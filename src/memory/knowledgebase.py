@@ -349,7 +349,6 @@ class KnowledgebaseManager:
         """
         # Normalize path separators to match the database storage format
         normalized_path = parentFolder.replace('/', os.sep)
-        logger.info(f"Normalized path: {normalized_path}")
         
         cur = self.conn.cursor()
         cur.execute("""

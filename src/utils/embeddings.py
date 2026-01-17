@@ -19,7 +19,7 @@ class EmbeddingRunner:
     for embeddings generation.
     """
     
-    def __init__(self, user_id: int = None):
+    def __init__(self, config_id: str = None):
         """
         Initialize the EmbeddingRunner with specified model configurations.
         
@@ -28,23 +28,20 @@ class EmbeddingRunner:
         """
         # Initialize memory manager to fetch user config
         self.memory_manager = MemoryManager()
-        self.user_id = user_id
 
         # Get user configuration from memory manager
-        if user_id:
-            self.user_config = self.memory_manager.get_user_configuration(user_id)
+        if config_id:
+            self.config = self.memory_manager.get_embedding_configuration(config_id)
         else:
-            self.user_config = None
+            self.config = self.memory_manager.get_active_embedding_configuration()
+        
+        if not self.config:
+            raise Exception("No embedding configuration found.")
 
-        # Set default values if no config is found
-        if self.user_config:         
-            self.embedding_provider = self.user_config.get("embedding_provider", "openai").lower()
-            self.embedding_api_key = self.user_config.get("embedding_api_key")
-            self.embedding_model_name = self.user_config.get("embedding_model")
-        else:
-            self.embedding_provider = os.environ.get("EMBED_PROVIDER", "ollama")
-            self.embedding_api_key = os.environ.get("EMBED_API_KEY")          
-            self.embedding_model_name = os.environ.get("EMBED_MODEL", "nomic-embed-text:latest")   
+        self.embedding_provider = self.config.get("embedding_provider", "openai").lower()
+        self.embedding_api_key = self.config.get("embedding_api_key")
+        self.embedding_model_name = self.config.get("embedding_model")
+        self.embedding_base_url = self.config.get("embedding_base_url")   
         
         # Initialize model instances
         self._embedding_model = None
@@ -59,7 +56,8 @@ class EmbeddingRunner:
         if self.embedding_provider == "openai":
             self._embedding_model = OpenAIEmbeddings(
                 model=self.embedding_model_name,
-                api_key=self.embedding_api_key
+                api_key=self.embedding_api_key,
+                base_url=self.embedding_base_url if self.embedding_base_url else None
             )
             logger.info(f"Initialized OpenAIEmbeddings model: {self.embedding_model_name}")
         elif self.embedding_provider == "hf":
@@ -70,6 +68,7 @@ class EmbeddingRunner:
         elif self.embedding_provider == "ollama":
             self._embedding_model = OllamaEmbeddings(
                 model=self.embedding_model_name,
+                base_url=self.embedding_base_url if self.embedding_base_url else None
             )
             logger.info(f"Initialized OllamaEmbeddings model: {self.embedding_model_name}")
         else:
@@ -110,35 +109,32 @@ class EmbeddingRunner:
 
 # Create a dictionary to store ApiLLMRunner instances per user
 embedding_runners = {}
-active_EmbeddingRunner = None
 
-def get_embedding_runner(user_id: int) -> EmbeddingRunner:
+def get_embedding_runner(config_id: str = None) -> EmbeddingRunner:
     """
     Get or create an EmbeddingRunner instance for the specified user.
     
     Args:
-        user_id: User's ID
+        config_id: Config ID
         
     Returns:
-        EmbeddingRunner instance for the user
+        EmbeddingRunner instance for the config
     """
-    global active_EmbeddingRunner
-    if user_id not in embedding_runners:
-        # Create a new EmbeddingRunner instance for this user with their ID
-        embedding_runners[user_id] = EmbeddingRunner(user_id=user_id)
-    active_EmbeddingRunner = embedding_runners[user_id]
-    return embedding_runners[user_id]
+    if not config_id:
+        return get_active_embedding_runner()
+
+    if config_id not in embedding_runners:
+        # Create a new EmbeddingRunner instance for this config with their ID
+        embedding_runners[config_id] = EmbeddingRunner(config_id=config_id)
+    return embedding_runners[config_id]
 
 def get_active_embedding_runner() -> EmbeddingRunner:
     """
     Get the currently active EmbeddingRunner instance.
     This function provides a reliable way to access the most recent active runner
-    from outside this module, without needing a user ID.
+    from outside this module, without needing a config ID.
     
     Returns:
         The currently active EmbeddingRunner instance
     """
-    global active_EmbeddingRunner
-    if active_EmbeddingRunner is None:
-        active_EmbeddingRunner = EmbeddingRunner()
-    return active_EmbeddingRunner
+    return EmbeddingRunner()

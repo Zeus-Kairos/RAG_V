@@ -4,7 +4,6 @@ from typing import Any
 import pymupdf.layout
 import pymupdf4llm
 
-from src.utils.paths import get_parsed_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)

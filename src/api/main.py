@@ -22,13 +22,11 @@ DEFAULT_USER_ID = 1
 
 # Pydantic model for configuration update
 class ConfigUpdate(BaseModel):
-    api_key: Optional[str] = None
-    llm_model: Optional[str] = None   
-    model_provider: Optional[str] = None
-    api_base_url: Optional[str] = None
-    embedding_provider: Optional[str] = None
-    embedding_api_key: Optional[str] = None
-    embedding_model: Optional[str] = None
+    id: str
+    embedding_provider: str
+    embedding_model: str
+    embedding_api_key: Optional[str] = None 
+    embedding_base_url: Optional[str] = None
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
@@ -106,15 +104,13 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error closing database connection: {e}")
 
 # API endpoint for updating configuration
-@app.patch("/api/config")
-async def update_configuration(config_data: ConfigUpdate):
-    """Update configuration settings."""
+@app.patch("/api/embedding_config")
+async def update_embedding_configuration(config_data: ConfigUpdate):
+    """Update embedding configuration settings."""
     try:
-        updated_config = memory_manager.update_configuration(
-            model_provider=config_data.model_provider,           
-            api_key=config_data.api_key,
-            llm_model=config_data.llm_model,
-            api_base_url=config_data.api_base_url,
+        updated_config = memory_manager.update_embedding_configuration(
+            id=config_data.id,
+            embedding_base_url=config_data.embedding_base_url,
             embedding_provider=config_data.embedding_provider,
             embedding_api_key=config_data.embedding_api_key,
             embedding_model=config_data.embedding_model,                     
@@ -122,19 +118,19 @@ async def update_configuration(config_data: ConfigUpdate):
         
         return {
             "success": True,
-            "message": "Configuration updated successfully",
+            "message": "Embedding configuration updated successfully",
             "config": updated_config
         }
     except Exception as e:
-        logger.error(f"Error updating configuration: {e}")
+        logger.error(f"Error updating embedding configuration: {e}")    
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for getting configuration
-@app.get("/api/config")
-async def get_configuration():
-    """Get configuration settings."""
+@app.get("/api/embedding_config")
+async def get_embedding_configuration():
+    """Get embedding configuration settings."""
     try:
-        config = memory_manager.get_configuration()
+        config = memory_manager.get_active_embedding_configuration()
         if config:
             return {
                 "success": True,
@@ -143,10 +139,25 @@ async def get_configuration():
         return {
             "success": True,
             "config": None,
-            "message": "No configuration found"
+            "message": "No embedding configuration found"
         }
     except Exception as e:
-        logger.error(f"Error getting configuration: {e}")
+        logger.error(f"Error getting embedding configuration: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to set active embedding configuration
+@app.patch("/api/embedding_config/{config_id}/active")
+async def set_active_embedding_configuration(config_id: str):
+    """Set an embedding configuration as active, deactivating all others."""
+    try:
+        updated_config = memory_manager.set_active_embedding_configuration(config_id)
+        return {
+            "success": True,
+            "message": "Embedding configuration set as active successfully",
+            "config": updated_config
+        }
+    except Exception as e:
+        logger.error(f"Error setting active embedding configuration: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for creating a knowledge base
@@ -465,7 +476,7 @@ async def stream_upload_files(
         
         return StreamingResponse(generate(), media_type="application/x-ndjson")
     except Exception as e:
-        logger.error(f"Error in stream upload: {e}")
+        logger.exception(f"Error in stream upload: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
