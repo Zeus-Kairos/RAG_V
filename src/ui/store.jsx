@@ -64,8 +64,11 @@ const useKnowledgebaseStore = create((set, get) => {
     showErrorModal: false,
     fileBrowserRefreshTrigger: 0,
     fileBrowserLastModifiedPath: '',
+    // Embedding settings state
+    embeddingConfigs: [],
+    activeEmbeddingConfig: null,
 
-    // Initialize app by getting knowledgebases
+    // Initialize app by getting knowledgebases and embedding configs
     initializeApp: async () => {
       try {
         // Check if we're already initializing or initialized
@@ -109,9 +112,22 @@ const useKnowledgebaseStore = create((set, get) => {
           }
         }
         
-        // Update state with knowledgebases
+        // Get embedding configurations
+        const embeddingConfigResponse = await fetchWithAuth('/api/embedding_config');
+        let embeddingConfigs = [];
+        let activeEmbeddingConfig = null;
+        
+        if (embeddingConfigResponse.ok) {
+          const embeddingConfigData = await embeddingConfigResponse.json();
+          embeddingConfigs = embeddingConfigData.configs || [];
+          activeEmbeddingConfig = embeddingConfigData.active_config || null;
+        }
+        
+        // Update state with knowledgebases and embedding configs
         set({ 
           knowledgebases,
+          embeddingConfigs,
+          activeEmbeddingConfig,
           isLoading: false,
           isInitializing: false,
           authChecked: true
@@ -195,6 +211,123 @@ const useKnowledgebaseStore = create((set, get) => {
       }));
     },
     
+    // Embedding settings management functions
+    fetchEmbeddingConfigs: async () => {
+      try {
+        set({ isLoading: true, error: null });
+        const response = await fetchWithAuth('/api/embedding_config');
+        
+        if (response.ok) {
+          const data = await response.json();
+          set({
+            embeddingConfigs: data.configs || [],
+            activeEmbeddingConfig: data.active_config || null,
+            isLoading: false
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch embedding configs:', err);
+        set({ 
+          error: 'Failed to fetch embedding configs: ' + err.message, 
+          isLoading: false
+        });
+      }
+    },
+    
+    createEmbeddingConfig: async (config) => {
+      try {
+        set({ isLoading: true, error: null });
+        // Map config_id to id as expected by the API
+        const apiConfig = {
+          ...config,
+          id: config.config_id
+        };
+        const response = await fetchWithAuth('/api/embedding_config', {
+          method: 'PATCH',
+          body: JSON.stringify(apiConfig)
+        });
+        
+        if (response.ok) {
+          // Fetch updated configs
+          await get().fetchEmbeddingConfigs();
+        }
+      } catch (err) {
+        console.error('Failed to create embedding config:', err);
+        set({ 
+          error: 'Failed to create embedding config: ' + err.message, 
+          isLoading: false
+        });
+        throw err;
+      }
+    },
+    
+    updateEmbeddingConfig: async (config) => {
+      try {
+        set({ isLoading: true, error: null });
+        // Map config_id to id as expected by the API
+        const apiConfig = {
+          ...config,
+          id: config.config_id
+        };
+        const response = await fetchWithAuth('/api/embedding_config', {
+          method: 'PATCH',
+          body: JSON.stringify(apiConfig)
+        });
+        
+        if (response.ok) {
+          // Fetch updated configs
+          await get().fetchEmbeddingConfigs();
+        }
+      } catch (err) {
+        console.error('Failed to update embedding config:', err);
+        set({ 
+          error: 'Failed to update embedding config: ' + err.message, 
+          isLoading: false
+        });
+        throw err;
+      }
+    },
+    
+    deleteEmbeddingConfig: async (configId) => {
+      try {
+        set({ isLoading: true, error: null });
+        const response = await fetchWithAuth(`/api/embedding_config/${configId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          // Fetch updated configs after deletion
+          await get().fetchEmbeddingConfigs();
+        }
+      } catch (err) {
+        console.error('Failed to delete embedding config:', err);
+        set({ 
+          error: 'Failed to delete embedding config: ' + err.message, 
+          isLoading: false
+        });
+      }
+    },
+    
+    setActiveEmbeddingConfig: async (configId) => {
+      try {
+        set({ isLoading: true, error: null });
+        const response = await fetchWithAuth(`/api/embedding_config/${configId}/active`, {
+          method: 'PATCH'
+        });
+        
+        if (response.ok) {
+          // Fetch updated configs
+          await get().fetchEmbeddingConfigs();
+        }
+      } catch (err) {
+        console.error('Failed to set active embedding config:', err);
+        set({ 
+          error: 'Failed to set active embedding config: ' + err.message, 
+          isLoading: false
+        });
+      }
+    },
+    
     // Logout function
     logout: () => {
       // Remove token from localStorage
@@ -204,6 +337,8 @@ const useKnowledgebaseStore = create((set, get) => {
         user_id: null,
         username: null,
         knowledgebases: [],
+        embeddingConfigs: [],
+        activeEmbeddingConfig: null,
         isLoading: false,
         isInitializing: false,
         authChecked: true,

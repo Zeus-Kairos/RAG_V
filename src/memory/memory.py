@@ -39,6 +39,9 @@ class MemoryManager:
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row  # Enable dict-like access to rows
         
+        # Enable foreign key constraints for SQLite
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        
         # Initialize database tables
         self._init_db_tables()
         
@@ -227,3 +230,48 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"Error getting configuration: {e}")
             return None
+    
+    def get_all_embedding_configurations(self) -> list:
+        """
+        Get all embedding configurations.
+        
+        Returns:
+            List of configuration dictionaries
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM embedding_configure")
+            configs = cur.fetchall()
+            return [
+                {
+                    "id": config[0],
+                    "embedding_base_url": config[1],
+                    "embedding_provider": config[2],
+                    "embedding_api_key": config[3],
+                    "embedding_model": config[4],
+                    "is_active": config[5]
+                }
+                for config in configs
+            ]
+        except Exception as e:
+            logger.error(f"Error getting all configurations: {e}")
+            return []
+    
+    def delete_embedding_configuration(self, id: str) -> bool:
+        """
+        Delete an embedding configuration by ID.
+        
+        Args:
+            id: Configuration ID to delete
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute("DELETE FROM embedding_configure WHERE id = ?", (id,))
+            self.conn.commit()
+            return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting configuration: {e}")
+            return False

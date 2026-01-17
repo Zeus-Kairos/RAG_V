@@ -110,7 +110,6 @@ class ParallelFileProcessingPipeline:
                         filename=filename,
                         filepath=file_path,
                         parsed_text=parse_result["content"],
-                        user_id=user_id,
                         knowledgebase_name=knowledge_base,
                         file_size=file_size,
                         parentFolder=upload_dir

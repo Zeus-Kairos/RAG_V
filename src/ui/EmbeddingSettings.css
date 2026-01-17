@@ -1,0 +1,272 @@
+.embedding-settings {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.embedding-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.embedding-settings-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.embedding-btn {
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.embedding-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.embedding-btn-primary {
+  background-color: #4a6cf7;
+  color: white;
+}
+
+.embedding-btn-primary:hover:not(:disabled) {
+  background-color: #3a5bdb;
+}
+
+.embedding-btn-secondary {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.embedding-btn-secondary:hover:not(:disabled) {
+  background-color: #d0d0d0;
+}
+
+.embedding-btn-tertiary {
+  background-color: transparent;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.embedding-btn-tertiary:hover:not(:disabled) {
+  background-color: #f0f0f0;
+}
+
+.embedding-btn-danger {
+  background-color: #ff5252;
+  color: white;
+}
+
+.embedding-btn-danger:hover:not(:disabled) {
+  background-color: #ff3b3b;
+}
+
+.embedding-configs-list {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.embedding-empty {
+  text-align: center;
+  color: #666;
+  padding: 24px 0;
+  font-style: italic;
+}
+
+.embedding-config-item {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.embedding-config-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.embedding-config-item.active {
+  border-color: #4a6cf7;
+  background-color: #f0f4ff;
+}
+
+.embedding-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.embedding-config-info {
+  flex: 1;
+}
+
+.embedding-config-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.embedding-config-provider {
+  font-size: 12px;
+  color: #666;
+  text-transform: capitalize;
+}
+
+.embedding-config-status {
+  display: flex;
+  align-items: center;
+}
+
+.embedding-active-indicator {
+  background-color: #4caf50;
+  color: white;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.embedding-config-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Modal styles */
+.embedding-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.embedding-modal {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.embedding-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.embedding-modal-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.embedding-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.embedding-modal-close:hover {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.embedding-modal-body {
+  padding: 20px;
+}
+
+.embedding-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.embedding-form-group {
+  margin-bottom: 16px;
+}
+
+.embedding-form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.embedding-form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.embedding-form-input:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.1);
+}
+
+.embedding-form-input:disabled {
+  background-color: #f5f5f5;
+  border-color: #e0e0e0;
+  cursor: not-allowed;
+  color: #666;
+}
+
+.embedding-form-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.embedding-form-input[type="password"] {
+  font-family: monospace;
+}
+
+.embedding-form-input select {
+  height: 40px;
+  cursor: pointer;
+}

@@ -33,11 +33,18 @@ memory_manager = MemoryManager()
 
 indexers = {}
 
-def get_indexer(knowledge_base: str) -> Indexer:
+def get_indexer(knowledge_base: str, embedding_config_id: str = None) -> Indexer:
     """Get or create an Indexer for the given knowledge base."""
-    indexer_key = knowledge_base
+    if embedding_config_id is None:
+        # Get active config if none specified
+        active_config = memory_manager.get_active_embedding_configuration()
+        if active_config:
+            embedding_config_id = active_config['id']
+        else:
+            raise HTTPException(status_code=400, detail="No active embedding configuration found")
+    indexer_key = f"{knowledge_base}_{embedding_config_id}"
     if indexer_key not in indexers:
-        indexers[indexer_key] = Indexer(DEFAULT_USER_ID, get_index_path(DEFAULT_USER_ID, knowledge_base))
+        indexers[indexer_key] = Indexer(embedding_config_id, get_index_path(knowledge_base, embedding_config_id))
     return indexers[indexer_key]
 
 @asynccontextmanager
@@ -78,22 +85,9 @@ async def add_security_headers(request, call_next):
     return response
 
 
-# Initialize MemoryManager
-memory_manager = MemoryManager()
-
-indexers = {}
-
-def get_indexer(knowledge_base: str) -> Indexer:
-    """Get or create an Indexer for the given knowledge base."""
-    indexer_key = knowledge_base
-    if indexer_key not in indexers:
-        indexers[indexer_key] = Indexer(DEFAULT_USER_ID, get_index_path(DEFAULT_USER_ID, knowledge_base))
-    return indexers[indexer_key]
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Clean up resources when the application shuts down."""
-
     yield
     logger.info("Shutting down MemoryManager...")
     if hasattr(memory_manager, 'conn'):
@@ -130,16 +124,15 @@ async def update_embedding_configuration(config_data: ConfigUpdate):
 async def get_embedding_configuration():
     """Get embedding configuration settings."""
     try:
-        config = memory_manager.get_active_embedding_configuration()
-        if config:
-            return {
-                "success": True,
-                "config": config
-            }
+        # Get all embedding configurations
+        all_configs = memory_manager.get_all_embedding_configurations()
+        # Find the active config from the list using the is_active flag
+        active_config = next((config for config in all_configs if config['is_active'] == 1), None)
+        
         return {
             "success": True,
-            "config": None,
-            "message": "No embedding configuration found"
+            "configs": all_configs,
+            "active_config": active_config
         }
     except Exception as e:
         logger.error(f"Error getting embedding configuration: {e}")
@@ -158,6 +151,25 @@ async def set_active_embedding_configuration(config_id: str):
         }
     except Exception as e:
         logger.error(f"Error setting active embedding configuration: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for deleting an embedding configuration
+@app.delete("/api/embedding_config/{config_id}")
+async def delete_embedding_configuration(config_id: str):
+    """Delete an embedding configuration by ID."""
+    try:
+        success = memory_manager.delete_embedding_configuration(config_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Embedding configuration deleted successfully"
+            }
+        return {
+            "success": False,
+            "message": "Embedding configuration not found"
+        }
+    except Exception as e:
+        logger.error(f"Error deleting embedding configuration: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for creating a knowledge base

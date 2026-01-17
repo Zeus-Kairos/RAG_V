@@ -50,7 +50,7 @@ class KnowledgebaseManager:
                     file_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     filename TEXT NOT NULL,
                     filepath TEXT NOT NULL UNIQUE,
-                    parsed_text TEXT NOT NULL,
+                    parsed_text TEXT,
                     uploaded_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     knowledgebase_id INTEGER NOT NULL,
                     file_size INTEGER,
@@ -106,7 +106,7 @@ class KnowledgebaseManager:
                 INSERT INTO files (filename, filepath, parsed_text, knowledgebase_id, file_size, description, type, parent)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                ('root', root_path, 'root', knowledgebase_id, None, 'root folder for the knowledgebase', 'folder', None)
+                ('root', root_path, None, knowledgebase_id, None, 'root folder for the knowledgebase', 'folder', None)
             )
             
             # Set all other knowledgebases to inactive

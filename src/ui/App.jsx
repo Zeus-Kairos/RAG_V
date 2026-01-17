@@ -2,6 +2,7 @@ import './index.css';
 import { useEffect } from 'react';
 import useKnowledgebaseStore from './store';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
+import EmbeddingSettings from './EmbeddingSettings';
 
 function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
@@ -20,10 +21,15 @@ function App() {
     return <div className="loading">Loading...</div>;
   }
 
-  // Show main app - focusing only on knowledgebase management
+  // Show main app with sidebar layout
   return (
-    <div>
-      <KnowledgebaseBrowser />
+    <div className="app-container">
+      <div className="sidebar">
+        <EmbeddingSettings />
+      </div>
+      <div className="main-content">
+        <KnowledgebaseBrowser />
+      </div>
     </div>
   );
 }

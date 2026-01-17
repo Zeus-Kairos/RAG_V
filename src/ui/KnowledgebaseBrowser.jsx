@@ -542,18 +542,18 @@ const KnowledgebaseBrowser = () => {
         }
 
         // Refresh knowledgebases by fetching them again
-        const kbsResponse = await fetchWithAuth('/api/knowledgebase');
-        if (kbsResponse.ok) {
-          const kbsData = await kbsResponse.json();
-          // Update the store's knowledgebases directly
-          useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
-          
-          // Set the active knowledgebase if one exists
-          const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
-          if (activeKB) {
-            setActiveKnowledgebase(activeKB.id);
-          }
-        }
+            const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+            if (kbsResponse.ok) {
+              const kbsData = await kbsResponse.json();
+              // Update the store's knowledgebases directly
+              useKnowledgebaseStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+              
+              // Set the active knowledgebase if one exists
+              const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
+              if (activeKB) {
+                setActiveKnowledgebase(activeKB.id);
+              }
+            }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -1051,18 +1051,18 @@ const KnowledgebaseBrowser = () => {
                           }
 
                           // Refresh knowledgebases by fetching them again
-                          const kbsResponse = await fetchWithAuth('/api/knowledgebase');
-                          if (kbsResponse.ok) {
-                            const kbsData = await kbsResponse.json();
-                            // Update the store's knowledgebases directly
-                            useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
-                            
-                            // Set the active knowledgebase if one exists
-                            const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
-                            if (activeKB) {
-                              setActiveKnowledgebase(activeKB.id);
-                            }
-                          }
+            const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+            if (kbsResponse.ok) {
+              const kbsData = await kbsResponse.json();
+              // Update the store's knowledgebases directly
+              useKnowledgebaseStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+              
+              // Set the active knowledgebase if one exists
+              const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
+              if (activeKB) {
+                setActiveKnowledgebase(activeKB.id);
+              }
+            }
                           
                           setShowInlineEdit(false);
                           setKBToEditDescription(null);

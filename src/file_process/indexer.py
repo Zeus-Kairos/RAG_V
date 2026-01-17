@@ -14,9 +14,9 @@ logger = get_logger(__name__)
 
 # index file chunks into faiss index
 class Indexer:
-    def __init__(self, user_id: int, index_path: str):
-        self.user_id = user_id
-        self._embeddings = get_embedding_runner(user_id).embedding_model
+    def __init__(self, embedding_config_id: str, index_path: str):
+        self.embedding_config_id = embedding_config_id
+        self._embeddings = get_embedding_runner(embedding_config_id).embedding_model
         self.index_path = index_path
         # Add thread lock to prevent concurrent modifications
         self._lock = threading.Lock()
@@ -37,6 +37,7 @@ class Indexer:
         
         Args:
             chunks: Dict of file chunks to index, keyed by file_id
+            save: Whether to save the index after indexing (default: False)
         """
         file_ids = list(chunks.keys())
         with self._lock:           
