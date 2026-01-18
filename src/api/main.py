@@ -545,6 +545,25 @@ async def get_chunk_runs(
         logger.error(f"Error getting chunk runs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to delete a chunk run
+@app.delete("/api/chunk-runs/{run_id}")
+async def delete_chunk_run(
+    run_id: int
+):
+    """Delete a chunk run and its associated chunks."""
+    try:
+        success = memory_manager.chunking_manager.delete_chunk_run(run_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Chunk run deleted successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Chunk run not found")
+    except Exception as e:
+        logger.error(f"Error deleting chunk run: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

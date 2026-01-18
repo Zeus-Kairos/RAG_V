@@ -120,27 +120,105 @@
   margin-bottom: 8px;
 }
 
+.chunk-run-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chunk-run-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chunk-run-time {
   font-size: 12px;
   color: #888888;
+  font-weight: 500;
+  min-width: 150px;
 }
 
 .chunk-run-framework {
   font-size: 12px;
   font-weight: bold;
-  color: #4caf50;
-  background-color: rgba(76, 175, 80, 0.1);
+  color: #9c27b0;
+  background-color: rgba(156, 39, 176, 0.1);
   padding: 2px 6px;
   border-radius: 10px;
 }
 
-.chunk-run-params {
-  font-size: 13px;
-  color: #555555;
-  background-color: #f9f9f9;
-  padding: 8px;
+.chunk-run-delete-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: #f44336;
+  padding: 4px;
   border-radius: 4px;
-  overflow-x: auto;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chunk-run-delete-btn:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+  transform: scale(1.1);
+}
+
+.chunk-run-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.chunk-run-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.param-label {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+  padding: 4px 8px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.param-label:hover {
+  background-color: #c8e6c9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.param-label-disabled {
+  background-color: #f0f0f0;
+  color: #9e9e9e;
+}
+
+.param-label-disabled:hover {
+  background-color: #e0e0e0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.param-label-digital {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.param-label-digital:hover {
+  background-color: #bbdefb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .no-runs {

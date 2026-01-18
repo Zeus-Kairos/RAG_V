@@ -315,6 +315,43 @@ class ChunkingManager:
             logger.error(f"Error deleting chunks by chunk run ID: {e}")
             raise
     
+    def delete_chunk_run(self, chunk_run_id: int) -> bool:
+        """
+        Delete a chunk run and all associated chunks.
+        
+        Args:
+            chunk_run_id: ID of the chunk run to delete
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            cur = self.conn.cursor()
+            
+            # Start a transaction
+            cur.execute("BEGIN TRANSACTION")
+            
+            # Delete chunks first (foreign key constraint will handle this automatically)
+            # Then delete the chunk_run record
+            cur.execute(
+                "DELETE FROM chunk_run WHERE id = ?",
+                (chunk_run_id,)
+            )
+            
+            if cur.rowcount > 0:
+                # Commit the transaction
+                self.conn.commit()
+                return True
+            else:
+                # No record found, rollback
+                self.conn.rollback()
+                return False
+        except Exception as e:
+            # Rollback on error
+            self.conn.rollback()
+            logger.error(f"Error deleting chunk run: {e}")
+            raise
+    
     def get_chunk_runs_by_knowledgebase_id(self, knowledgebase_id: int) -> List[Dict[str, Any]]:
         """
         Get all chunk runs for a specific knowledgebase, ordered by run_time descending.

@@ -151,11 +151,7 @@ const SplitterSettings = () => {
         )}
       </div>
       
-      <div className="splitter-actions">
-        <button className="splitter-btn splitter-btn-primary">
-          Save Settings
-        </button>
-      </div>
+
     </div>
   );
 };

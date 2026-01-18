@@ -3,9 +3,10 @@ import useKnowledgebaseStore from './store';
 import './ChunkBrowser.css';
 
 const ChunkBrowser = () => {
-  const { knowledgebases, isLoading, splitterSettings, refreshFileBrowser } = useKnowledgebaseStore();
+  const { knowledgebases, splitterSettings, refreshFileBrowser } = useKnowledgebaseStore();
   const [chunkRuns, setChunkRuns] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   
   // Get active knowledgebase
@@ -95,7 +96,10 @@ const ChunkBrowser = () => {
   };
   
   const formatDateTime = (dateTimeString) => {
-    const date = new Date(dateTimeString);
+    // Convert database UTC timestamp (YYYY-MM-DD HH:MM:SS) to ISO format with Z (UTC indicator)
+    const utcIsoString = dateTimeString.replace(' ', 'T') + 'Z';
+    const date = new Date(utcIsoString);
+    // Convert to local time string with full date and time
     return date.toLocaleString();
   };
   
@@ -105,6 +109,31 @@ const ChunkBrowser = () => {
       return JSON.stringify(parsedParams, null, 2);
     } catch (err) {
       return String(params);
+    }
+  };
+  
+  // Delete a chunk run
+  const deleteChunkRun = async (runId) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`http://localhost:8000/api/chunk-runs/${runId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Refresh chunk runs after deletion
+        fetchChunkRuns(activeKnowledgebase.id);
+      } else {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to delete chunk run');
+      }
+    } catch (err) {
+      console.error('Error deleting chunk run:', err);
+      setError('Failed to delete chunk run');
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -153,12 +182,63 @@ const ChunkBrowser = () => {
               {chunkRuns.map(run => (
                 <div key={run.id} className="chunk-run-item">
                   <div className="chunk-run-header">
-                    <span className="chunk-run-time">{formatDateTime(run.run_time)}</span>
-                    <span className="chunk-run-framework">{run.framework}</span>
+                    <div className="chunk-run-header-left">
+                      <span className="chunk-run-framework">{run.framework}</span>
+                      <span className="chunk-run-time">{formatDateTime(run.run_time)}</span>
+                    </div>
+                    <div className="chunk-run-header-actions">
+                      <button 
+                        className="chunk-run-delete-btn"
+                        onClick={() => deleteChunkRun(run.id)}
+                        disabled={isLoading}
+                        title="Delete chunk run"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                   <div className="chunk-run-params">
-                    <strong>Parameters:</strong>
-                    <pre>{formatParameters(run.parameters)}</pre>
+                    {Object.entries(run.parameters).map(([key, value]) => {
+                      // Format parameter name to be more readable
+                      const displayName = key
+                        .replace(/_/g, ' ')    
+                        .replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      // Format value based on type
+                      let displayValue = value;
+                      if (typeof value === 'boolean') {
+                        displayValue = value ? 'Enabled' : 'Disabled';
+                      }
+                      
+                      // Check if this parameter is part of a disabled feature
+                      const isDisabled = (() => {
+                        // Check parent feature flags
+                        if (key === 'header_levels' || key === 'strip_headers') {
+                          return run.parameters.markdown_header_splitting === false;
+                        }
+                        if (key === 'chunk_size' || key === 'chunk_overlap') {
+                          return run.parameters.recursive_splitting === false;
+                        }
+                        // Check if the parameter itself is disabled (boolean false)
+                        return displayValue === "Disabled";
+                      })();
+                      
+                      // Determine parameter type for styling
+                      let paramClass = "param-label";
+                      if (isDisabled) {
+                        paramClass += " param-label-disabled";
+                      } else if (typeof value === "boolean") {
+                        // Keep boolean values as original styling
+                      } else if (typeof value === "number" || (!isNaN(Number(value)) && value !== "")) {
+                        paramClass += " param-label-digital";
+                      }
+                      
+                      return (
+                        <span key={key} className={paramClass}>
+                          {displayName}: {displayValue}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
