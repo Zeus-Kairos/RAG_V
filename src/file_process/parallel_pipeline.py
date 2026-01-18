@@ -5,7 +5,7 @@ from fastapi import UploadFile
 from src.file_process.utils import SUPPORTED_FORMATS
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
-from src.file_process.file_splitter import FileSplitter
+from src.file_process.file_splitter import LangchainFileSplitter
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser
 from src.memory.memory import MemoryManager
@@ -16,10 +16,10 @@ logger = get_logger(__name__)
 class ParallelFileProcessingPipeline:
     """Pipeline that processes files in parallel and yields results as they complete."""
     
-    def __init__(self, indexer: Indexer, memory_manager: MemoryManager = None):
-        self.file_uploader = FileUploader()
-        self.file_parser = FileParser()
-        self.file_splitter = FileSplitter()
+    def __init__(self, indexer: Indexer = None, memory_manager: MemoryManager = None):
+        self.file_uploader = None
+        self.file_parser = None
+        self.file_splitter = None
         self.memory_manager = memory_manager or MemoryManager()
         self.indexer = indexer
     
@@ -44,7 +44,6 @@ class ParallelFileProcessingPipeline:
         tasks = []
         for file in files:
             task = self._process_single_file(
-                user_id,
                 knowledge_base,
                 file,
                 upload_dir
@@ -151,5 +150,254 @@ class ParallelFileProcessingPipeline:
                 file_result["status"] = "failed"
                 file_result["error"] = f"Unexpected error during processing: {str(e)}"
             logger.error(f"Unexpected error processing file {filename}: {e}")
+        
+        return file_result
+    
+    async def chunk_all_files_in_knowledgebase(self, knowledgebase_id: int, framework: str = "langchain", **kwargs) -> AsyncGenerator[Dict[str, Any], None]:
+        """Chunk all files in a knowledgebase in parallel.
+        
+        Args:
+            knowledgebase_id: Knowledge base ID
+            framework: Framework to use for chunking (default: "langchain")
+            markdown_header_splitting: Whether to use markdown header splitting
+            recursive_splitting: Whether to use recursive splitting
+            chunk_size: Size of each chunk
+            chunk_overlap: Overlap between chunks
+            header_levels: Number of header levels to split on
+            
+        Yields:
+            Dict containing chunking results for each file
+        """
+        logger.info(f"Starting parallel chunking for knowledgebase: knowledgebase_id={knowledgebase_id}")
+        
+        if framework == "langchain":
+            # Initialize FileSplitter with the provided parameters
+            self.file_splitter = LangchainFileSplitter(**kwargs)
+        else:
+            raise ValueError(f"Unsupported chunking framework: {framework}")
+        
+        try:                      
+            chunk_run_id = self.memory_manager.chunking_manager.save_chunk_run_config(
+                knowledgebase_id=knowledgebase_id,
+                framework=framework,
+                chunk_parameters=kwargs
+            )
+            
+            # Get all files from the knowledgebase
+            files = self.memory_manager.knowledgebase_manager.get_files_by_knowledgebase_id(knowledgebase_id)
+            
+            # Filter out files that are folders or don't have parsed content
+            valid_files = []
+            for file in files:
+                file_dict = dict(file)
+                if file_dict['type'] == 'file' and file_dict['parsed_text']:
+                    valid_files.append(file_dict)
+            
+            logger.info(f"Found {len(valid_files)} valid files to chunk out of {len(files)} total files")
+            
+            # Create tasks for parallel chunking of each file
+            tasks = []
+            for file in valid_files:
+                task = self._chunk_single_file(
+                    file,
+                    chunk_run_id,
+                )
+                tasks.append(task)
+            
+            # Process files in parallel and yield results as they complete
+            for task in asyncio.as_completed(tasks):
+                try:
+                    result = await task
+                    yield result
+                except Exception as e:
+                    logger.error(f"Unexpected error in parallel chunking: {e}")
+                    yield {"status": "failed", "error": f"Unexpected error: {str(e)}"}
+            
+        except Exception as e:
+            logger.error(f"Error in chunk_all_files_in_knowledgebase: {e}")
+            yield {"status": "failed", "error": f"Unexpected error: {str(e)}"}
+    
+    async def _chunk_single_file(self, file: Dict[str, Any], chunk_run_id: int) -> Dict[str, Any]:
+        """Chunk a single file and save chunks to the database.
+        
+        Args:
+            file: File dictionary from the database
+            chunk_run_id: ID of the chunk_run record
+            
+        Returns:
+            Dict containing chunking results
+        """
+        file_id = file['file_id']
+        filename = file['filename']
+        parsed_text = file['parsed_text']
+        
+        try:
+            logger.info(f"Starting to chunk file: {filename} (ID: {file_id})")
+            
+            # Prepare metadata for the file
+            metadata = {
+                "file_id": file_id,
+                "filename": filename,
+                "filepath": file['filepath']
+            }
+            
+            # Split the file content into chunks
+            documents = await asyncio.to_thread(self.file_splitter.split_text, parsed_text, metadata)
+            
+            if not documents:
+                logger.warning(f"No chunks created for file: {filename}")
+                return {
+                    "file_id": file_id,
+                    "filename": filename,
+                    "status": "completed",
+                    "chunks_count": 0,
+                    "message": "No chunks created"
+                }
+            
+            # Prepare chunks for database insertion
+            chunks_to_insert = []
+            for doc in documents:
+                chunks_to_insert.append({
+                    "chunk_id": doc.metadata["chunk_id"],
+                    "file_id": file_id,
+                    "chunk_run_id": chunk_run_id,
+                    "content": doc.page_content,
+                    "metadata": doc.metadata
+                })
+            
+            # Save chunks to the chunks table
+            chunks_added = self.memory_manager.chunking_manager.add_chunks(chunks_to_insert)
+            
+            logger.info(f"Chunked file: {filename}, chunks: {len(documents)}")
+            
+            return {
+                "file_id": file_id,
+                "filename": filename,
+                "status": "completed",
+                "chunks_count": len(chunks_added),
+                "chunk_run_id": chunk_run_id
+            }
+        except Exception as e:
+            logger.error(f"Error chunking file {filename}: {e}")
+            return {
+                "file_id": file_id,
+                "filename": filename,
+                "status": "failed",
+                "error": f"Chunking failed: {str(e)}"
+            }
+    
+    async def upload_and_parse_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> AsyncGenerator[Dict[str, Any], None]:
+        """Upload and parse files in parallel, yield results as they complete.
+        
+        Args:
+            user_id: User identifier
+            knowledge_base: Knowledge base name
+            files: List of UploadFile objects
+            directory: Optional directory path
+            
+        Yields:
+            Dict containing the result for each uploaded and parsed file
+        """
+        logger.info(f"Starting parallel upload and parse pipeline: user_id={user_id}, knowledge_base={knowledge_base}, directory={directory}, file_count={len(files)}")
+        
+        self.file_uploader = FileUploader()
+        self.file_parser = FileParser()
+        upload_dir = get_upload_dir(user_id, knowledge_base, directory)
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Create tasks for parallel upload and parse of each file
+        tasks = []
+        for file in files:
+            task = self._upload_and_parse_single_file(
+                knowledge_base,
+                file,
+                upload_dir
+            )
+            tasks.append(task)
+        
+        # Process files in parallel and yield results as they complete
+        for task in asyncio.as_completed(tasks):
+            try:
+                result = await task
+                yield result
+            except Exception as e:
+                logger.error(f"Unexpected error in upload and parse: {e}")
+    
+    async def _upload_and_parse_single_file(self, knowledge_base: str, file: UploadFile, upload_dir: str) -> Dict[str, Any]:
+        """Upload and parse a single file.
+        
+        Args:
+            knowledge_base: Knowledge base name
+            file: UploadFile object from FastAPI
+            upload_dir: Directory to save the file
+            
+        Returns:
+            Dict containing upload and parse results
+        """
+        filename = file.filename
+        
+        try:
+            # Step 1: Upload the file
+            file_result = await self.file_uploader.upload_file(file, upload_dir)
+            
+            # Check if upload was successful
+            if file_result["status"] not in ["success", "updated"]:
+                # Upload failed or skipped, return the result
+                return file_result
+            
+            file_path = file_result["path"]
+            file_size = file_result["file_size"]
+            
+            # Check if file is parsable
+            file_ext = os.path.splitext(filename)[1].lower()
+            if file_ext not in SUPPORTED_FORMATS:
+                file_result["status"] = "failed"
+                file_result["parsed"] = False
+                file_result["parsing_error"] = "File type not parsable"
+                logger.error(f"File {filename} is not parsable")
+                return file_result
+            
+            # Step 2: Parse the file (run sync method in thread pool)
+            parse_result = await asyncio.to_thread(self.file_parser.parse_file, file_path)
+
+            if parse_result["success"]:
+                file_result["parsed"] = True
+                file_result["content"] = parse_result["content"]               
+                logger.info(f"File parsed successfully: {filename}")
+                
+                # Step 3: Add file to database
+                try:
+                    file_id = self.memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
+                        filename=filename,
+                        filepath=file_path,
+                        parsed_text=parse_result["content"],
+                        knowledgebase_name=knowledge_base,
+                        file_size=file_size,
+                        parentFolder=upload_dir
+                    )
+                    file_result["file_id"] = file_id
+                except Exception as e:
+                    file_result["status"] = "failed"
+                    file_result["error"] = f"Failed to add file to database: {str(e)}"
+                    logger.error(f"Failed to add file {filename} to database: {e}")
+                    return file_result
+            
+            else:
+                file_result["status"] = "failed"
+                file_result["parsed"] = False
+                file_result["parsing_error"] = parse_result["error"]
+                logger.error(f"Failed to parse content for {filename}: {parse_result['error']}")
+        except Exception as e:
+            # Create a result dictionary if file_result doesn't exist yet
+            if 'file_result' not in locals():
+                file_result = {
+                    "filename": filename,
+                    "status": "failed",
+                    "error": f"Unexpected error during upload and parse: {str(e)}"
+                }
+            else:
+                file_result["status"] = "failed"
+                file_result["error"] = f"Unexpected error during upload and parse: {str(e)}"
+            logger.error(f"Unexpected error uploading and parsing file {filename}: {e}")
         
         return file_result

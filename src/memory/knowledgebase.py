@@ -134,9 +134,12 @@ class KnowledgebaseManager:
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT id, name, description, root_path, is_active, created_at, updated_at
-                FROM knowledgebase
-                ORDER BY is_active DESC, updated_at DESC
+                SELECT k.id, k.name, k.description, k.root_path, k.is_active, k.created_at, k.updated_at, 
+                       COUNT(CASE WHEN f.type = 'file' THEN 1 END) as file_count
+                FROM knowledgebase k
+                LEFT JOIN files f ON k.id = f.knowledgebase_id
+                GROUP BY k.id, k.name, k.description, k.root_path, k.is_active, k.created_at, k.updated_at
+                ORDER BY k.is_active DESC, k.updated_at DESC
             """)
             # Convert results to dictionaries
             results = []
@@ -148,7 +151,8 @@ class KnowledgebaseManager:
                     "root_path": row[3],
                     "is_active": bool(row[4]),
                     "created_at": row[5],
-                    "updated_at": row[6]
+                    "updated_at": row[6],
+                    "file_count": row[7]
                 })
             return results
         except Exception as e:
@@ -460,6 +464,8 @@ class KnowledgebaseManager:
         except Exception as e:
             logger.error(f"Error getting files by path prefix: {e}")
             raise
+    
+
     
     def delete_files_by_path_prefix(self, path_prefix: str) -> int:
         """

@@ -8,6 +8,7 @@ from langgraph.store.base import BaseStore
 from langgraph.store.memory import InMemoryStore
 
 from .knowledgebase import KnowledgebaseManager
+from .chunks import ChunkingManager
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -47,6 +48,9 @@ class MemoryManager:
         
         # Initialize knowledgebase manager
         self.knowledgebase_manager = KnowledgebaseManager(self.conn)
+        
+        # Initialize chunking manager
+        self.chunking_manager = ChunkingManager(self.conn)
         
         # Mark as initialized
         self._initialized = True    

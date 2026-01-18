@@ -1,17 +1,15 @@
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 
-class FileSplitter:
-    def __init__(self, markdown_header_splitting=True, recursive_splitting=True, chunk_size=500, chunk_overlap=50):
-        headers_to_split_on = [
-            ("#", "Header 1"),
-            ("##", "Header 2"),
-            ("###", "Header 3"),
-        ]
-        self.markdown_header_splitting = markdown_header_splitting
-        self.recursive_splitting = recursive_splitting
-        self.markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on, strip_headers=False)
-        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)      
+class LangchainFileSplitter:
+    def __init__(self, **kwargs):
+        self.markdown_header_splitting = kwargs.get("markdown_header_splitting", True)
+        header_levels = kwargs.get("header_levels", 3)
+        headers_to_split_on = [("#"*i, f"Header {i}") for i in range(1, header_levels + 1)]
+        strip_headers = kwargs.get("strip_headers", False)
+        self.recursive_splitting = kwargs.get("recursive_splitting", True)
+        self.markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on, strip_headers=strip_headers)
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=kwargs.get("chunk_size", 500), chunk_overlap=kwargs.get("chunk_overlap", 50))      
     
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:
         # Fix mutable default argument issue

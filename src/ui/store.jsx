@@ -81,80 +81,89 @@ const useKnowledgebaseStore = create((set, get) => {
       }
     },
 
+    // Fetch knowledgebases from the API
+    fetchKnowledgebases: async () => {
+        try {
+            const knowledgebasesResponse = await fetchWithAuth('/api/knowledgebase');
+            
+            let knowledgebases = [];
+            if (knowledgebasesResponse.ok) {
+                const knowledgebasesData = await knowledgebasesResponse.json();
+                knowledgebases = knowledgebasesData.knowledgebases || [];
+            }
+            
+            set({ knowledgebases });
+            return knowledgebases;
+        } catch (err) {
+            console.error('Failed to fetch knowledgebases:', err);
+            throw err;
+        }
+    },
+
     // Initialize app by getting knowledgebases and embedding configs
     initializeApp: async () => {
-      try {
-        // Check if we're already initializing or initialized
-        const currentState = get();
-        if (currentState.isInitializing || currentState.authChecked) {
-          // Already initializing or initialized, no need to proceed
-          return;
-        }
-        
-        set({ isLoading: true, error: null, isInitializing: true });
-        
-        // For simplicity, we'll skip auth check for now
-        // and directly fetch knowledgebases
-        
-        // Get all knowledgebases
-        const knowledgebasesResponse = await fetchWithAuth('/api/knowledgebase');
-        
-        let knowledgebases = [];
-        if (knowledgebasesResponse.ok) {
-          const knowledgebasesData = await knowledgebasesResponse.json();
-          knowledgebases = knowledgebasesData.knowledgebases || [];
-        }
-        
-        // Create default knowledgebase if none exist
-        if (knowledgebases.length === 0) {
-          const createDefaultKBResponse = await fetchWithAuth('/api/knowledgebase', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: 'default',
-              description: 'Default knowledgebase'
-            })
-          });
-          
-          if (createDefaultKBResponse.ok) {
-            // Fetch knowledgebases again to get the newly created one
-            const updatedKBsResponse = await fetchWithAuth('/api/knowledgebase');
-            if (updatedKBsResponse.ok) {
-              const updatedKBsData = await updatedKBsResponse.json();
-              knowledgebases = updatedKBsData.knowledgebases || [];
+        try {
+            // Check if we're already initializing or initialized
+            const currentState = get();
+            if (currentState.isInitializing || currentState.authChecked) {
+                // Already initializing or initialized, no need to proceed
+                return;
             }
-          }
+            
+            set({ isLoading: true, error: null, isInitializing: true });
+            
+            // For simplicity, we'll skip auth check for now
+            // and directly fetch knowledgebases
+            
+            // Get all knowledgebases
+            let knowledgebases = await get().fetchKnowledgebases();
+            
+            // Create default knowledgebase if none exist
+            if (knowledgebases.length === 0) {
+                const createDefaultKBResponse = await fetchWithAuth('/api/knowledgebase', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: 'default',
+                        description: 'Default knowledgebase'
+                    })
+                });
+                
+                if (createDefaultKBResponse.ok) {
+                    // Fetch knowledgebases again to get the newly created one
+                    knowledgebases = await get().fetchKnowledgebases();
+                }
+            }
+            
+            // Get embedding configurations
+            const embeddingConfigResponse = await fetchWithAuth('/api/embedding_config');
+            let embeddingConfigs = [];
+            let activeEmbeddingConfig = null;
+            
+            if (embeddingConfigResponse.ok) {
+                const embeddingConfigData = await embeddingConfigResponse.json();
+                embeddingConfigs = embeddingConfigData.configs || [];
+                activeEmbeddingConfig = embeddingConfigData.active_config || null;
+            }
+            
+            // Update state with knowledgebases and embedding configs
+            set({ 
+                knowledgebases,
+                embeddingConfigs,
+                activeEmbeddingConfig,
+                isLoading: false,
+                isInitializing: false,
+                authChecked: true
+            });
+            
+        } catch (err) {
+            console.error('Failed to initialize app:', err);
+            set({ 
+                isLoading: false, 
+                isInitializing: false,
+                authChecked: true,
+                error: err.message
+            });
         }
-        
-        // Get embedding configurations
-        const embeddingConfigResponse = await fetchWithAuth('/api/embedding_config');
-        let embeddingConfigs = [];
-        let activeEmbeddingConfig = null;
-        
-        if (embeddingConfigResponse.ok) {
-          const embeddingConfigData = await embeddingConfigResponse.json();
-          embeddingConfigs = embeddingConfigData.configs || [];
-          activeEmbeddingConfig = embeddingConfigData.active_config || null;
-        }
-        
-        // Update state with knowledgebases and embedding configs
-        set({ 
-          knowledgebases,
-          embeddingConfigs,
-          activeEmbeddingConfig,
-          isLoading: false,
-          isInitializing: false,
-          authChecked: true
-        });
-        
-      } catch (err) {
-        console.error('Failed to initialize app:', err);
-        set({ 
-          isLoading: false, 
-          isInitializing: false,
-          authChecked: true,
-          error: err.message
-        });
-      }
     },
 
     // Update the active knowledgebase
@@ -216,12 +225,15 @@ const useKnowledgebaseStore = create((set, get) => {
       });
     },
     
-    // Trigger file browser refresh
-    refreshFileBrowser: (path = '') => {
+    // Trigger file browser refresh and update knowledgebases
+    refreshFileBrowser: async (path = '') => {
+      // Update the trigger for file browser refresh
       set((state) => ({
         fileBrowserRefreshTrigger: (state.fileBrowserRefreshTrigger || 0) + 1,
         fileBrowserLastModifiedPath: path
       }));
+      // Fetch updated knowledgebases with file counts
+      await get().fetchKnowledgebases();
     },
     
     // Embedding settings management functions
@@ -378,28 +390,31 @@ const useKnowledgebaseStore = create((set, get) => {
     
     updateRecursiveSettings: (settings) => {
       set(prev => {
-        let updatedSettings = {
-          ...prev.splitterSettings,
-          recursiveSettings: {
-            ...prev.splitterSettings.recursiveSettings,
-            ...settings
-          }
+        // Create updated recursive settings first
+        const updatedRecursiveSettings = {
+          ...prev.splitterSettings.recursiveSettings,
+          ...settings
         };
         
         // Ensure chunkOverlap doesn't exceed half of chunkSize
         if (settings.chunkSize !== undefined) {
-          updatedSettings.splitterSettings.recursiveSettings.chunkOverlap = Math.min(
-            updatedSettings.splitterSettings.recursiveSettings.chunkOverlap,
-            Math.floor(updatedSettings.splitterSettings.recursiveSettings.chunkSize / 2)
+          updatedRecursiveSettings.chunkOverlap = Math.min(
+            updatedRecursiveSettings.chunkOverlap,
+            Math.floor(updatedRecursiveSettings.chunkSize / 2)
           );
         } else if (settings.chunkOverlap !== undefined) {
-          updatedSettings.splitterSettings.recursiveSettings.chunkOverlap = Math.min(
-            updatedSettings.splitterSettings.recursiveSettings.chunkOverlap,
-            Math.floor(updatedSettings.splitterSettings.recursiveSettings.chunkSize / 2)
+          updatedRecursiveSettings.chunkOverlap = Math.min(
+            updatedRecursiveSettings.chunkOverlap,
+            Math.floor(prev.splitterSettings.recursiveSettings.chunkSize / 2)
           );
         }
         
-        return updatedSettings;
+        return {
+          splitterSettings: {
+            ...prev.splitterSettings,
+            recursiveSettings: updatedRecursiveSettings
+          }
+        };
       });
     },
     

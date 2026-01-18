@@ -1,11 +1,13 @@
 import os
 import shutil
+import json
 from datetime import datetime, timedelta, timezone
 
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
@@ -475,20 +477,72 @@ async def stream_upload_files(
     files: List[UploadFile] = File(...)
 ):
     """Upload one or more files to a knowledge base and stream results as they complete."""
-    try:
-        from fastapi.responses import StreamingResponse
-        import json
-        
-        indexer = get_indexer(knowledge_base)
-        pipeline = ParallelFileProcessingPipeline(indexer, memory_manager)
+    try:        
+        # indexer = get_indexer(knowledge_base)
+        # pipeline = ParallelFileProcessingPipeline(indexer, memory_manager)
+        pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
         
         async def generate():
-            async for result in pipeline.process_files(DEFAULT_USER_ID, knowledge_base, files, directory):
+            async for result in pipeline.upload_and_parse_files(DEFAULT_USER_ID, knowledge_base, files, directory):
                 yield json.dumps(result) + "\n"
         
         return StreamingResponse(generate(), media_type="application/x-ndjson")
     except Exception as e:
-        logger.exception(f"Error in stream upload: {e}", stack_info=True)
+        logger.exception(f"Error in stream uploading: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/chunk-files/{kb_id}")
+async def chunk_files(
+    kb_id: int,
+    request: Request
+):
+    """Chunk files in a knowledgebase."""
+    try:        
+        # Get all form data as a dictionary
+        form_data = await request.form()
+        
+        # Extract framework which is required
+        framework = form_data.get('framework', 'langchain')
+        
+        # Build kwargs from form data
+        kwargs = {}
+        for key, value in form_data.items():
+            if key != 'framework':
+                # Convert string booleans to actual booleans
+                if value.lower() in ['true', 'false']:
+                    kwargs[key] = value.lower() == 'true'
+                # Convert numeric values to integers
+                elif value.isdigit():
+                    kwargs[key] = int(value)
+                # Keep strings as-is
+                else:
+                    kwargs[key] = value
+        
+        pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
+        
+        async def generate():
+            async for result in pipeline.chunk_all_files_in_knowledgebase(kb_id, framework, **kwargs):
+                yield json.dumps(result) + "\n"
+        
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
+    except Exception as e:
+        logger.exception(f"Error in chunking files: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to get chunk run history
+@app.get("/api/chunk-runs/{kb_id}")
+async def get_chunk_runs(
+    kb_id: int
+):
+    """Get chunk run history for a knowledgebase."""
+    try:
+        chunk_runs = memory_manager.chunking_manager.get_chunk_runs_by_knowledgebase_id(kb_id)
+        return {
+            "success": True,
+            "chunk_runs": chunk_runs
+        }
+    except Exception as e:
+        logger.error(f"Error getting chunk runs: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint

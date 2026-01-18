@@ -1,12 +1,14 @@
 import './index.css';
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import useKnowledgebaseStore from './store';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import EmbeddingSettings from './EmbeddingSettings';
 import SplitterSettings from './SplitterSettings';
+import ChunkBrowser from './ChunkBrowser';
 
 function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
+  const [activeTab, setActiveTab] = useState('knowledgebase'); // 'chunk' or 'knowledgebase'
 
   // Initialize the app when it loads
   useEffect(() => {
@@ -30,7 +32,27 @@ function App() {
         <EmbeddingSettings />
       </div>
       <div className="main-content">
-        <KnowledgebaseBrowser />
+        {/* Tab Navigation */}
+        <div className="main-tabs">
+          <button 
+            className={`tab-btn ${activeTab === 'knowledgebase' ? 'active' : ''}`}
+            onClick={() => setActiveTab('knowledgebase')}
+          >
+            Knowledgebase Browser
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'chunk' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chunk')}
+          >
+            Chunk Browser
+          </button>
+        </div>
+        
+        {/* Tab Content */}
+        <div className="tab-content">
+          {activeTab === 'chunk' && <ChunkBrowser />}
+          {activeTab === 'knowledgebase' && <KnowledgebaseBrowser />}
+        </div>
       </div>
     </div>
   );

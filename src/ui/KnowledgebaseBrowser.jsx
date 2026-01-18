@@ -1339,7 +1339,7 @@ const KnowledgebaseBrowser = () => {
                               {result.file_size !== undefined && (
                                 <span>Size: {(result.file_size / 1024).toFixed(2)} KB</span>
                               )}
-                              {result.parsed && <span>• Indexed</span>}
+                              {result.parsed && <span>• Parsed</span>}
                             </div>
                           )}
                           {result.status === 'failed' && result.error && (
