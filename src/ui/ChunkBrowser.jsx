@@ -157,8 +157,10 @@ const ChunkBrowser = () => {
         {activeKnowledgebase && (
           <div className="active-knowledge-info">
             <h4>Active Knowledgebase</h4>
-            <p className="knowledge-name">{activeKnowledgebase.name}</p>
-            <p className="knowledge-description">{activeKnowledgebase.description || 'No description available'}</p>
+            <div className="knowledge-header">
+              <span className="knowledge-name">{activeKnowledgebase.name}</span>
+              <span className="knowledge-description">{activeKnowledgebase.description || 'No description available'}</span>
+            </div>
             <div className="knowledge-meta">
               <div className="knowledge-meta-item">
                 <span className="meta-label">Files:</span>

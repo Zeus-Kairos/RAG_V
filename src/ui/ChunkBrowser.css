@@ -22,7 +22,7 @@
 .chunk-browser-actions {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .chunk-browser-btn {
@@ -66,6 +66,32 @@
   margin: 0 0 8px 0;
   color: #333333;
   font-size: 16px;
+}
+
+.knowledge-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.knowledge-name {
+  font-size: 14px;
+  background-color: #4caf50;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.knowledge-description {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #666666;
+  /* font-style: italic; */
+  margin: 0;
+  flex: 1;
+  text-wrap: wrap;
 }
 
 .knowledge-meta {
