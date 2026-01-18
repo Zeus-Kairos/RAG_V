@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import useKnowledgebaseStore from './store';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import EmbeddingSettings from './EmbeddingSettings';
+import SplitterSettings from './SplitterSettings';
 
 function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
@@ -25,6 +26,7 @@ function App() {
   return (
     <div className="app-container">
       <div className="sidebar">
+        <SplitterSettings />
         <EmbeddingSettings />
       </div>
       <div className="main-content">

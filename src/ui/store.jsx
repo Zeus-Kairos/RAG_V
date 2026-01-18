@@ -67,6 +67,19 @@ const useKnowledgebaseStore = create((set, get) => {
     // Embedding settings state
     embeddingConfigs: [],
     activeEmbeddingConfig: null,
+    // Splitter settings state
+    splitterSettings: {
+      isMarkdownEnabled: false,
+      isRecursiveEnabled: true,
+      markdownSettings: {
+        headerLevels: 3,
+        stripHeaders: false
+      },
+      recursiveSettings: {
+        chunkSize: 1000,
+        chunkOverlap: 100
+      }
+    },
 
     // Initialize app by getting knowledgebases and embedding configs
     initializeApp: async () => {
@@ -332,6 +345,64 @@ const useKnowledgebaseStore = create((set, get) => {
       }
     },
     
+    // Splitter settings management functions
+    updateSplitterSettings: (newSettings) => {
+      set(prev => ({
+        splitterSettings: {
+          ...prev.splitterSettings,
+          ...newSettings
+        }
+      }));
+    },
+    
+    toggleSplitter: (splitterType, isEnabled) => {
+      set(prev => ({
+        splitterSettings: {
+          ...prev.splitterSettings,
+          [splitterType === 'markdown' ? 'isMarkdownEnabled' : 'isRecursiveEnabled']: isEnabled
+        }
+      }));
+    },
+    
+    updateMarkdownSettings: (settings) => {
+      set(prev => ({
+        splitterSettings: {
+          ...prev.splitterSettings,
+          markdownSettings: {
+            ...prev.splitterSettings.markdownSettings,
+            ...settings
+          }
+        }
+      }));
+    },
+    
+    updateRecursiveSettings: (settings) => {
+      set(prev => {
+        let updatedSettings = {
+          ...prev.splitterSettings,
+          recursiveSettings: {
+            ...prev.splitterSettings.recursiveSettings,
+            ...settings
+          }
+        };
+        
+        // Ensure chunkOverlap doesn't exceed half of chunkSize
+        if (settings.chunkSize !== undefined) {
+          updatedSettings.splitterSettings.recursiveSettings.chunkOverlap = Math.min(
+            updatedSettings.splitterSettings.recursiveSettings.chunkOverlap,
+            Math.floor(updatedSettings.splitterSettings.recursiveSettings.chunkSize / 2)
+          );
+        } else if (settings.chunkOverlap !== undefined) {
+          updatedSettings.splitterSettings.recursiveSettings.chunkOverlap = Math.min(
+            updatedSettings.splitterSettings.recursiveSettings.chunkOverlap,
+            Math.floor(updatedSettings.splitterSettings.recursiveSettings.chunkSize / 2)
+          );
+        }
+        
+        return updatedSettings;
+      });
+    },
+    
     // Logout function
     logout: () => {
       // Remove token from localStorage
@@ -343,6 +414,18 @@ const useKnowledgebaseStore = create((set, get) => {
         knowledgebases: [],
         embeddingConfigs: [],
         activeEmbeddingConfig: null,
+        splitterSettings: {
+          isMarkdownEnabled: false,
+          isRecursiveEnabled: true,
+          markdownSettings: {
+            headerLevels: 3,
+            stripHeaders: false
+          },
+          recursiveSettings: {
+            chunkSize: 1000,
+            chunkOverlap: 100
+          }
+        },
         isLoading: false,
         isInitializing: false,
         authChecked: true,
