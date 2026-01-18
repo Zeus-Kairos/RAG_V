@@ -100,7 +100,7 @@ const EmbeddingSettings = () => {
           className="embedding-btn embedding-btn-primary"
           onClick={handleAddConfig}
         >
-          Add Configuration
+          Add
         </button>
       </div>
       

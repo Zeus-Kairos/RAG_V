@@ -62,11 +62,10 @@ class ParallelFileProcessingPipeline:
 
         self.indexer.save_index()
     
-    async def _process_single_file(self, user_id: int, knowledge_base: str, file: UploadFile, upload_dir: str) -> Dict[str, Any]:
+    async def _process_single_file(self, knowledge_base: str, file: UploadFile, upload_dir: str) -> Dict[str, Any]:
         """Process a single file through upload, parsing, database insertion, splitting, and indexing.
         
         Args:
-            user_id: User identifier
             knowledge_base: Knowledge base name
             file: UploadFile object from FastAPI
             upload_dir: Directory to save the file

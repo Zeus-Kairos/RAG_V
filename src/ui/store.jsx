@@ -291,7 +291,9 @@ const useKnowledgebaseStore = create((set, get) => {
     deleteEmbeddingConfig: async (configId) => {
       try {
         set({ isLoading: true, error: null });
-        const response = await fetchWithAuth(`/api/embedding_config/${configId}`, {
+        // Properly encode the configId to handle slashes
+        const encodedConfigId = encodeURIComponent(configId);
+        const response = await fetchWithAuth(`/api/embedding_config/${encodedConfigId}`, {
           method: 'DELETE'
         });
         
@@ -311,7 +313,9 @@ const useKnowledgebaseStore = create((set, get) => {
     setActiveEmbeddingConfig: async (configId) => {
       try {
         set({ isLoading: true, error: null });
-        const response = await fetchWithAuth(`/api/embedding_config/${configId}/active`, {
+        // Properly encode the configId to handle slashes
+        const encodedConfigId = encodeURIComponent(configId);
+        const response = await fetchWithAuth(`/api/embedding_config/${encodedConfigId}/active`, {
           method: 'PATCH'
         });
         

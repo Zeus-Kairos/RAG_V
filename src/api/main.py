@@ -139,7 +139,7 @@ async def get_embedding_configuration():
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint to set active embedding configuration
-@app.patch("/api/embedding_config/{config_id}/active")
+@app.patch("/api/embedding_config/{config_id:path}/active")
 async def set_active_embedding_configuration(config_id: str):
     """Set an embedding configuration as active, deactivating all others."""
     try:
@@ -154,7 +154,7 @@ async def set_active_embedding_configuration(config_id: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for deleting an embedding configuration
-@app.delete("/api/embedding_config/{config_id}")
+@app.delete("/api/embedding_config/{config_id:path}")
 async def delete_embedding_configuration(config_id: str):
     """Delete an embedding configuration by ID."""
     try:
