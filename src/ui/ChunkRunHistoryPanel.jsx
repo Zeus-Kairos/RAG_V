@@ -31,6 +31,11 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       return;
     }
 
+    // Open the visualization window immediately (better UX + avoids popup blockers),
+    // render a loading skeleton, then populate it once the data is ready.
+    const visualizationWindow = openLoadingChunksWindow(fileName);
+    if (!visualizationWindow) return;
+
     try {
       setIsLoading(true);
       // Step 1: Get file parsed_text
@@ -52,19 +57,83 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       const chunksData = await chunksResponse.json();
       const chunks = chunksData.success ? chunksData.chunks : [];
 
-      // Step 3: Set loading to false BEFORE opening window (window.open can be slow)
+      // Step 3: Populate the already-open window
       setIsLoading(false);
       
       // Step 4: Open new window with parsed_text, chunk boundaries, and run parameters
-      openChunksWindow(parsedText, chunks, fileName, chunkRuns);
+      openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow);
     } catch (err) {
       console.error('Error opening chunks:', err);
       alert(`Failed to open chunks: ${err.message}`);
       setIsLoading(false);
+      try {
+        visualizationWindow.document.title = `Failed: Chunk Visualization: ${fileName}`;
+        visualizationWindow.document.body.innerHTML = `
+          <div style="font-family: Arial, sans-serif; padding: 24px;">
+            <h2 style="margin-bottom: 12px;">Failed to load chunk visualization</h2>
+            <div style="color:#b00020; white-space: pre-wrap;">${String(err?.message ?? err)}</div>
+          </div>
+        `;
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
-  const openChunksWindow = (parsedText, chunks, fileName, chunkRuns) => {
+  const openLoadingChunksWindow = (fileName) => {
+    const newWindow = window.open('', '_blank', 'width=1200,height=800');
+    if (!newWindow) {
+      alert('Could not open new window. Please check your popup blocker settings.');
+      return null;
+    }
+
+    // Try to maximize the new window (subject to browser constraints)
+    try {
+      newWindow.moveTo(0, 0);
+      newWindow.resizeTo(screen.availWidth, screen.availHeight);
+    } catch (e) {
+      // Best-effort only; ignore if blocked
+      console.warn('Unable to resize visualization window:', e);
+    }
+
+    newWindow.document.open();
+    newWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Loading… Chunk Visualization: ${fileName}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; background:#f5f5f5; margin:0; padding:24px; }
+          .card { background:#fff; border:1px solid #ddd; border-radius:10px; padding:18px; box-shadow:0 2px 4px rgba(0,0,0,0.08); max-width: 860px; }
+          .row { display:flex; align-items:center; gap:12px; }
+          .spinner {
+            width:16px; height:16px; border-radius:50%;
+            border:2px solid #ddd; border-top-color:#333;
+            animation: spin 0.9s linear infinite;
+          }
+          @keyframes spin { to { transform: rotate(360deg); } }
+          .sub { color:#666; font-size: 13px; margin-top: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="row">
+            <div class="spinner"></div>
+            <div><strong>Loading chunk visualization…</strong></div>
+          </div>
+          <div class="sub">Fetching file text and selected chunk runs. This window will update automatically.</div>
+        </div>
+      </body>
+      </html>
+    `);
+    newWindow.document.close();
+    return newWindow;
+  };
+
+  const openChunksWindow = (parsedText, chunks, fileName, chunkRuns, existingWindow = null) => {
     // Group chunks by chunk_run_id
     const chunksByRunId = chunks.reduce((acc, chunk) => {
       const runId = chunk.chunk_run_id;
@@ -237,20 +306,21 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       return result;
     };
 
-    // Create new window
-    const newWindow = window.open('', '_blank', 'width=1200,height=800');
+    // Use existing window if provided; otherwise open a new one
+    const newWindow = existingWindow || window.open('', '_blank', 'width=1200,height=800');
     if (!newWindow) {
       alert('Could not open new window. Please check your popup blocker settings.');
       return;
     }
 
-    // Try to maximize the new window (subject to browser constraints)
-    try {
-      newWindow.moveTo(0, 0);
-      newWindow.resizeTo(screen.availWidth, screen.availHeight);
-    } catch (e) {
-      // Best-effort only; ignore if blocked
-      console.warn('Unable to resize visualization window:', e);
+    // If we opened a new one here, attempt to maximize (best effort)
+    if (!existingWindow) {
+      try {
+        newWindow.moveTo(0, 0);
+        newWindow.resizeTo(screen.availWidth, screen.availHeight);
+      } catch (e) {
+        console.warn('Unable to resize visualization window:', e);
+      }
     }
 
     // Generate HTML for the new window
