@@ -1232,8 +1232,26 @@ const KnowledgebaseBrowser = () => {
                           <div className="item-header">
                             <div className="item-title-container">
                               <span className="item-name">{item.name}</span>
-                              {item.type === 'file' && item.file_size && (
-                                <span className="item-size">({(item.file_size / 1024).toFixed(2)} KB)</span>
+                              {item.type === 'file' && (
+                                <>
+                                  {item.file_size && (
+                                    <span className="item-size">
+                                      ({(item.file_size / 1024).toFixed(2)} KB)
+                                    </span>
+                                  )}
+                                  <button 
+                                    className="item-action view-btn item-history-inline-btn"
+                                    onClick={() => {
+                                      setSelectedFileId(item.id);
+                                      setSelectedFileName(item.name);
+                                      setShowChunkRunPanel(true);
+                                    }}
+                                    title="View chunk run history"
+                                  >
+                                    {/* Document sections icon representing chunks */}
+                                    📑
+                                  </button>
+                                </>
                               )}
                             </div>
                             {item.uploaded_time && (
@@ -1248,19 +1266,6 @@ const KnowledgebaseBrowser = () => {
                         </div>
                       </div>
                       <div className="item-actions">
-                        {item.type === 'file' && (
-                          <button 
-                            className="item-action view-btn"
-                            onClick={() => {
-                              setSelectedFileId(item.id);
-                              setSelectedFileName(item.name);
-                              setShowChunkRunPanel(true);
-                            }}
-                            title="View chunk run history"
-                          >
-                            👁️
-                          </button>
-                        )}
                         <button 
                           className="item-action delete-action"
                           onClick={() => {

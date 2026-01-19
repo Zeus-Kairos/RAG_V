@@ -55,8 +55,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       // Step 3: Set loading to false BEFORE opening window (window.open can be slow)
       setIsLoading(false);
       
-      // Step 4: Open new window with parsed_text and chunk boundaries
-      openChunksWindow(parsedText, chunks, fileName);
+      // Step 4: Open new window with parsed_text, chunk boundaries, and run parameters
+      openChunksWindow(parsedText, chunks, fileName, chunkRuns);
     } catch (err) {
       console.error('Error opening chunks:', err);
       alert(`Failed to open chunks: ${err.message}`);
@@ -64,7 +64,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     }
   };
 
-  const openChunksWindow = (parsedText, chunks, fileName) => {
+  const openChunksWindow = (parsedText, chunks, fileName, chunkRuns) => {
     // Group chunks by chunk_run_id
     const chunksByRunId = chunks.reduce((acc, chunk) => {
       const runId = chunk.chunk_run_id;
@@ -189,6 +189,15 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       return;
     }
 
+    // Try to maximize the new window (subject to browser constraints)
+    try {
+      newWindow.moveTo(0, 0);
+      newWindow.resizeTo(screen.availWidth, screen.availHeight);
+    } catch (e) {
+      // Best-effort only; ignore if blocked
+      console.warn('Unable to resize visualization window:', e);
+    }
+
     // Generate HTML for the new window
     let html = `
       <!DOCTYPE html>
@@ -254,6 +263,16 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             padding: 10px;
             padding-right: calc(10px + var(--scrollbar-gutter-size)); /* manual gutter fallback */
             position: relative;
+          }
+
+          /* Hide scrollbars but keep scroll functionality */
+          .text-container {
+            scrollbar-width: none; /* Firefox */
+          }
+
+          .text-container::-webkit-scrollbar {
+            width: 0;
+            height: 0;
           }
           
           .chunk-text {
@@ -346,10 +365,45 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       '#374151'  // gray-700
     ];
 
+    // Create a mapping from runId to run parameters
+    const runParamsMap = new Map();
+    chunkRuns.forEach(run => {
+      runParamsMap.set(run.id, run.parameters);
+    });
+
+    // Helper function to format parameters for display
+    const formatParamsForDisplay = (params) => {
+      if (!params) return '';
+      
+      // Convert to object if it's a string
+      const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
+      
+      // Format parameters as readable strings, excluding any nested objects
+      return Object.entries(paramsObj)
+        .filter(([key, value]) => typeof value !== 'object' || value === null)
+        .map(([key, value]) => {
+          // Format key to be more readable
+          const displayKey = key
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase());
+          
+          // Format value based on type
+          let displayValue = value;
+          if (typeof value === 'boolean') {
+            displayValue = value ? 'Enabled' : 'Disabled';
+          }
+          
+          return `${displayKey}: ${displayValue}`;
+        })
+        .join(', ');
+    };
+
     // Process each chunk run
     runIds.forEach((runId, runIndex) => {
       const runChunks = chunksByRunId[runId];
       const baseColor = colors[runIndex % colors.length];
+      const runParams = runParamsMap.get(parseInt(runId));
+      const formattedParams = formatParamsForDisplay(runParams);
       
       // Find positions for all chunks and filter out those with no match
       let lastStart = -1;
@@ -371,7 +425,10 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       // Generate HTML for this run
       html += `
         <div class="run-column">
-          <div class="run-header">Chunk Run ID: ${runId} (${chunksWithPositions.length}/${runChunks.length} chunks matched)</div>
+          <div class="run-header">
+            <div style="margin-bottom: 5px; font-weight: bold;">Chunk Run: ${runIndex + 1} (${chunksWithPositions.length}/${runChunks.length} chunks matched)</div>
+            <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word;">${formattedParams || 'No parameters available'}</div>
+          </div>
           <div class="text-container" style="position: relative;">
             <div class="chunk-text">${highlightedText}</div>
       `;
@@ -381,7 +438,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           <div class="legend">
             <div class="legend-item">
               <span class="legend-color" style="background-color: ${baseColor};"></span>
-              <span>Chunks for Run ${runIndex + 1}</span>
+              <span>Run Parameters: ${formattedParams}</span>
             </div>
           </div>
         </div>
