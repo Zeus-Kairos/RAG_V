@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useKnowledgebaseStore from './store';
 import './SplitterSettings.css';
 
 const SplitterSettings = () => {
   const [activeTab, setActiveTab] = useState('Langchain');
+  // Local state for input values to prevent immediate sync on every keystroke
+  const [localChunkSize, setLocalChunkSize] = useState('');
+  const [localChunkOverlap, setLocalChunkOverlap] = useState('');
   
   const { 
     splitterSettings, 
@@ -18,6 +21,15 @@ const SplitterSettings = () => {
     markdownSettings, 
     recursiveSettings 
   } = splitterSettings;
+  
+  // Sync local state with store when store values change
+  useEffect(() => {
+    setLocalChunkSize(recursiveSettings.chunkSize.toString());
+  }, [recursiveSettings.chunkSize]);
+  
+  useEffect(() => {
+    setLocalChunkOverlap(recursiveSettings.chunkOverlap.toString());
+  }, [recursiveSettings.chunkOverlap]);
   
   // Handle splitter toggle
   const handleSplitterToggle = (splitterType, isEnabled) => {
@@ -116,10 +128,36 @@ const SplitterSettings = () => {
               
               <div className="splitter-section-content">
                 <div className="param-group">
-                  <label htmlFor="chunk-size">Chunk Size: {recursiveSettings.chunkSize}</label>
+                  <label htmlFor="chunk-size" className="param-label-with-input">
+                    Chunk Size: 
+                    <input
+                      type="number"
+                      id="chunk-size-input"
+                      className="param-text-input-inline"
+                      min="50"
+                      max="10000"
+                      value={localChunkSize}
+                      onChange={(e) => setLocalChunkSize(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          let value = parseInt(localChunkSize);
+                          if (isNaN(value) || value < 50) value = 50;
+                          if (value > 10000) value = 10000;
+                          handleRecursiveSettingChange('chunkSize', value);
+                        }
+                      }}
+                      onBlur={() => {
+                        let value = parseInt(localChunkSize);
+                        if (isNaN(value) || value < 50) value = 50;
+                        if (value > 10000) value = 10000;
+                        handleRecursiveSettingChange('chunkSize', value);
+                      }}
+                    />
+                  </label>
                   <input
                     type="range"
                     id="chunk-size"
+                    className="param-slider"
                     min="50"
                     max="10000"
                     value={recursiveSettings.chunkSize}
@@ -128,10 +166,39 @@ const SplitterSettings = () => {
                 </div>
                 
                 <div className="param-group">
-                  <label htmlFor="chunk-overlap">Chunk Overlap: {recursiveSettings.chunkOverlap} (max: {Math.floor(recursiveSettings.chunkSize / 2)})</label>
+                  <label htmlFor="chunk-overlap" className="param-label-with-input">
+                    Chunk Overlap: 
+                    <input
+                      type="number"
+                      id="chunk-overlap-input"
+                      className="param-text-input-inline"
+                      min="0"
+                      max={Math.floor(recursiveSettings.chunkSize / 2)}
+                      value={localChunkOverlap}
+                      onChange={(e) => setLocalChunkOverlap(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          let value = parseInt(localChunkOverlap);
+                          const maxOverlap = Math.floor(recursiveSettings.chunkSize / 2);
+                          if (isNaN(value) || value < 0) value = 0;
+                          if (value > maxOverlap) value = maxOverlap;
+                          handleRecursiveSettingChange('chunkOverlap', value);
+                        }
+                      }}
+                      onBlur={() => {
+                        let value = parseInt(localChunkOverlap);
+                        const maxOverlap = Math.floor(recursiveSettings.chunkSize / 2);
+                        if (isNaN(value) || value < 0) value = 0;
+                        if (value > maxOverlap) value = maxOverlap;
+                        handleRecursiveSettingChange('chunkOverlap', value);
+                      }}
+                    />
+                    <span className="param-max-value"> (max: {Math.floor(recursiveSettings.chunkSize / 2)})</span>
+                  </label>
                   <input
                     type="range"
                     id="chunk-overlap"
+                    className="param-slider"
                     min="0"
                     max={Math.floor(recursiveSettings.chunkSize / 2)}
                     value={recursiveSettings.chunkOverlap}
