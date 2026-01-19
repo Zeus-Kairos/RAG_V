@@ -3,6 +3,7 @@ import asyncio
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from markitdown import MarkItDown
+from bs4 import BeautifulSoup
 import html2text
 
 from src.file_process.pdf_parser import PdfParser
@@ -17,10 +18,6 @@ class FileParser:
     """
     
     def __init__(self, pdf_parser: Optional[PdfParser] = None):
-        self.html_converter = html2text.HTML2Text()
-        self.html_converter.ignore_links = False
-        self.html_converter.ignore_images = False
-        self.html_converter.body_width = 0  # No line wrapping
         self.markdownable_parser = MarkItDown(enable_plugins=False)
         self.pdf_parser = pdf_parser or PdfParser()
     
@@ -181,9 +178,22 @@ class FileParser:
     
     def _parse_html(self, content: str) -> str:
         """
-        Parse HTML content using html2text.
-        """
-        return self.html_converter.handle(content)
+        Parse HTML content using BeautifulSoup4 to handle malformed HTML, then convert to text using html2text.
+        Creates a new HTML2Text instance for each call to ensure thread safety.
+        """        
+        # Use BeautifulSoup to handle malformed HTML
+        soup = BeautifulSoup(content, 'html.parser')
+        # Get the cleaned HTML
+        cleaned_html = str(soup)
+        
+        # Create a new HTML2Text instance for each call to ensure thread safety
+        converter = html2text.HTML2Text()
+        converter.ignore_links = False
+        converter.ignore_images = False
+        converter.body_width = 0  # No line wrapping
+        
+        # Convert to markdown using html2text
+        return converter.handle(cleaned_html)
 
     def _parse_pdf(self, file_path: str) -> str:
         """
