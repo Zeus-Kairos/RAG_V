@@ -78,19 +78,74 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     const runIds = Object.keys(chunksByRunId);
     const isSingleRun = runIds.length === 1;
 
-    // Helper function to find chunk positions in the text (optimized version)
-    const findChunkPositions = (chunkContent, fileText, minStart = 0) => {
-      // Simple and fast exact match search
-      const startIdx = fileText.indexOf(chunkContent, minStart);
+    // Helper function to find chunk positions in the text
+    const findChunkPositions = (chunkContent, fileText, minStart = 0, useExactMatch = false) => {
       
-      if (startIdx === -1 || startIdx < minStart) {
-        return null; // No match found (removed expensive similarity check)
+      // Handle empty/whitespace-only chunks separately to avoid failing tokenization
+      if (!chunkContent || !chunkContent.trim()) {
+        const startIdx = fileText.indexOf(chunkContent, minStart);
+        if (startIdx !== -1 && startIdx >= minStart) {
+          return { start_idx: startIdx, end_idx: startIdx + chunkContent.length };
+        }
+        // Fallback: treat as zero-length match at minStart to keep progression
+        return { start_idx: minStart, end_idx: minStart };
+      }
+
+      // Use exact match when markdown header splitting is disabled
+      if (useExactMatch) {
+        // Simple and fast exact match search (original implementation)
+        const startIdx = fileText.indexOf(chunkContent, minStart);
+        
+        if (startIdx === -1 || startIdx < minStart) {
+          return null; // No match found
+        }
+        
+        return {
+          start_idx: startIdx,
+          end_idx: startIdx + chunkContent.length
+        };
       }
       
-      return {
-        start_idx: startIdx,
-        end_idx: startIdx + chunkContent.length
-      };
+      // Use regex match when markdown header splitting is enabled (handles whitespace differences)
+      try {
+        // Token-based regex: match the same non-whitespace tokens in order, allowing
+        // any amount of whitespace between them. This is robust to blank-line removal.
+        const tokens = chunkContent.trim().split(/\s+/).filter(Boolean);
+        if (tokens.length === 0) return null;
+
+        const pattern = tokens
+          .map(t => t.replace(/[.*+?^${}()|\[\]\\]/g, '\\$&'))
+          .join('\\s*');
+        
+        // Create regex with global flag to use lastIndex for starting position
+        const regex = new RegExp(pattern, 'g');
+        
+        // Set the starting position for the search
+        regex.lastIndex = minStart;
+        
+        // Find the match
+        const match = regex.exec(fileText);
+        
+        if (!match || match.index < minStart) {
+          return null; // No match found
+        }
+        
+        return {
+          start_idx: match.index,
+          end_idx: match.index + match[0].length
+        };
+      } catch (e) {
+        console.warn('Regex matching failed, falling back to exact match:', e);
+        // Fallback to exact match if regex fails
+        const startIdx = fileText.indexOf(chunkContent, minStart);
+        if (startIdx === -1 || startIdx < minStart) {
+          return null;
+        }
+        return {
+          start_idx: startIdx,
+          end_idx: startIdx + chunkContent.length
+        };
+      }
     };
 
     // Escape raw text before injecting into HTML
@@ -407,10 +462,27 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       
       // Find positions for all chunks and filter out those with no match
       let lastStart = -1;
-      const chunksWithPositions = runChunks
+      // Check if markdown header splitting was disabled (use exact match in that case)
+      const useExactMatch = runParams && runParams.markdown_header_splitting === false;
+      // IMPORTANT: enforce document order before applying the increasing-start constraint.
+      // The API may not return chunks sorted, and an out-of-order chunk would fail matching
+      // once minStart has advanced past its true location.
+      const runChunksSorted = [...runChunks].sort((a, b) => {
+        const aId = typeof a.chunk_id === 'string' ? a.chunk_id : '';
+        const bId = typeof b.chunk_id === 'string' ? b.chunk_id : '';
+        const aParts = aId.split('_');
+        const bParts = bId.split('_');
+        const aIdx = parseInt(aParts[aParts.length - 1], 10);
+        const bIdx = parseInt(bParts[bParts.length - 1], 10);
+        if (!Number.isNaN(aIdx) && !Number.isNaN(bIdx)) return aIdx - bIdx;
+        // Fallback: stable string compare
+        return String(aId).localeCompare(String(bId));
+      });
+
+      const chunksWithPositions = runChunksSorted
         .map(chunk => {
           const minStart = lastStart + 1; // enforce strictly after previous start
-          const positions = findChunkPositions(chunk.content, parsedText, minStart);
+          const positions = findChunkPositions(chunk.content, parsedText, minStart, useExactMatch);
           if (!positions) return null;
           lastStart = positions.start_idx;
           return { ...chunk, ...positions };
