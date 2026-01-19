@@ -201,7 +201,7 @@ class ChunkingManager:
             logger.error(f"Error adding chunks: {e}")
             raise
     
-    def get_chunks_by_file_id(self, file_id: int) -> List[Dict[str, Any]]:
+    def get_chunks_by_file_id(self, file_id: int, chunk_run_ids: List[int] = None) -> List[Dict[str, Any]]:
         """
         Get all chunks for a specific file.
         
@@ -213,10 +213,16 @@ class ChunkingManager:
         """
         try:
             cur = self.conn.cursor()
-            cur.execute(
-                "SELECT chunk_id, file_id, chunk_run_id, content, metadata FROM chunks WHERE file_id = ?",
-                (file_id,)
-            )
+            if chunk_run_ids:
+                cur.execute(
+                    "SELECT chunk_id, file_id, chunk_run_id, content, metadata FROM chunks WHERE file_id = ? AND chunk_run_id IN ({})".format(','.join('?'*len(chunk_run_ids))),
+                    (file_id, *chunk_run_ids)
+                )
+            else:
+                cur.execute(
+                    "SELECT chunk_id, file_id, chunk_run_id, content, metadata FROM chunks WHERE file_id = ?",
+                    (file_id,)
+                )
             
             chunks = []
             for row in cur.fetchall():
@@ -378,4 +384,40 @@ class ChunkingManager:
             return chunk_runs
         except Exception as e:
             logger.error(f"Error getting chunk runs by knowledgebase ID: {e}")
+            raise
+
+    def get_chunk_runs_by_file_id(self, file_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all chunk runs that have chunks with the designated file_id, ordered by run_time descending.
+        
+        Args:
+            file_id: ID of the file
+            
+        Returns:
+            List of chunk run records
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT DISTINCT chunk_run.id, chunk_run.knowledgebase_id, chunk_run.framework, chunk_run.parameters, chunk_run.run_time "
+                "FROM chunk_run "
+                "JOIN chunks ON chunk_run.id = chunks.chunk_run_id "
+                "WHERE chunks.file_id = ? "
+                "ORDER BY chunk_run.run_time DESC",
+                (file_id,)
+            )
+            
+            chunk_runs = []
+            for row in cur.fetchall():
+                chunk_runs.append({
+                    "id": row[0],
+                    "knowledgebase_id": row[1],
+                    "framework": row[2],
+                    "parameters": json.loads(row[3]),
+                    "run_time": row[4]
+                })
+            
+            return chunk_runs
+        except Exception as e:
+            logger.error(f"Error getting chunk runs by file ID: {e}")
             raise

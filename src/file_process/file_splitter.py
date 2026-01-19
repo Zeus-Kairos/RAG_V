@@ -9,7 +9,7 @@ class LangchainFileSplitter:
         strip_headers = kwargs.get("strip_headers", False)
         self.recursive_splitting = kwargs.get("recursive_splitting", True)
         self.markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on, strip_headers=strip_headers)
-        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=kwargs.get("chunk_size", 500), chunk_overlap=kwargs.get("chunk_overlap", 50))      
+        self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=kwargs.get("chunk_size", 500), chunk_overlap=kwargs.get("chunk_overlap", 50), strip_whitespace=False)      
     
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:
         # Fix mutable default argument issue

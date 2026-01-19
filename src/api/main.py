@@ -564,6 +564,72 @@ async def delete_chunk_run(
         logger.error(f"Error deleting chunk run: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to get chunk runs by file_id
+@app.get("/api/chunk-runs/by-file/{file_id}")
+async def get_chunk_runs_by_file(
+    file_id: int
+):
+    """Get chunk run history for a specific file."""
+    try:
+        chunk_runs = memory_manager.chunking_manager.get_chunk_runs_by_file_id(file_id)
+        return {
+            "success": True,
+            "chunk_runs": chunk_runs
+        }
+    except Exception as e:
+        logger.error(f"Error getting chunk runs by file ID: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to get chunks by file_id and chunk_run_ids
+@app.get("/api/chunks")
+async def get_chunks(
+    file_id: int, 
+    chunk_run_ids: Optional[str] = None
+):
+    """Get chunks by file_id and optionally filter by chunk_run_ids."""
+    try:
+        # Parse chunk_run_ids from comma-separated string to list of integers if provided
+        parsed_chunk_run_ids = None
+        if chunk_run_ids:
+            parsed_chunk_run_ids = [int(id.strip()) for id in chunk_run_ids.split(",") if id.strip().isdigit()]
+        
+        chunks = memory_manager.chunking_manager.get_chunks_by_file_id(file_id, parsed_chunk_run_ids)
+        
+        return {
+            "success": True,
+            "chunks": chunks
+        }
+    except Exception as e:
+        logger.error(f"Error getting chunks: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to get a file by its ID
+@app.get("/api/files/{file_id}")
+async def get_file_by_id(file_id: int):
+    """Get file details by file_id."""
+    try:
+        file_tuple = memory_manager.knowledgebase_manager.get_file_by_id(file_id)
+        if not file_tuple:
+            raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
+        
+        # Convert tuple to dictionary with meaningful keys
+        file = {
+            "file_id": file_tuple[0],
+            "filename": file_tuple[1],
+            "filepath": file_tuple[2],
+            "parsed_text": file_tuple[3],
+        }
+        
+        return {
+            "success": True,
+            "file": file
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting file by ID: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from './store';
 import useKnowledgebaseStore from './store';
+import ChunkRunHistoryPanel from './ChunkRunHistoryPanel';
 import './KnowledgebaseBrowser.css';
 
 const KnowledgebaseBrowser = () => {
@@ -26,6 +27,10 @@ const KnowledgebaseBrowser = () => {
   // State variables for editing knowledgebase descriptions
   const [showInlineEdit, setShowInlineEdit] = useState(false);
   const [kbToEditDescription, setKBToEditDescription] = useState(null);
+  // State for chunk run history panel
+  const [showChunkRunPanel, setShowChunkRunPanel] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState(null);
+  const [selectedFileName, setSelectedFileName] = useState(null);
   const [editKBDescription, setEditKBDescription] = useState('');
   
   // State variables for bulk editing file/folder descriptions
@@ -1242,19 +1247,34 @@ const KnowledgebaseBrowser = () => {
                           )}
                         </div>
                       </div>
-                      <button 
-                        className="item-action delete-action"
-                        onClick={() => {
-                          if (item.type === 'folder') {
-                            deleteFolder(item.name);
-                          } else {
-                            deleteFile(item.name);
-                          }
-                        }}
-                        title={`Delete ${item.type}`}
-                      >
-                        🗑️
-                      </button>
+                      <div className="item-actions">
+                        {item.type === 'file' && (
+                          <button 
+                            className="item-action view-btn"
+                            onClick={() => {
+                              setSelectedFileId(item.id);
+                              setSelectedFileName(item.name);
+                              setShowChunkRunPanel(true);
+                            }}
+                            title="View chunk run history"
+                          >
+                            👁️
+                          </button>
+                        )}
+                        <button 
+                          className="item-action delete-action"
+                          onClick={() => {
+                            if (item.type === 'folder') {
+                              deleteFolder(item.name);
+                            } else {
+                              deleteFile(item.name);
+                            }
+                          }}
+                          title={`Delete ${item.type}`}
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   ))}
               </div>
@@ -1660,6 +1680,18 @@ const KnowledgebaseBrowser = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Chunk Run History Panel */}
+      {showChunkRunPanel && (
+        <>
+          <div className="chunk-run-history-overlay" onClick={() => setShowChunkRunPanel(false)} />
+          <ChunkRunHistoryPanel 
+            fileId={selectedFileId} 
+            fileName={selectedFileName} 
+            onClose={() => setShowChunkRunPanel(false)} 
+          />
+        </>
       )}
     </div>
   );
