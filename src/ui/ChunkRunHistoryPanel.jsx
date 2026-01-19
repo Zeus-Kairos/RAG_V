@@ -79,11 +79,11 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     const isSingleRun = runIds.length === 1;
 
     // Helper function to find chunk positions in the text (optimized version)
-    const findChunkPositions = (chunkContent, fileText) => {
+    const findChunkPositions = (chunkContent, fileText, minStart = 0) => {
       // Simple and fast exact match search
-      const startIdx = fileText.indexOf(chunkContent);
+      const startIdx = fileText.indexOf(chunkContent, minStart);
       
-      if (startIdx === -1) {
+      if (startIdx === -1 || startIdx < minStart) {
         return null; // No match found (removed expensive similarity check)
       }
       
@@ -350,16 +350,18 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     runIds.forEach((runId, runIndex) => {
       const runChunks = chunksByRunId[runId];
       const baseColor = colors[runIndex % colors.length];
-      const highlightColor = applyAlpha(baseColor, 0.22); // lighter overlay
       
       // Find positions for all chunks and filter out those with no match
+      let lastStart = -1;
       const chunksWithPositions = runChunks
         .map(chunk => {
-          const positions = findChunkPositions(chunk.content, parsedText);
-          return positions ? { ...chunk, ...positions } : null;
+          const minStart = lastStart + 1; // enforce strictly after previous start
+          const positions = findChunkPositions(chunk.content, parsedText, minStart);
+          if (!positions) return null;
+          lastStart = positions.start_idx;
+          return { ...chunk, ...positions };
         })
-        .filter(chunk => chunk !== null)
-        .sort((a, b) => a.start_idx - b.start_idx); // Sort by start position
+        .filter(chunk => chunk !== null);
       const highlightedText = formatTextWithBoundaryMarkers(
         parsedText,
         chunksWithPositions,
@@ -424,7 +426,12 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
 
   const formatDateTime = (dateTimeStr) => {
     if (!dateTimeStr) return '';
-    const date = new Date(dateTimeStr);
+    // Ensure datetime string is in ISO format with UTC timezone for correct parsing
+    const isoDateTimeStr = dateTimeStr
+      .replace(/\s+/, 'T') // Replace space with T to make ISO format
+      .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(?!Z$)/, '$1Z'); // Add Z if missing, indicating UTC
+    const date = new Date(isoDateTimeStr);
+    // Convert to local time and display in a readable format
     return date.toLocaleString();
   };
 
