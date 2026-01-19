@@ -8,6 +8,11 @@ const ChunkBrowser = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Chunking modal state
+  const [showChunkingModal, setShowChunkingModal] = useState(false);
+  const [chunkingResults, setChunkingResults] = useState([]);
+  // Ref for auto-scrolling results
+  const chunkingResultsListRef = React.useRef(null);
   
   // Get active knowledgebase
   const activeKnowledgebase = knowledgebases.find(kb => kb.is_active === 1) || knowledgebases[0];
@@ -32,6 +37,13 @@ const ChunkBrowser = () => {
     }
   };
   
+  // Auto-scroll to bottom when chunking results change
+  useEffect(() => {
+    if (chunkingResultsListRef.current) {
+      chunkingResultsListRef.current.scrollTop = chunkingResultsListRef.current.scrollHeight;
+    }
+  }, [chunkingResults]);
+
   const handleRunChunking = async () => {
     if (!activeKnowledgebase) {
       setError('No active knowledgebase found');
@@ -41,6 +53,8 @@ const ChunkBrowser = () => {
     try {
       setIsRunning(true);
       setError(null);
+      setShowChunkingModal(true);
+      setChunkingResults([]);
       
       // Prepare form data with splitter settings
       const formData = new FormData();
@@ -77,6 +91,8 @@ const ChunkBrowser = () => {
           try {
             const result = JSON.parse(line);
             console.log('Chunking result:', result);
+            // Update results state for modal display
+            setChunkingResults(prev => [...prev, result]);
           } catch (parseError) {
             console.error('Error parsing chunking result:', parseError);
           }
@@ -250,6 +266,98 @@ const ChunkBrowser = () => {
           )}
         </div>
       </div>
+      
+      {/* Chunking Progress Modal */}
+      {showChunkingModal && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog">
+            <div className="dialog-header">
+              <h3>Chunking Progress</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => {
+                  setShowChunkingModal(false);
+                  setChunkingResults([]);
+                }}
+                disabled={isRunning}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body">
+              {/* Real-time Chunking Results */}
+              {chunkingResults.length > 0 && (
+                <div className="upload-results">
+                  <p>Chunking Results:</p>
+                  <div className="upload-results-list" ref={chunkingResultsListRef}>
+                    {chunkingResults.map((result, index) => {
+                      // Get status icon and message based on result
+                      let statusIcon, statusClass;
+                      switch (result.status) {
+                        case 'success':
+                        case 'completed': // Chunking uses 'completed' instead of 'success'
+                          statusIcon = '✅';
+                          statusClass = 'upload-success';
+                          break;
+                        case 'failed':
+                          statusIcon = '❌';
+                          statusClass = 'upload-failed';
+                          break;
+                        default:
+                          statusIcon = '⏳';
+                          statusClass = 'upload-processing';
+                      }
+                      
+                      return (
+                        <div key={index} className={`upload-result-item ${statusClass}`}>
+                          <div className="upload-result-header">
+                            <span className="upload-result-icon">{statusIcon}</span>
+                            <span className="upload-result-filename">{result.filename || 'Processing...'}</span>
+                            <span className="upload-result-status">
+                              {result.status === 'completed' ? 'Completed' : 
+                               result.status ? result.status.charAt(0).toUpperCase() + result.status.slice(1) : 'Processing'}
+                            </span>
+                          </div>
+                          {(result.status === 'success' || result.status === 'completed') && result.chunks_count && (
+                            <div className="upload-result-details">
+                              <span>Chunks: {result.chunks_count}</span>
+                            </div>
+                          )}
+                          {result.status === 'failed' && result.error && (
+                            <div className="upload-result-error">
+                              {result.error}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {isRunning && (
+                <div className="uploading-indicator">
+                  <div className="loading-spinner"></div>
+                  <span>
+                    Chunking files... ({chunkingResults.filter(r => r.status).length} files processed)
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => {
+                  setShowChunkingModal(false);
+                  setChunkingResults([]);
+                }}
+                disabled={isRunning}
+              >
+                {isRunning ? 'Processing...' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

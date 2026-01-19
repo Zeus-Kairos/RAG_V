@@ -274,11 +274,11 @@ class ParallelFileProcessingPipeline:
                 "file_id": file_id,
                 "filename": filename,
                 "status": "completed",
-                "chunks_count": len(chunks_added),
+                "chunks_count": chunks_added,
                 "chunk_run_id": chunk_run_id
             }
         except Exception as e:
-            logger.error(f"Error chunking file {filename}: {e}")
+            logger.exception(f"Error chunking file {filename}: {e}", stack_info=True)
             return {
                 "file_id": file_id,
                 "filename": filename,

@@ -45,7 +45,8 @@ class ChunkingManager:
             # Create chunks table for storing individual chunks
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chunks (
-                    chunk_id TEXT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chunk_id TEXT NOT NULL,
                     file_id INTEGER NOT NULL,
                     chunk_run_id INTEGER NOT NULL,
                     content TEXT NOT NULL,
@@ -190,11 +191,6 @@ class ChunkingManager:
                 """
                 INSERT INTO chunks (chunk_id, file_id, chunk_run_id, content, metadata) 
                 VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(chunk_id) DO UPDATE 
-                SET file_id = excluded.file_id,
-                    chunk_run_id = excluded.chunk_run_id,
-                    content = excluded.content,
-                    metadata = excluded.metadata
                 """,
                 chunk_data
             )

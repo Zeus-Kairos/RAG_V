@@ -69,7 +69,7 @@ const useKnowledgebaseStore = create((set, get) => {
     activeEmbeddingConfig: null,
     // Splitter settings state
     splitterSettings: {
-      isMarkdownEnabled: false,
+      isMarkdownEnabled: true,
       isRecursiveEnabled: true,
       markdownSettings: {
         headerLevels: 3,
@@ -430,7 +430,7 @@ const useKnowledgebaseStore = create((set, get) => {
         embeddingConfigs: [],
         activeEmbeddingConfig: null,
         splitterSettings: {
-          isMarkdownEnabled: false,
+          isMarkdownEnabled: true,
           isRecursiveEnabled: true,
           markdownSettings: {
             headerLevels: 3,

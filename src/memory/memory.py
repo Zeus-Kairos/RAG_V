@@ -35,6 +35,7 @@ class MemoryManager:
         
         # Get database path from environment or use default
         db_path = os.getenv("DB_URI", "./data/rag_v.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         
         # Create SQLite connection
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
