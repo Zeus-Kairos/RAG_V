@@ -80,6 +80,25 @@ const useKnowledgebaseStore = create((set, get) => {
         chunkOverlap: 100
       }
     },
+    
+    // Parser settings state
+    parserSettings: {
+      pdf: {
+        framework: 'pymupdf4llm',
+        params: {
+          detectLayout: true,
+          useOcr: false
+        }
+      },
+      docx: {
+        framework: 'MarkitDown',
+        params: {}
+      },
+      pptx: {
+        framework: 'MarkitDown',
+        params: {}
+      }
+    },
 
     // Fetch knowledgebases from the API
     fetchKnowledgebases: async () => {
@@ -418,6 +437,46 @@ const useKnowledgebaseStore = create((set, get) => {
       });
     },
     
+    // Parser settings management functions
+    updateParserSettings: (fileType, newSettings) => {
+      set(prev => ({
+        parserSettings: {
+          ...prev.parserSettings,
+          [fileType]: {
+            ...prev.parserSettings[fileType],
+            ...newSettings
+          }
+        }
+      }));
+    },
+    
+    updateParserFramework: (fileType, framework) => {
+      set(prev => ({
+        parserSettings: {
+          ...prev.parserSettings,
+          [fileType]: {
+            ...prev.parserSettings[fileType],
+            framework
+          }
+        }
+      }));
+    },
+    
+    updateParserParams: (fileType, params) => {
+      set(prev => ({
+        parserSettings: {
+          ...prev.parserSettings,
+          [fileType]: {
+            ...prev.parserSettings[fileType],
+            params: {
+              ...prev.parserSettings[fileType].params,
+              ...params
+            }
+          }
+        }
+      }));
+    },
+    
     // Logout function
     logout: () => {
       // Remove token from localStorage
@@ -439,6 +498,23 @@ const useKnowledgebaseStore = create((set, get) => {
           recursiveSettings: {
             chunkSize: 1000,
             chunkOverlap: 100
+          }
+        },
+        parserSettings: {
+          pdf: {
+            framework: 'pymupdf4llm',
+            params: {
+              detectLayout: true,
+              useOcr: false
+            }
+          },
+          docx: {
+            framework: 'MarkitDown',
+            params: {}
+          },
+          pptx: {
+            framework: 'MarkitDown',
+            params: {}
           }
         },
         isLoading: false,

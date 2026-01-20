@@ -4,6 +4,7 @@ import useKnowledgebaseStore from './store';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import EmbeddingSettings from './EmbeddingSettings';
 import SplitterSettings from './SplitterSettings';
+import ParserSettings from './ParserSettings';
 import ChunkBrowser from './ChunkBrowser';
 
 function App() {
@@ -28,8 +29,9 @@ function App() {
   return (
     <div className="app-container">
       <div className="sidebar">
-        <SplitterSettings />
-        <EmbeddingSettings />
+        {activeTab === 'chunk' && <SplitterSettings />}
+        {activeTab === 'knowledgebase' && <ParserSettings />}
+        {activeTab === 'chunk' && <EmbeddingSettings />}
       </div>
       <div className="main-content">
         {/* Tab Navigation */}

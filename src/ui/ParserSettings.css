@@ -1,0 +1,108 @@
+.parser-settings {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.parser-settings-header {
+  margin-bottom: 12px;
+}
+
+.parser-settings-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Parser Section Styles */
+.parser-section {
+  margin-bottom: 12px;
+  padding: 8px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.parser-section:last-child {
+  margin-bottom: 0;
+}
+
+.parser-section-header {
+  margin-bottom: 8px;
+}
+
+.parser-section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #444;
+}
+
+.parser-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Parameter Group Styles */
+.param-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.param-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
+.param-group select {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+/* Checkbox Parameter Styles */
+.param-group.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+/* Parameters Subsection */
+.params-subsection {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #fafafa;
+  border-radius: 4px;
+  border-left: 3px solid #4a6cf7;
+}
+
+.param-group.checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.param-group.checkbox label {
+  margin: 0;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+/* Parameters Subsection */
+.params-subsection {
+  margin-top: 12px;
+  padding: 12px;
+  background-color: #fafafa;
+  border-radius: 4px;
+  border-left: 3px solid #4a6cf7;
+}
