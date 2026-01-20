@@ -1246,7 +1246,7 @@ const KnowledgebaseBrowser = () => {
                                       setSelectedFileName(item.name);
                                       setShowChunkRunPanel(true);
                                     }}
-                                    title="View chunk run history"
+                                    title="View parsed text and chunks"
                                   >
                                     {/* Document sections icon representing chunks */}
                                     📑

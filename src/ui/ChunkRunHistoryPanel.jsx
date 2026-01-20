@@ -6,6 +6,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedChunkRuns, setSelectedChunkRuns] = useState(new Set());
+  // Parsed Text option is always considered selected and can't be unselected
+  const hasParsedTextSelected = true;
 
   const handleChunkRunSelect = (runId) => {
     const newSelected = new Set(selectedChunkRuns);
@@ -26,11 +28,6 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
   };
 
   const handleOpenChunks = async () => {
-    if (selectedChunkRuns.size === 0) {
-      alert('Please select at least one chunk run to open.');
-      return;
-    }
-
     // Open the visualization window immediately (better UX + avoids popup blockers),
     // render a loading skeleton, then populate it once the data is ready.
     const visualizationWindow = openLoadingChunksWindow(fileName);
@@ -46,16 +43,19 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       const fileData = await fileResponse.json();
       const parsedText = fileData.success ? fileData.file.parsed_text : '';
 
-      // Step 2: Get chunks for selected runs
-      const selectedRunIds = Array.from(selectedChunkRuns);
-      const chunkRunIds = selectedRunIds.join(',');
-      
-      const chunksResponse = await fetch(`http://localhost:8000/api/chunks?file_id=${fileId}&chunk_run_ids=${chunkRunIds}`);
-      if (!chunksResponse.ok) {
-        throw new Error('Failed to fetch chunks');
+      let chunks = [];
+      // Step 2: Get chunks for selected runs if any are selected
+      if (selectedChunkRuns.size > 0) {
+        const selectedRunIds = Array.from(selectedChunkRuns);
+        const chunkRunIds = selectedRunIds.join(',');
+        
+        const chunksResponse = await fetch(`http://localhost:8000/api/chunks?file_id=${fileId}&chunk_run_ids=${chunkRunIds}`);
+        if (!chunksResponse.ok) {
+          throw new Error('Failed to fetch chunks');
+        }
+        const chunksData = await chunksResponse.json();
+        chunks = chunksData.success ? chunksData.chunks : [];
       }
-      const chunksData = await chunksResponse.json();
-      const chunks = chunksData.success ? chunksData.chunks : [];
 
       // Step 3: Populate the already-open window
       setIsLoading(false);
@@ -134,17 +134,18 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
   };
 
   const openChunksWindow = (parsedText, chunks, fileName, chunkRuns, existingWindow = null) => {
-    // Group chunks by chunk_run_id
-    const chunksByRunId = chunks.reduce((acc, chunk) => {
+    // Group chunks by chunk_run_id if any chunks exist
+    const chunksByRunId = chunks.length > 0 ? chunks.reduce((acc, chunk) => {
       const runId = chunk.chunk_run_id;
       if (!acc[runId]) {
         acc[runId] = [];
       }
       acc[runId].push(chunk);
       return acc;
-    }, {});
+    }, {}) : {};
 
     const runIds = Object.keys(chunksByRunId);
+    const hasChunkRuns = runIds.length > 0;
     const isSingleRun = runIds.length === 1;
 
     // Helper function to find chunk positions in the text
@@ -346,7 +347,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           
           .container {
             display: flex;
-            flex-direction: ${isSingleRun ? 'column' : 'row'};
+            flex-direction: ${hasChunkRuns && isSingleRun ? 'column' : 'row'};
             gap: 20px;
             max-width: 100%;
             height: 100%;
@@ -476,6 +477,21 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         <div class="container">
     `;
 
+    // Show Parsed Text column only when no chunk runs are selected
+    if (!hasChunkRuns) {
+      html += `
+        <div class="run-column">
+          <div class="run-header">
+            <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
+            <div style="font-size: 12px; color: #666;">Original parsed content of the file</div>
+          </div>
+          <div class="text-container" style="position: relative;">
+            <div class="chunk-text">${escapeHtml(parsedText)}</div>
+          </div>
+        </div>
+      `;
+    }
+
     // Define colors for boundary markers (darker for readability on white)
     const colors = [
       '#B91C1C', // red-700
@@ -490,41 +506,42 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       '#374151'  // gray-700
     ];
 
-    // Create a mapping from runId to run parameters
-    const runParamsMap = new Map();
-    chunkRuns.forEach(run => {
-      runParamsMap.set(run.id, run.parameters);
-    });
+    if (hasChunkRuns) {
+      // Create a mapping from runId to run parameters
+      const runParamsMap = new Map();
+      chunkRuns.forEach(run => {
+        runParamsMap.set(run.id, run.parameters);
+      });
 
-    // Helper function to format parameters for display
-    const formatParamsForDisplay = (params) => {
-      if (!params) return '';
-      
-      // Convert to object if it's a string
-      const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
-      
-      // Format parameters as readable strings, excluding any nested objects
-      return Object.entries(paramsObj)
-        .filter(([key, value]) => typeof value !== 'object' || value === null)
-        .map(([key, value]) => {
-          // Format key to be more readable
-          const displayKey = key
-            .replace(/_/g, ' ')
-            .replace(/\b\w/g, l => l.toUpperCase());
-          
-          // Format value based on type
-          let displayValue = value;
-          if (typeof value === 'boolean') {
-            displayValue = value ? 'Enabled' : 'Disabled';
-          }
-          
-          return `${displayKey}: ${displayValue}`;
-        })
-        .join(', ');
-    };
+      // Helper function to format parameters for display
+      const formatParamsForDisplay = (params) => {
+        if (!params) return '';
+        
+        // Convert to object if it's a string
+        const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
+        
+        // Format parameters as readable strings, excluding any nested objects
+        return Object.entries(paramsObj)
+          .filter(([key, value]) => typeof value !== 'object' || value === null)
+          .map(([key, value]) => {
+            // Format key to be more readable
+            const displayKey = key
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, l => l.toUpperCase());
+            
+            // Format value based on type
+            let displayValue = value;
+            if (typeof value === 'boolean') {
+              displayValue = value ? 'Enabled' : 'Disabled';
+            }
+            
+            return `${displayKey}: ${displayValue}`;
+          })
+          .join(', ');
+      };
 
-    // Process each chunk run
-    runIds.forEach((runId, runIndex) => {
+      // Process each chunk run
+      runIds.forEach((runId, runIndex) => {
       const runChunks = chunksByRunId[runId];
       const baseColor = colors[runIndex % colors.length];
       const runParams = runParamsMap.get(parseInt(runId));
@@ -579,13 +596,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           </div>
           <div class="legend">
             <div class="legend-item">
-              <span class="legend-color" style="background-color: ${baseColor};"></span>
+              <span class="legend-color" style="background-color: ${baseColor}; opacity: 0.3;"></span>
               <span>Run Parameters: ${formattedParams}</span>
             </div>
           </div>
         </div>
       `;
     });
+    }
     
     html += `
         </div>
@@ -662,99 +680,112 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           <div className="loading">Loading chunk runs...</div>
         ) : error ? (
           <div className="error-message">{error}</div>
-        ) : chunkRuns.length > 0 ? (
+        ) : (
           <>
             <div className="chunk-run-select-all">
               <label>
                 <input
                   type="checkbox"
-                  checked={selectedChunkRuns.size === chunkRuns.length && chunkRuns.length > 0}
-                  onChange={handleSelectAll}
-                  disabled={isLoading}
+                  checked={true}
+                  disabled={true}
+                  title="Parsed Text is always included and cannot be unselected"
                 />
-                Select All
+                Parsed Text
               </label>
             </div>
-            <div className="chunk-run-list">
-              {chunkRuns.map(run => (
-                <div key={run.id} className="chunk-run-item">
-                  <div className="chunk-run-header">
-                    <div className="chunk-run-header-left">
-                      <input
-                        type="checkbox"
-                        className="chunk-run-checkbox"
-                        checked={selectedChunkRuns.has(run.id)}
-                        onChange={() => handleChunkRunSelect(run.id)}
-                        disabled={isLoading}
-                        title="Select this chunk run"
-                      />
-                      <span className="chunk-run-framework">{run.framework}</span>
-                      <span className="chunk-run-time">{formatDateTime(run.run_time)}</span>
+            {chunkRuns.length > 0 && (
+              <div className="chunk-run-select-all">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selectedChunkRuns.size === chunkRuns.length && chunkRuns.length > 0}
+                    onChange={handleSelectAll}
+                    disabled={isLoading}
+                  />
+                  Select All Chunk Runs
+                </label>
+              </div>
+            )}
+            {chunkRuns.length > 0 ? (
+              <div className="chunk-run-list">
+                {chunkRuns.map(run => (
+                  <div key={run.id} className="chunk-run-item">
+                    <div className="chunk-run-header">
+                      <div className="chunk-run-header-left">
+                        <input
+                          type="checkbox"
+                          className="chunk-run-checkbox"
+                          checked={selectedChunkRuns.has(run.id)}
+                          onChange={() => handleChunkRunSelect(run.id)}
+                          disabled={isLoading}
+                          title="Select this chunk run"
+                        />
+                        <span className="chunk-run-framework">{run.framework}</span>
+                        <span className="chunk-run-time">{formatDateTime(run.run_time)}</span>
+                      </div>
+                    </div>
+                    <div className="chunk-run-params">
+                      {Object.entries(run.parameters).map(([key, value]) => {
+                        // Format parameter name to be more readable
+                        const displayName = key
+                          .replace(/_/g, ' ')    
+                          .replace(/\b\w/g, l => l.toUpperCase());
+                        
+                        // Format value based on type
+                        let displayValue = value;
+                        if (typeof value === 'boolean') {
+                          displayValue = value ? 'Enabled' : 'Disabled';
+                        }
+                        
+                        // Check if this parameter is part of a disabled feature
+                        const isDisabled = (() => {
+                          // Check parent feature flags
+                          if (key === 'header_levels' || key === 'strip_headers') {
+                            return run.parameters.markdown_header_splitting === false;
+                          }
+                          if (key === 'chunk_size' || key === 'chunk_overlap') {
+                            return run.parameters.recursive_splitting === false;
+                          }
+                          // Check if the parameter itself is disabled (boolean false)
+                          return displayValue === "Disabled";
+                        })();
+                        
+                        // Determine parameter type for styling
+                        let paramClass = "param-label";
+                        if (isDisabled) {
+                          paramClass += " param-label-disabled";
+                        } else if (typeof value === "boolean") {
+                          // Keep boolean values as original styling
+                        } else if (typeof value === "number" || (!isNaN(Number(value)) && value !== "")) {
+                          paramClass += " param-label-digital";
+                        }
+                        
+                        return (
+                          <span key={key} className={paramClass}>
+                            {displayName}: {displayValue}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="chunk-run-params">
-                    {Object.entries(run.parameters).map(([key, value]) => {
-                      // Format parameter name to be more readable
-                      const displayName = key
-                        .replace(/_/g, ' ')    
-                        .replace(/\b\w/g, l => l.toUpperCase());
-                      
-                      // Format value based on type
-                      let displayValue = value;
-                      if (typeof value === 'boolean') {
-                        displayValue = value ? 'Enabled' : 'Disabled';
-                      }
-                      
-                      // Check if this parameter is part of a disabled feature
-                      const isDisabled = (() => {
-                        // Check parent feature flags
-                        if (key === 'header_levels' || key === 'strip_headers') {
-                          return run.parameters.markdown_header_splitting === false;
-                        }
-                        if (key === 'chunk_size' || key === 'chunk_overlap') {
-                          return run.parameters.recursive_splitting === false;
-                        }
-                        // Check if the parameter itself is disabled (boolean false)
-                        return displayValue === "Disabled";
-                      })();
-                      
-                      // Determine parameter type for styling
-                      let paramClass = "param-label";
-                      if (isDisabled) {
-                        paramClass += " param-label-disabled";
-                      } else if (typeof value === "boolean") {
-                        // Keep boolean values as original styling
-                      } else if (typeof value === "number" || (!isNaN(Number(value)) && value !== "")) {
-                        paramClass += " param-label-digital";
-                      }
-                      
-                      return (
-                        <span key={key} className={paramClass}>
-                          {displayName}: {displayValue}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-runs">No chunk runs yet for this file.</div>
+            )}
           </>
-        ) : (
-          <div className="no-runs">No chunk runs yet for this file.</div>
         )}
       </div>
-      {chunkRuns.length > 0 && (
-        <div className="chunk-run-history-panel-footer">
-          <button 
-            className="chunk-run-history-panel-open-btn"
-            onClick={handleOpenChunks}
-            disabled={isLoading || selectedChunkRuns.size === 0}
-            title="Open selected chunk runs"
-          >
-            Open
-          </button>
-        </div>
-      )}
+      <div className="chunk-run-history-panel-footer">
+        <button 
+          className="chunk-run-history-panel-open-btn"
+          onClick={handleOpenChunks}
+          disabled={isLoading}
+          title="Open parsed text and selected chunk runs"
+        >
+          Open
+        </button>
+      </div>
     </div>
   );
 };
