@@ -81,11 +81,24 @@ const ChunkBrowser = () => {
           // Convert chunker type to lowercase for the backend
           const chunkerType = chunker.type.toLowerCase();
           
-          // Prepare params object
-          const params = {
-            "chunk_size": chunker.params.chunkSize,
-            ...(chunker.type === "Sentence" && { "chunk_overlap": chunker.params.chunkOverlap })
+          // Prepare params object based on chunker type
+          let params = {
+            "chunk_size": chunker.params.chunkSize
           };
+          
+          // Add Sentence-specific params
+          if (chunker.type === "Sentence" && chunker.params.chunkOverlap !== undefined) {
+            params["chunk_overlap"] = chunker.params.chunkOverlap;
+          }
+          // Add Semantic-specific params
+          if (chunker.type === "Semantic") {
+            if (chunker.params.threshold !== undefined) {
+              params["threshold"] = chunker.params.threshold;
+            }
+            if (chunker.params.similarityWindow !== undefined) {
+              params["similarity_window"] = chunker.params.similarityWindow;
+            }
+          }
           
           return {
             "chunker": chunkerType,
@@ -279,6 +292,25 @@ const ChunkBrowser = () => {
                               <span className="param-label param-label-digital">
                                 Chunk Overlap: {chunker.params.chunk_overlap}
                               </span>
+                            )}
+                            
+                            {/* Semantic Chunker Parameters */}
+                            {chunker.chunker === 'semantic' && (
+                              <>
+                                {/* Threshold */}
+                                {chunker.params.threshold !== undefined && (
+                                  <span className="param-label param-label-digital">
+                                    Threshold: {chunker.params.threshold}
+                                  </span>
+                                )}
+                                
+                                {/* Similarity Window */}
+                                {chunker.params.similarity_window !== undefined && (
+                                  <span className="param-label param-label-digital">
+                                    Similarity Window: {chunker.params.similarity_window}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </React.Fragment>
                         ))}

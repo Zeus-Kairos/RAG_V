@@ -471,14 +471,45 @@ const useKnowledgebaseStore = create((set, get) => {
             // Remove chunker if it's already in the array
             updatedChunkers.splice(existingIndex, 1);
           } else {
-            // Add new chunker with default params
-            const newChunker = {
-              type: chunkerType,
-              params: {
-                chunkSize: 1000,
-                ...(chunkerType === "Sentence" && { chunkOverlap: 100 })
-              }
-            };
+            // Add new chunker with default params based on type
+            let newChunker;
+            switch (chunkerType) {
+              case "Sentence":
+                newChunker = {
+                  type: chunkerType,
+                  params: {
+                    chunkSize: 1000,
+                    chunkOverlap: 100
+                  }
+                };
+                break;
+              case "Recursive":
+                newChunker = {
+                  type: chunkerType,
+                  params: {
+                    chunkSize: 1000
+                  }
+                };
+                break;
+              case "Semantic":
+                newChunker = {
+                  type: chunkerType,
+                  params: {
+                    chunkSize: 100,
+                    threshold: 0.8,
+                    similarityWindow: 3
+                  }
+                };
+                break;
+              default:
+                // Default chunker params
+                newChunker = {
+                  type: chunkerType,
+                  params: {
+                    chunkSize: 1000
+                  }
+                };
+            }
             updatedChunkers.push(newChunker);
           }
           

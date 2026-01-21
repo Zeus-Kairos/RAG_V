@@ -538,8 +538,20 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
             paramStrings.push(`${chunkerType}: Enabled`);
             paramStrings.push(`Chunk Size: ${chunker.params.chunk_size}`);
+            
+            // Add Sentence-specific params
             if (chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined) {
               paramStrings.push(`Chunk Overlap: ${chunker.params.chunk_overlap}`);
+            }
+            
+            // Add Semantic-specific params
+            if (chunker.chunker === 'semantic') {
+              if (chunker.params.threshold !== undefined) {
+                paramStrings.push(`Threshold: ${chunker.params.threshold}`);
+              }
+              if (chunker.params.similarity_window !== undefined) {
+                paramStrings.push(`Similarity Window: ${chunker.params.similarity_window}`);
+              }
             }
           });
         } else {
@@ -755,31 +767,46 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                     </div>
                     <div className="chunk-run-params">
                       {/* Special handling for Chonkie framework parameters */}
-                      {run.framework === 'chonkie' && run.parameters.chunkers && (
-                        <>
-                          {/* Display each chunker with its parameters */}
-                          {run.parameters.chunkers.map((chunker, index) => (
-                            <React.Fragment key={`chonkie-chunker-${index}`}>
-                              {/* Chunker type with enabled styling */}
-                              <span className="param-label">
-                                {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
-                              </span>
-                              
-                              {/* Chunk Size */}
+                    {run.framework === 'chonkie' && run.parameters.chunkers && (
+                      <>
+                        {/* Display each chunker with its parameters */}
+                        {run.parameters.chunkers.map((chunker, index) => (
+                          <React.Fragment key={`chonkie-chunker-${index}`}>
+                            {/* Chunker type with enabled styling */}
+                            <span className="param-label">
+                              {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
+                            </span>
+                            
+                            {/* Chunk Size */}
+                            <span className="param-label param-label-digital">
+                              Chunk Size: {chunker.params.chunk_size}
+                            </span>
+                            
+                            {/* Chunk Overlap (only for Sentence chunker) */}
+                            {chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined && (
                               <span className="param-label param-label-digital">
-                                Chunk Size: {chunker.params.chunk_size}
+                                Chunk Overlap: {chunker.params.chunk_overlap}
                               </span>
-                              
-                              {/* Chunk Overlap (only for Sentence chunker) */}
-                              {chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined && (
+                            )}
+                            
+                            {/* Semantic Chunker Parameters */}
+                            {chunker.chunker === 'semantic' && (
+                              <>
+                                {/* Threshold */}
                                 <span className="param-label param-label-digital">
-                                  Chunk Overlap: {chunker.params.chunk_overlap}
+                                  Threshold: {chunker.params.threshold}
                                 </span>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </>
-                      )}
+                                
+                                {/* Similarity Window */}
+                                <span className="param-label param-label-digital">
+                                  Similarity Window: {chunker.params.similarity_window}
+                                </span>
+                              </>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
                       
                       {/* Display all other parameters (excluding chunkers for Chonkie framework) */}
                       {Object.entries(run.parameters).map(([key, value]) => {

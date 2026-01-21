@@ -263,6 +263,16 @@ const SplitterSettings = () => {
                     />
                     <span>Recursive</span>
                   </label>
+                  <label className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={chonkieSettings.chunkers.some(chunker => chunker.type === 'Semantic')}
+                      onChange={(e) => {
+                        handleChonkieSettingChange('toggleChunker', 'Semantic');
+                      }}
+                    />
+                    <span>Semantic</span>
+                  </label>
                 </div>
               </div>
               
@@ -346,6 +356,81 @@ const SplitterSettings = () => {
                             }}
                           />
                         </div>
+                      )}
+                      
+                      {/* Semantic Chunker Parameters */}
+                      {chunker.type === 'Semantic' && (
+                        <>
+                          {/* Threshold */}
+                          <div className="param-group chunker-param">
+                            <label className="param-label-with-input">
+                              Threshold: 
+                              <input
+                                type="number"
+                                className="param-text-input-inline"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={chunker.params.threshold}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value);
+                                  if (!isNaN(value)) {
+                                    handleChonkieSettingChange('params', {
+                                      threshold: value
+                                    }, index);
+                                  }
+                                }}
+                              />
+                            </label>
+                            <input
+                              type="range"
+                              className="param-slider"
+                              min="0"
+                              max="1"
+                              step="0.1"
+                              value={chunker.params.threshold}
+                              onChange={(e) => {
+                                handleChonkieSettingChange('params', {
+                                  threshold: parseFloat(e.target.value)
+                                }, index);
+                              }}
+                            />
+                          </div>
+                          
+                          {/* Similarity Window */}
+                          <div className="param-group chunker-param">
+                            <label className="param-label-with-input">
+                              Similarity Window: 
+                              <input
+                                type="number"
+                                className="param-text-input-inline"
+                                min="1"
+                                max="10"
+                                value={chunker.params.similarityWindow}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value);
+                                  if (!isNaN(value)) {
+                                    handleChonkieSettingChange('params', {
+                                      similarityWindow: value
+                                    }, index);
+                                  }
+                                }}
+                              />
+                            </label>
+                            <input
+                              type="range"
+                              className="param-slider"
+                              min="1"
+                              max="10"
+                              value={chunker.params.similarityWindow}
+                              onChange={(e) => {
+                                handleChonkieSettingChange('params', {
+                                  similarityWindow: parseInt(e.target.value)
+                                }, index);
+                              }}
+                            />
+                          </div>
+                        </>
                       )}
                     </div>
                   ))}
