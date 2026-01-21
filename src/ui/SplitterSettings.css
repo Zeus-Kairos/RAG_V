@@ -262,3 +262,80 @@
 .splitter-btn-secondary:hover {
   background-color: #d0d0d0;
 }
+
+/* Checkbox group styles for chunker selection */
+.checkbox-group {
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+  color: #333333;
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4a6cf7;
+  cursor: pointer;
+}
+
+.checkbox-item:hover {
+  color: #4a6cf7;
+}
+
+/* Vertical chunker pipeline styles */
+.selected-chunkers-container {
+  margin-top: 16px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.selected-chunkers-container label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 500;
+  color: #666;
+  font-size: 14px;
+}
+
+.chunker-item {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.chunker-header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chunker-type {
+  font-weight: 600;
+  color: #4a6cf7;
+  font-size: 14px;
+}
+
+.chunker-param {
+  margin-bottom: 8px;
+}
+
+.chunker-param .param-label-with-input {
+  margin-bottom: 4px;
+}
+
+.chunker-param .param-slider {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}

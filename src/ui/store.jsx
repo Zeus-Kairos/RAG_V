@@ -67,6 +67,9 @@ const useKnowledgebaseStore = create((set, get) => {
     // Embedding settings state
     embeddingConfigs: [],
     activeEmbeddingConfig: null,
+    // Active framework state for synchronization between components
+    activeFramework: 'langchain',
+    
     // Splitter settings state
     splitterSettings: {
       isMarkdownEnabled: true,
@@ -78,6 +81,18 @@ const useKnowledgebaseStore = create((set, get) => {
       recursiveSettings: {
         chunkSize: 1000,
         chunkOverlap: 100
+      },
+      // Chonkie splitter settings
+      chonkieSettings: {
+        chunkers: [
+          {
+            type: "Sentence",
+            params: {
+              chunkSize: 1000,
+              chunkOverlap: 100
+            }
+          }
+        ] // Array of chunker objects with their own parameters
       }
     },
     
@@ -437,6 +452,87 @@ const useKnowledgebaseStore = create((set, get) => {
       });
     },
     
+    updateChonkieSettings: (settings) => {
+      set(prev => {
+        // Create updated chonkie settings first
+        const updatedChonkieSettings = {
+          ...prev.splitterSettings.chonkieSettings
+        };
+        
+        // Handle chunker toggle logic if provided
+        if (settings.toggleChunker !== undefined) {
+          const chunkerType = settings.toggleChunker;
+          let updatedChunkers = [...prev.splitterSettings.chonkieSettings.chunkers];
+          
+          // Check if chunker type is already present
+          const existingIndex = updatedChunkers.findIndex(chunker => chunker.type === chunkerType);
+          
+          if (existingIndex !== -1) {
+            // Remove chunker if it's already in the array
+            updatedChunkers.splice(existingIndex, 1);
+          } else {
+            // Add new chunker with default params
+            const newChunker = {
+              type: chunkerType,
+              params: {
+                chunkSize: 1000,
+                ...(chunkerType === "Sentence" && { chunkOverlap: 100 })
+              }
+            };
+            updatedChunkers.push(newChunker);
+          }
+          
+          updatedChonkieSettings.chunkers = updatedChunkers;
+        }
+        
+        // Handle updating individual chunker parameters
+        if (settings.chunkerIndex !== undefined && settings.params !== undefined) {
+          const updatedChunkers = [...prev.splitterSettings.chonkieSettings.chunkers];
+          if (updatedChunkers[settings.chunkerIndex]) {
+            // Create updated params
+            const updatedParams = {
+              ...updatedChunkers[settings.chunkerIndex].params,
+              ...settings.params
+            };
+            
+            // Ensure chunkOverlap doesn't exceed half of chunkSize for Sentence chunker
+            if (updatedChunkers[settings.chunkerIndex].type === "Sentence") {
+              if (settings.params.chunkSize !== undefined) {
+                updatedParams.chunkOverlap = Math.min(
+                  updatedParams.chunkOverlap,
+                  Math.floor(updatedParams.chunkSize / 2)
+                );
+              } else if (settings.params.chunkOverlap !== undefined) {
+                updatedParams.chunkOverlap = Math.min(
+                  updatedParams.chunkOverlap,
+                  Math.floor(updatedChunkers[settings.chunkerIndex].params.chunkSize / 2)
+                );
+              }
+            }
+            
+            updatedChunkers[settings.chunkerIndex] = {
+              ...updatedChunkers[settings.chunkerIndex],
+              params: updatedParams
+            };
+            
+            updatedChonkieSettings.chunkers = updatedChunkers;
+          }
+        }
+        
+        return {
+          splitterSettings: {
+            ...prev.splitterSettings,
+            chonkieSettings: updatedChonkieSettings
+          }
+        };
+      });
+    },
+    
+    // Update active framework
+    setActiveFramework: (framework) => {
+      set({ activeFramework: framework });
+    },
+    
     // Parser settings management functions
     updateParserSettings: (fileType, newSettings) => {
       set(prev => ({
@@ -488,6 +584,7 @@ const useKnowledgebaseStore = create((set, get) => {
         knowledgebases: [],
         embeddingConfigs: [],
         activeEmbeddingConfig: null,
+        activeFramework: 'langchain',
         splitterSettings: {
           isMarkdownEnabled: true,
           isRecursiveEnabled: true,
@@ -498,6 +595,17 @@ const useKnowledgebaseStore = create((set, get) => {
           recursiveSettings: {
             chunkSize: 1000,
             chunkOverlap: 100
+          },
+          chonkieSettings: {
+            chunkers: [
+              {
+                type: "Sentence",
+                params: {
+                  chunkSize: 1000,
+                  chunkOverlap: 100
+                }
+              }
+            ]
           }
         },
         parserSettings: {

@@ -3,23 +3,26 @@ import useKnowledgebaseStore from './store';
 import './SplitterSettings.css';
 
 const SplitterSettings = () => {
-  const [activeTab, setActiveTab] = useState('Langchain');
   // Local state for input values to prevent immediate sync on every keystroke
   const [localChunkSize, setLocalChunkSize] = useState('');
   const [localChunkOverlap, setLocalChunkOverlap] = useState('');
   
   const { 
     splitterSettings, 
+    activeFramework,
+    setActiveFramework,
     toggleSplitter, 
     updateMarkdownSettings, 
-    updateRecursiveSettings 
+    updateRecursiveSettings,
+    updateChonkieSettings 
   } = useKnowledgebaseStore();
   
   const { 
     isMarkdownEnabled, 
     isRecursiveEnabled, 
     markdownSettings, 
-    recursiveSettings 
+    recursiveSettings,
+    chonkieSettings
   } = splitterSettings;
   
   // Sync local state with store when store values change
@@ -30,6 +33,8 @@ const SplitterSettings = () => {
   useEffect(() => {
     setLocalChunkOverlap(recursiveSettings.chunkOverlap.toString());
   }, [recursiveSettings.chunkOverlap]);
+  
+
   
   // Handle splitter toggle
   const handleSplitterToggle = (splitterType, isEnabled) => {
@@ -46,6 +51,20 @@ const SplitterSettings = () => {
     updateRecursiveSettings({ [setting]: value });
   };
   
+  // Handle Chonkie settings change
+  const handleChonkieSettingChange = (setting, value, chunkerIndex) => {
+    if (setting === 'params') {
+      // Update individual chunker parameters
+      updateChonkieSettings({
+        chunkerIndex,
+        params: value
+      });
+    } else {
+      // Update other settings like toggleChunker
+      updateChonkieSettings({ [setting]: value });
+    }
+  };
+  
   return (
     <div className="splitter-settings">
       <div className="splitter-settings-header">
@@ -54,14 +73,14 @@ const SplitterSettings = () => {
         {/* Tab Navigation */}
         <div className="splitter-tabs">
           <button 
-            className={`tab-btn ${activeTab === 'Langchain' ? 'active' : ''}`}
-            onClick={() => setActiveTab('Langchain')}
+            className={`tab-btn ${activeFramework === 'langchain' ? 'active' : ''}`}
+            onClick={() => setActiveFramework('langchain')}
           >
             Langchain
           </button>
           <button 
-            className={`tab-btn ${activeTab === 'Chonkie' ? 'active' : ''}`}
-            onClick={() => setActiveTab('Chonkie')}
+            className={`tab-btn ${activeFramework === 'chonkie' ? 'active' : ''}`}
+            onClick={() => setActiveFramework('chonkie')}
           >
             Chonkie
           </button>
@@ -71,7 +90,7 @@ const SplitterSettings = () => {
       {/* Tab Content */}
       <div className="tab-content">
         {/* Langchain Tab Content */}
-        {activeTab === 'Langchain' && (
+        {activeFramework === 'langchain' && (
           <>
             {/* Markdown Splitter Section */}
             <div className="splitter-section">
@@ -210,10 +229,129 @@ const SplitterSettings = () => {
           </>
         )}
         
-        {/* Chonkie Tab Content - Blank Placeholder */}
-        {activeTab === 'Chonkie' && (
-          <div className="chonkie-placeholder">
-            <p>Chonkie framework settings will be available soon.</p>
+        {/* Chonkie Tab Content */}
+        {activeFramework === 'chonkie' && (
+          <div className="splitter-section">
+            <div className="splitter-section-header">
+              <div className="splitter-section-title">
+                <h4>Chonkie Splitter Settings</h4>
+              </div>
+            </div>
+            
+            <div className="splitter-section-content">
+              {/* Chunker Selection */}
+              <div className="param-group">
+                <label>Available Chunkers:</label>
+                <div className="checkbox-group">
+                  <label className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={chonkieSettings.chunkers.some(chunker => chunker.type === 'Sentence')}
+                      onChange={(e) => {
+                        handleChonkieSettingChange('toggleChunker', 'Sentence');
+                      }}
+                    />
+                    <span>Sentence</span>
+                  </label>
+                  <label className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={chonkieSettings.chunkers.some(chunker => chunker.type === 'Recursive')}
+                      onChange={(e) => {
+                        handleChonkieSettingChange('toggleChunker', 'Recursive');
+                      }}
+                    />
+                    <span>Recursive</span>
+                  </label>
+                </div>
+              </div>
+              
+              {/* Selected Chunkers with Individual Parameters - Vertical Layout */}
+              {chonkieSettings.chunkers.length > 0 && (
+                <div className="selected-chunkers-container">
+                  <label>Selected Chunkers (Vertical Pipeline):</label>
+                  
+                  {chonkieSettings.chunkers.map((chunker, index) => (
+                    <div key={index} className="chunker-item">
+                      <div className="chunker-header">
+                        <span className="chunker-type">{chunker.type} Chunker</span>
+                      </div>
+                      
+                      {/* Chunk Size for this chunker */}
+                      <div className="param-group chunker-param">
+                        <label className="param-label-with-input">
+                          Chunk Size: 
+                          <input
+                            type="number"
+                            className="param-text-input-inline"
+                            min="50"
+                            max="10000"
+                            value={chunker.params.chunkSize}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              if (!isNaN(value)) {
+                                handleChonkieSettingChange('params', {
+                                  chunkSize: value
+                                }, index);
+                              }
+                            }}
+                          />
+                        </label>
+                        <input
+                          type="range"
+                          className="param-slider"
+                          min="50"
+                          max="10000"
+                          value={chunker.params.chunkSize}
+                          onChange={(e) => {
+                            handleChonkieSettingChange('params', {
+                              chunkSize: parseInt(e.target.value)
+                            }, index);
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Chunk Overlap - Only for Sentence Chunker */}
+                      {chunker.type === 'Sentence' && (
+                        <div className="param-group chunker-param">
+                          <label className="param-label-with-input">
+                            Chunk Overlap: 
+                            <input
+                              type="number"
+                              className="param-text-input-inline"
+                              min="0"
+                              max={Math.floor(chunker.params.chunkSize / 2)}
+                              value={chunker.params.chunkOverlap}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value);
+                                if (!isNaN(value)) {
+                                  handleChonkieSettingChange('params', {
+                                    chunkOverlap: value
+                                  }, index);
+                                }
+                              }}
+                            />
+                            <span className="param-max-value"> (max: {Math.floor(chunker.params.chunkSize / 2)})</span>
+                          </label>
+                          <input
+                            type="range"
+                            className="param-slider"
+                            min="0"
+                            max={Math.floor(chunker.params.chunkSize / 2)}
+                            value={chunker.params.chunkOverlap}
+                            onChange={(e) => {
+                              handleChonkieSettingChange('params', {
+                                chunkOverlap: parseInt(e.target.value)
+                              }, index);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

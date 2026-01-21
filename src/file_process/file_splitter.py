@@ -1,5 +1,9 @@
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
+from chonkie import Pipeline
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class LangchainFileSplitter:
     def __init__(self, **kwargs):
@@ -40,3 +44,52 @@ class LangchainFileSplitter:
                 chunk_index += 1
             documents.extend(split_docs)
         return documents
+
+class ChonkieFileSplitter:
+    def __init__(self, **kwargs):
+        self.chunkers = kwargs.get("chunkers", None)
+    
+    def split_text(self, text: str, metadata: dict = None) -> list[Document]:     
+        pipeline = Pipeline().process_with("markdown")
+        for chunker in self.chunkers:
+            logger.info(chunker)
+            pipeline = pipeline.chunk_with(chunker["chunker"], **chunker["params"])     
+        chunks = pipeline.run(text).chunks
+
+        documents = []
+        chunk_index = 0
+        file_id = metadata.get("file_id", "")
+        for chunk in chunks:
+            document = Document(page_content=chunk.text, 
+                        metadata={
+                            **{k: v for k, v in chunk.to_dict().items() if k != "text"},
+                            "chunk_id": f"{file_id}_{chunk_index}",
+                            **metadata
+                        })
+            chunk_index += 1
+            documents.append(document)
+        return documents
+
+if __name__ == "__main__":
+    splitter = ChonkieFileSplitter(chunkers=[
+        {"chunker": "recursive", "params": {"chunk_size": 200}},
+        {"chunker": "sentence", "params": {"chunk_size": 100, "chunk_overlap": 10}},
+    ])
+    text = """
+    # Noise Figure Converters Freq
+
+    ## Main
+
+    * [Start, Stop, Center, Span, Step](../Applications/Noise_Figure_on_Converters.htm#MxrSwpCombos)
+
+    * [CW](../Applications/Noise_Figure_on_Converters.htm#MxrSwpCombos)
+
+    * [Frequency Offset...](../FreqOffset/Frequency_Offset_Mode.htm)
+
+    * [NFX Setup...](../Applications/Noise_Figure_on_Converters.htm#MxrSwpCombos)
+    """
+    splits = splitter.split_text(text, metadata={"file_id": 1})
+    for split in splits:
+        print(split)
+        
+        

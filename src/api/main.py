@@ -514,9 +514,12 @@ async def chunk_files(
                 # Convert numeric values to integers
                 elif value.isdigit():
                     kwargs[key] = int(value)
-                # Keep strings as-is
+                # Convert JSON objects to actual objects
                 else:
-                    kwargs[key] = value
+                    try:
+                        kwargs[key] = json.loads(value)
+                    except json.JSONDecodeError:
+                        kwargs[key] = value
         
         pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
         

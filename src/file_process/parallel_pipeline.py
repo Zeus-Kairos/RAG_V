@@ -5,7 +5,7 @@ from fastapi import UploadFile
 from src.file_process.utils import SUPPORTED_FORMATS
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
-from src.file_process.file_splitter import LangchainFileSplitter
+from src.file_process.file_splitter import ChonkieFileSplitter, LangchainFileSplitter
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser
 from src.memory.memory import MemoryManager
@@ -170,9 +170,11 @@ class ParallelFileProcessingPipeline:
         """
         logger.info(f"Starting parallel chunking for knowledgebase: knowledgebase_id={knowledgebase_id}")
         
-        if framework == "langchain":
-            # Initialize FileSplitter with the provided parameters
+        # Initialize FileSplitter with the provided parameters
+        if framework == "langchain":        
             self.file_splitter = LangchainFileSplitter(**kwargs)
+        elif framework == "chonkie":
+            self.file_splitter = ChonkieFileSplitter(**kwargs)
         else:
             raise ValueError(f"Unsupported chunking framework: {framework}")
         

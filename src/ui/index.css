@@ -234,12 +234,12 @@ body {
 
 /* Sidebar styles */
 .sidebar {
-  width: 320px;
-  background-color: #f5f5f5;
-  border-right: 1px solid #e0e0e0;
-  padding: 16px;
-  overflow-y: auto;
-  box-sizing: border-box;
+    width: 380px;
+    background-color: #f5f5f5;
+    border-right: 1px solid #e0e0e0;
+    padding: 16px;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
 /* Main content area */
@@ -304,7 +304,7 @@ body {
   }
   
   .sidebar {
-    width: 280px;
+    width: 320px;
   }
 }
 

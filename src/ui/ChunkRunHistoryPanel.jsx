@@ -520,24 +520,41 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         // Convert to object if it's a string
         const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
         
-        // Format parameters as readable strings, excluding any nested objects
-        return Object.entries(paramsObj)
-          .filter(([key, value]) => typeof value !== 'object' || value === null)
-          .map(([key, value]) => {
-            // Format key to be more readable
-            const displayKey = key
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, l => l.toUpperCase());
-            
-            // Format value based on type
-            let displayValue = value;
-            if (typeof value === 'boolean') {
-              displayValue = value ? 'Enabled' : 'Disabled';
+        // Format parameters as readable strings
+        const paramStrings = [];
+        
+        // Handle Chonkie framework chunkers specially (check for chunkers array)
+        if (paramsObj.chunkers && Array.isArray(paramsObj.chunkers)) {
+          paramsObj.chunkers.forEach((chunker, index) => {
+            const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
+            paramStrings.push(`${chunkerType}: Enabled`);
+            paramStrings.push(`Chunk Size: ${chunker.params.chunk_size}`);
+            if (chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined) {
+              paramStrings.push(`Chunk Overlap: ${chunker.params.chunk_overlap}`);
             }
-            
-            return `${displayKey}: ${displayValue}`;
-          })
-          .join(', ');
+          });
+        } else {
+          // Handle other frameworks and regular parameters
+          Object.entries(paramsObj)
+            .forEach(([key, value]) => {
+              if (typeof value !== 'object' || value === null) {
+                // Format key to be more readable
+                const displayKey = key
+                  .replace(/_/g, ' ')
+                  .replace(/\b\w/g, l => l.toUpperCase());
+                
+                // Format value based on type
+                let displayValue = value;
+                if (typeof value === 'boolean') {
+                  displayValue = value ? 'Enabled' : 'Disabled';
+                }
+                
+                paramStrings.push(`${displayKey}: ${displayValue}`);
+              }
+            });
+        }
+        
+        return paramStrings.join(', ');
       };
 
       // Process each chunk run
@@ -725,7 +742,40 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                       </div>
                     </div>
                     <div className="chunk-run-params">
+                      {/* Special handling for Chonkie framework parameters */}
+                      {run.framework === 'chonkie' && run.parameters.chunkers && (
+                        <>
+                          {/* Display each chunker with its parameters */}
+                          {run.parameters.chunkers.map((chunker, index) => (
+                            <React.Fragment key={`chonkie-chunker-${index}`}>
+                              {/* Chunker type with enabled styling */}
+                              <span className="param-label">
+                                {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
+                              </span>
+                              
+                              {/* Chunk Size */}
+                              <span className="param-label param-label-digital">
+                                Chunk Size: {chunker.params.chunk_size}
+                              </span>
+                              
+                              {/* Chunk Overlap (only for Sentence chunker) */}
+                              {chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined && (
+                                <span className="param-label param-label-digital">
+                                  Chunk Overlap: {chunker.params.chunk_overlap}
+                                </span>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </>
+                      )}
+                      
+                      {/* Display all other parameters (excluding chunkers for Chonkie framework) */}
                       {Object.entries(run.parameters).map(([key, value]) => {
+                        // Skip chunkers for Chonkie framework since we're displaying it specially
+                        if (run.framework === 'chonkie' && key === 'chunkers') {
+                          return null;
+                        }
+                        
                         // Format parameter name to be more readable
                         const displayName = key
                           .replace(/_/g, ' ')    

@@ -3,7 +3,7 @@ import useKnowledgebaseStore from './store';
 import './ChunkBrowser.css';
 
 const ChunkBrowser = () => {
-  const { knowledgebases, splitterSettings, refreshFileBrowser } = useKnowledgebaseStore();
+  const { knowledgebases, splitterSettings, refreshFileBrowser, activeFramework, setActiveFramework } = useKnowledgebaseStore();
   const [chunkRuns, setChunkRuns] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,17 +58,44 @@ const ChunkBrowser = () => {
       
       // Prepare form data with splitter settings
       const formData = new FormData();
-      formData.append('framework', 'langchain');
-      formData.append('markdown_header_splitting', splitterSettings.isMarkdownEnabled ? 'true' : 'false');
-      formData.append('recursive_splitting', splitterSettings.isRecursiveEnabled ? 'true' : 'false');
       
-      // Add markdown settings
-      formData.append('header_levels', splitterSettings.markdownSettings.headerLevels);
-      formData.append('strip_headers', splitterSettings.markdownSettings.stripHeaders ? 'true' : 'false');
-      
-      // Add recursive settings
-      formData.append('chunk_size', splitterSettings.recursiveSettings.chunkSize);
-      formData.append('chunk_overlap', splitterSettings.recursiveSettings.chunkOverlap);
+      if (activeFramework === 'langchain') {
+        // Langchain framework settings
+        formData.append('framework', 'langchain');
+        formData.append('markdown_header_splitting', splitterSettings.isMarkdownEnabled ? 'true' : 'false');
+        formData.append('recursive_splitting', splitterSettings.isRecursiveEnabled ? 'true' : 'false');
+        
+        // Add markdown settings
+        formData.append('header_levels', splitterSettings.markdownSettings.headerLevels);
+        formData.append('strip_headers', splitterSettings.markdownSettings.stripHeaders ? 'true' : 'false');
+        
+        // Add recursive settings
+        formData.append('chunk_size', splitterSettings.recursiveSettings.chunkSize);
+        formData.append('chunk_overlap', splitterSettings.recursiveSettings.chunkOverlap);
+      } else if (activeFramework === 'chonkie') {
+        // Chonkie framework settings
+        formData.append('framework', 'chonkie');
+        
+        // Prepare chunkers array from the selected chunkers with their individual parameters
+        const chunkers = splitterSettings.chonkieSettings.chunkers.map(chunker => {
+          // Convert chunker type to lowercase for the backend
+          const chunkerType = chunker.type.toLowerCase();
+          
+          // Prepare params object
+          const params = {
+            "chunk_size": chunker.params.chunkSize,
+            ...(chunker.type === "Sentence" && { "chunk_overlap": chunker.params.chunkOverlap })
+          };
+          
+          return {
+            "chunker": chunkerType,
+            "params": params
+          };
+        });
+        
+        // Add chunkers as JSON string
+        formData.append('chunkers', JSON.stringify(chunkers));
+      }
       
       // Send request to chunk-files endpoint
       const response = await fetch(`http://localhost:8000/api/chunk-files/${activeKnowledgebase.id}`, {
@@ -156,14 +183,29 @@ const ChunkBrowser = () => {
   return (
     <div className="chunk-browser">
       <div className="chunk-browser-header">
-        <div className="chunk-browser-actions">
-          <button 
-            className="chunk-browser-btn chunk-browser-btn-primary"
-            onClick={handleRunChunking}
-            disabled={isRunning || (!activeKnowledgebase || activeKnowledgebase.file_count === 0)}
-          >
-            {isRunning ? 'Running...' : 'Run Chunking'}
-          </button>
+        <div className="chunk-browser-controls">
+          <div className="framework-selection">
+            <label htmlFor="framework-select">Framework:</label>
+            <select
+              id="framework-select"
+              className="framework-select"
+              value={activeFramework}
+              onChange={(e) => setActiveFramework(e.target.value)}
+              disabled={isRunning}
+            >
+              <option value="langchain">Langchain</option>
+              <option value="chonkie">Chonkie</option>
+            </select>
+          </div>
+          <div className="chunk-browser-actions">
+            <button 
+              className="chunk-browser-btn chunk-browser-btn-primary"
+              onClick={handleRunChunking}
+              disabled={isRunning || (!activeKnowledgebase || activeKnowledgebase.file_count === 0)}
+            >
+              {isRunning ? 'Running...' : 'Run Chunking'}
+            </button>
+          </div>
         </div>
         {error && <div className="error-message">{error}</div>}
       </div>
@@ -216,7 +258,40 @@ const ChunkBrowser = () => {
                     </div>
                   </div>
                   <div className="chunk-run-params">
+                    {/* Special handling for Chonkie framework parameters */}
+                    {run.framework === 'chonkie' && run.parameters.chunkers && (
+                      <>
+                        {/* Display each chunker with its parameters */}
+                        {run.parameters.chunkers.map((chunker, index) => (
+                          <React.Fragment key={`chonkie-chunker-${index}`}>
+                            {/* Chunker type with enabled styling */}
+                            <span className="param-label">
+                              {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
+                            </span>
+                            
+                            {/* Chunk Size */}
+                            <span className="param-label param-label-digital">
+                              Chunk Size: {chunker.params.chunk_size}
+                            </span>
+                            
+                            {/* Chunk Overlap (only for Sentence chunker) */}
+                            {chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined && (
+                              <span className="param-label param-label-digital">
+                                Chunk Overlap: {chunker.params.chunk_overlap}
+                              </span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
+                    
+                    {/* Display all other parameters (excluding chunkers for Chonkie framework) */}
                     {Object.entries(run.parameters).map(([key, value]) => {
+                      // Skip chunkers for Chonkie framework since we're displaying it specially
+                      if (run.framework === 'chonkie' && key === 'chunkers') {
+                        return null;
+                      }
+                      
                       // Format parameter name to be more readable
                       const displayName = key
                         .replace(/_/g, ' ')    
@@ -226,6 +301,9 @@ const ChunkBrowser = () => {
                       let displayValue = value;
                       if (typeof value === 'boolean') {
                         displayValue = value ? 'Enabled' : 'Disabled';
+                      } else if (typeof value === 'object' && value !== null) {
+                        // Convert objects and arrays to string representation for display
+                        displayValue = JSON.stringify(value);
                       }
                       
                       // Check if this parameter is part of a disabled feature
