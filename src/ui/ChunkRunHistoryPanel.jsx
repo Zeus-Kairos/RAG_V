@@ -507,10 +507,19 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     ];
 
     if (hasChunkRuns) {
-      // Create a mapping from runId to run parameters
+      // Create mappings from runId to run parameters and framework
       const runParamsMap = new Map();
+      const runFrameworkMap = new Map();
       chunkRuns.forEach(run => {
         runParamsMap.set(run.id, run.parameters);
+        runFrameworkMap.set(run.id, run.framework);
+      });
+      
+      // Create framework-to-color mapping for consistent coloring
+      const frameworkColors = new Map();
+      const uniqueFrameworks = [...new Set(chunkRuns.map(run => run.framework))];
+      uniqueFrameworks.forEach((framework, index) => {
+        frameworkColors.set(framework, colors[index % colors.length]);
       });
 
       // Helper function to format parameters for display
@@ -560,7 +569,9 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       // Process each chunk run
       runIds.forEach((runId, runIndex) => {
       const runChunks = chunksByRunId[runId];
-      const baseColor = colors[runIndex % colors.length];
+      const framework = runFrameworkMap.get(parseInt(runId));
+      // Use consistent color for the same framework
+      const baseColor = frameworkColors.get(framework);
       const runParams = runParamsMap.get(parseInt(runId));
       const formattedParams = formatParamsForDisplay(runParams);
       
@@ -601,9 +612,10 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       // Generate HTML for this run
       html += `
         <div class="run-column">
-          <div class="run-header">
-            <div style="margin-bottom: 5px; font-weight: bold;">Chunk Run: ${runIndex + 1} (${chunksWithPositions.length}/${runChunks.length} chunks matched)</div>
-            <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word;">${formattedParams || 'No parameters available'}</div>
+          <div class="run-header" style="height: 80px; display: flex; flex-direction: column; justify-content: flex-start;">
+            <div style="margin-bottom: 5px; font-weight: bold;">Chunk Run ID: ${runId} (${chunksWithPositions.length}/${runChunks.length} chunks matched)</div>
+            <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word;">Framework: <span style="background-color: ${baseColor}; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; opacity: 0.8;">${framework}</span></div>
+            <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word; margin-top: 4px;">${formattedParams || 'No parameters available'}</div>
           </div>
           <div class="text-container" style="position: relative;">
             <div class="chunk-text">${highlightedText}</div>
@@ -614,7 +626,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           <div class="legend">
             <div class="legend-item">
               <span class="legend-color" style="background-color: ${baseColor}; opacity: 0.3;"></span>
-              <span>Run Parameters: ${formattedParams}</span>
+              <span>Framework: ${framework} | Run Parameters: ${formattedParams}</span>
             </div>
           </div>
         </div>
