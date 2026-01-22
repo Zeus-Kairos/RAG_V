@@ -77,7 +77,8 @@ class ChonkieFileSplitter:
         pipeline = Pipeline().process_with("markdown")
         for chunker in self.chunkers:
             pipeline = pipeline.chunk_with(chunker["chunker"], **chunker["params"])     
-        chunks = pipeline.run(text).chunks
+        doc = pipeline.run(text)
+        chunks = doc.chunks
 
         documents = []
         chunk_index = 0
@@ -96,48 +97,62 @@ class ChonkieFileSplitter:
 if __name__ == "__main__":
     print("Testing ChonkieFileSplitter:")
     splitter = ChonkieFileSplitter(chunkers=[
-        {"chunker": "recursive", "params": {"chunk_size": 200}},
-        {"chunker": "sentence", "params": {"chunk_size": 100, "chunk_overlap": 10}},
-        {"chunker": "semantic", "params": {"chunk_size":100, "threshold":0.8, "similarity_window":3}}
+        # {"chunker": "recursive", "params": {"chunk_size": 200}},
+        {"chunker": "sentence", "params": {"chunk_size": 1000, "chunk_overlap": 100}},
+        # {"chunker": "semantic", "params": {"chunk_size":100, "threshold":0.8, "similarity_window":3}}
     ])
     text = """
-    # Noise Figure Converters Freq
+        APPLICATION NOTE 
 
-    ## Main
+**N8480 Series Power Sensors** 
 
-    * [Start, Stop, Center, Span, Step](../Applications/Noise_Figure_on_Converters.htm#MxrSwpCombos)
+Upgrade your 8480 Power Sensor to the N8480 Series 
 
-    * [CW](../Applications/Noise_Figure_on_Converters.htm#MxrSwpCombos)
 
-    * [Frequency Offset...](../FreqOffset/Frequency_Offset_Mode.htm)
+![](uploads/1/test_kb/origin/N8480 Series Power Sensors_images/N8480 Series Power Sensors.pdf-0001-03.png)
 
-    * [NFX Setup...](../Applications/Noise_Figure_on_Converters.htm#MxrSwpCombos)
+
+## **Table of Contents** 
+
+A New Thermocouple Power Sensor for Average or Complex Modulations Power Measurement .............. 3 
+
+Introduction ................................................................................................................................................... 4 N8480 Series Power Sensors ....................................................................................................................... 5 Key Specifications and Features .................................................................................................................. 7 Step-by-Step Migration Guide from 8480 to N848x with EPM Power Meter .............................................. 20 Conclusion .................................................................................................................................................. 24 References .................................................................................................................................................. 24 Related Literatures ...................................................................................................................................... 25 Related Links .............................................................................................................................................. 25 
+
+
+![](uploads/1/test_kb/origin/N8480 Series Power Sensors_images/N8480 Series Power Sensors.pdf-0002-03.png)
+
+
+## **A New Thermocouple Power Sensor for Average or Complex Modulations Power Measurement** 
+
+Keysight Technologies, Inc. is introducing the N8480 Series power sensors to replace its legacy 8480 Series power sensor (excluding the D-model sensor). The new N8480 Series power sensors offers new features, including a built-in EEPROM, better dynamic range up to 55 dB, better measurement accuracy and repeatability, as well as backward compatibility with existing Keysight power meters. 
+
+This document compares the legacy 8480 and the new N8480 power sensors. It also outlines the stepby-step migration from the 8480 to the N8480 Series with the EPM power meter.
     """
     splits = splitter.split_text(text, metadata={"file_id": 1})
     for split in splits:
         print(split)
     
-    print("\n\nTesting refactored LangchainFileSplitter with default chunkers:")
-    langchain_splitter = LangchainFileSplitter()
-    langchain_splits = langchain_splitter.split_text(text, metadata={"file_id": 2})
-    for split in langchain_splits:
-        print(split)
+    # print("\n\nTesting refactored LangchainFileSplitter with default chunkers:")
+    # langchain_splitter = LangchainFileSplitter()
+    # langchain_splits = langchain_splitter.split_text(text, metadata={"file_id": 2})
+    # for split in langchain_splits:
+    #     print(split)
     
-    print("\n\nTesting LangchainFileSplitter with custom chunkers:")
-    custom_langchain_splitter = LangchainFileSplitter(chunkers=[
-        {"chunker": "markdown_header", "params": {"header_levels": 2, "strip_headers": True}},
-        {"chunker": "recursive", "params": {"chunk_size": 150, "chunk_overlap": 20}}
-    ])
-    custom_splits = custom_langchain_splitter.split_text(text, metadata={"file_id": 3})
-    for split in custom_splits:
-        print(split)
+    # print("\n\nTesting LangchainFileSplitter with custom chunkers:")
+    # custom_langchain_splitter = LangchainFileSplitter(chunkers=[
+    #     {"chunker": "markdown_header", "params": {"header_levels": 2, "strip_headers": True}},
+    #     {"chunker": "recursive", "params": {"chunk_size": 150, "chunk_overlap": 20}}
+    # ])
+    # custom_splits = custom_langchain_splitter.split_text(text, metadata={"file_id": 3})
+    # for split in custom_splits:
+    #     print(split)
     
-    print("\n\nTesting LangchainFileSplitter with only recursive chunker:")
-    recursive_only_splitter = LangchainFileSplitter(chunkers=[
-        {"chunker": "recursive", "params": {"chunk_size": 100, "chunk_overlap": 10}}
-    ])
-    recursive_splits = recursive_only_splitter.split_text(text, metadata={"file_id": 4})
-    for split in recursive_splits:
-        print(split)
+    # print("\n\nTesting LangchainFileSplitter with only recursive chunker:")
+    # recursive_only_splitter = LangchainFileSplitter(chunkers=[
+    #     {"chunker": "recursive", "params": {"chunk_size": 100, "chunk_overlap": 10}}
+    # ])
+    # recursive_splits = recursive_only_splitter.split_text(text, metadata={"file_id": 4})
+    # for split in recursive_splits:
+    #     print(split)
         
         

@@ -325,6 +325,9 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     }
 
     // Generate HTML for the new window
+    const numColumns = runIds.length;
+    const gridTemplateColumns = numColumns > 0 ? `repeat(${numColumns}, minmax(300px, 1fr))` : '1fr';
+    
     let html = `
       <!DOCTYPE html>
       <html lang="en">
@@ -353,14 +356,11 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             font-family: Arial, sans-serif;
           }
           
-          * {
-            box-sizing: border-box;
-          }
-          
           h1 {
             margin-bottom: 20px;
           }
           
+          /* Single grid container for perfect alignment */
           .main-container {
             display: flex;
             flex-direction: column;
@@ -368,38 +368,106 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             width: 100%;
           }
           
-          /* Header row styling */
-          .header-row {
-            display: flex;
-            flex-direction: ${hasChunkRuns && isSingleRun ? 'column' : 'row'};
-            gap: 20px;
-            margin-bottom: -1px; /* Overlap with content row border */
-            flex-shrink: 0; /* Don't shrink headers */
-          }
-          
-          /* Scrollable content row styling */
-          .scroll-container {
-            display: flex;
-            flex-direction: ${hasChunkRuns && isSingleRun ? 'column' : 'row'};
-            gap: 20px;
-            overflow-y: auto;
-            flex-grow: 1;
-            flex-shrink: 1;
-            scrollbar-width: thin;
-            min-height: 0; /* Allow shrinking below content size */
-          }
-          
-          .run-column {
-            flex: 1;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          /* Single grid container for perfect alignment */
+          .main-container {
             display: flex;
             flex-direction: column;
+            height: calc(100vh - 40px); /* Subtract body padding */
+            width: 100%;
           }
           
-          /* Shared header styling */
+          /* Ensure grid wrapper has consistent width */
+          .grid-wrapper {
+            display: contents;
+            scrollbar-gutter: stable both-edges;
+          }
+          
+          /* Base styling for both header and scroll rows */
+          .header-row, .scroll-container {
+            display: grid;
+            grid-template-columns: ${gridTemplateColumns};
+            gap: 20px;
+            width: 100%;
+            box-sizing: border-box;
+            overflow-y: ${hasChunkRuns && isSingleRun ? 'hidden' : 'auto'};
+            scrollbar-width: thin;
+            scrollbar-gutter: stable both-edges;
+            min-height: 0;
+          }
+          
+          /* Header-specific styling - ensure same width as scroll container */
+          .header-row {
+            margin-bottom: -1px;
+            flex-shrink: 0;
+            overflow-y: scroll; /* Match scroll-container overflow */
+            visibility: hidden; /* Hide scrollbar visually */
+            pointer-events: none; /* Disable interaction with hidden scrollbar */
+          }
+          
+          /* Hide scrollbar for header row while maintaining width */
+          .header-row::-webkit-scrollbar {
+            visibility: hidden;
+            width: 8px;
+          }
+          
+          .header-row::-webkit-scrollbar-track {
+            visibility: hidden;
+          }
+          
+          .header-row::-webkit-scrollbar-thumb {
+            visibility: hidden;
+          }
+          
+          /* Show scrollbar content */
+          .header-row > * {
+            visibility: visible;
+            pointer-events: auto;
+          }
+          
+          /* Scroll-container specific styling */
+          .scroll-container {
+            overflow-y: auto;
+            flex: 1;
+          }
+          
+          /* Header column */
+          .run-column {
+            background: white;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px 8px 0 0;
+            min-width: 300px;
+          }
+          
+          /* Content column */
+          .content-column {
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 0 0 8px 8px;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+          }
+          
+          /* Remove grid wrapper since we're using direct grid layout */
+          .grid-wrapper {
+            display: contents;
+          }
+          
+          /* Ensure single run layout still works correctly */
+          ${hasChunkRuns && isSingleRun ? `
+            .grid-wrapper {
+              grid-template-columns: 1fr;
+            }
+            .run-column, .content-column {
+              width: 100%;
+            }
+          ` : ''}
+          
+          /* Shared header styling - allows expansion while maintaining uniform height across all columns */
           .run-header {
             font-size: 16px;
             font-weight: bold;
@@ -408,39 +476,25 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             color: #333;
             background: white;
             margin: 0;
-            border-radius: 8px 8px 0 0;
-            height: 80px;
+            min-height: 80px; /* Minimum height to maintain readability */
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
-          }
-          
-          /* Content column styling */
-          .content-column {
-            flex: 1;
-            background: white;
-            border: 1px solid #ddd;
-            border-top: none;
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
-            min-height: 0; /* Allow shrinking below content size */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
           
           /* Column content wrapper */
           .column-content {
             display: flex;
             flex-direction: column;
-            height: 100%;
           }
           
-          /* Text container styling - no independent scrolling */
+          /* Text container styling - only handle horizontal scrolling */
           .text-container {
-            --scrollbar-gutter-size: 14px; /* fallback gutter width */
-            flex: 1;
-            overflow: visible; /* Allow content to overflow into scroll container */
-            scrollbar-gutter: stable both-edges; /* reserve space consistently */
+            overflow-x: auto; /* Only handle horizontal overflow */
+            overflow-y: hidden; /* Let scroll-container handle vertical scrolling */
+            scrollbar-gutter: stable both-edges; /* Reserve space for scrollbars */
             font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
             line-height: 1.5;
@@ -448,18 +502,28 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             border: 1px solid #eee;
             border-radius: 0 0 4px 4px;
             padding: 10px;
-            padding-right: calc(10px + var(--scrollbar-gutter-size)); /* manual gutter fallback */
             position: relative;
+            min-height: 200px; /* Ensure minimum height for consistency */
+            height: 100%; /* Fill available space */
           }
-
-          /* Hide scrollbars on text containers, show them on the main scroll container */
+          
+          /* Ensure column content fills the available space */
+          .column-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+          }
+          
+          /* Make text container fill the available space */
           .text-container {
-            scrollbar-width: none; /* Firefox */
+            flex: 1;
           }
-
-          .text-container::-webkit-scrollbar {
-            width: 0;
-            height: 0;
+          
+          /* Chunk text styling */
+          .chunk-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
           }
           
           /* Show scrollbars on main scroll container */
@@ -485,11 +549,6 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           
           .scroll-container::-webkit-scrollbar-thumb:hover {
             background: #999;
-          }
-          
-          .chunk-text {
-            white-space: pre-wrap;
-            word-wrap: break-word;
           }
           
           .legend {
@@ -561,13 +620,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       <body>
         <h1>Chunk Visualization: ${fileName}</h1>
         <div class="main-container">
+          <div class="grid-wrapper">
     `;
 
     // Show Parsed Text column only when no chunk runs are selected
     if (!hasChunkRuns) {
       html += `
         <div class="header-row">
-          <div class="run-column">
+          <div class="run-column" style="min-width: auto; width: 100%;">
             <div class="run-header">
               <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
               <div style="font-size: 12px; color: #666;">Original parsed content of the file</div>
@@ -575,7 +635,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           </div>
         </div>
         <div class="scroll-container">
-          <div class="content-column">
+          <div class="content-column" style="min-width: auto; width: 100%;">
             <div class="column-content">
               <div class="text-container" style="position: relative;">
                 <div class="chunk-text">${escapeHtml(parsedText)}</div>
@@ -756,11 +816,51 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           </div>
         `;
       });
-      html += '</div>';
+      html += '</div>'; // End scroll-container
     }
     
     html += `
-        </div>
+          </div> <!-- End grid-wrapper -->
+        </div> <!-- End main-container -->
+        <script>
+          // Synchronized scrolling implementation that handles scrollbar alignment
+          document.addEventListener('DOMContentLoaded', () => {
+            const textContainers = document.querySelectorAll('.text-container');
+            const scrollContainer = document.querySelector('.scroll-container');
+            let isScrolling = false;
+            
+            // Disable vertical scrolling on text containers - let scroll-container handle it
+            textContainers.forEach(container => {
+              container.style.overflowY = 'hidden';
+              container.style.overflowX = 'auto';
+              container.style.maxHeight = 'none';
+            });
+            
+            // Function to synchronize horizontal scrolling across all text containers
+            const syncHorizontalScroll = (scrolledContainer) => {
+              if (isScrolling) return;
+              
+              isScrolling = true;
+              
+              const scrollLeft = scrolledContainer.scrollLeft;
+              
+              textContainers.forEach(container => {
+                if (container !== scrolledContainer) {
+                  container.scrollLeft = scrollLeft;
+                }
+              });
+              
+              isScrolling = false;
+            };
+            
+            // Add scroll event listeners for horizontal sync only
+            textContainers.forEach(container => {
+              container.addEventListener('scroll', (e) => {
+                syncHorizontalScroll(e.target);
+              });
+            });
+          });
+        </script>
       </body>
       </html>
     `;
