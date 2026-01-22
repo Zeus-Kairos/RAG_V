@@ -38,7 +38,7 @@ class PdfParser:
             show_progress=True,  # Displays a progress bar during processing.
             hdr_info=True,  # Optional, disables header detection logic.
             write_images=False,  # Saves images found in the document as files.
-            embed_images=False,  # Embeds images directly as base64 in markdown.
+            embed_images=True,  # Embeds images directly as base64 in markdown.
             # image_path=image_dir,
             image_size_limit=0.05,  # Exclude small images below this size threshold.
             force_text=True,  # Include text overlapping images/graphics.

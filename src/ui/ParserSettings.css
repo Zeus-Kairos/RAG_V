@@ -16,47 +16,56 @@
   color: #333;
 }
 
-/* Parser Section Styles */
+/* Parser Section Styles - match SplitterSettings */
 .parser-section {
-  margin-bottom: 12px;
-  padding: 8px;
   background-color: white;
-  border-radius: 6px;
   border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
 }
 
 .parser-section:last-child {
   margin-bottom: 0;
 }
 
+/* Section header with light background like SplitterSettings */
 .parser-section-header {
-  margin-bottom: 8px;
+  background-color: #f9f9f9;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .parser-section-header h4 {
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #444;
+  color: #333;
 }
 
+/* Section content with consistent padding */
 .parser-section-content {
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-/* Parameter Group Styles */
+/* Parameter Group Styles - match SplitterSettings */
 .param-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.param-group:last-child {
+  margin-bottom: 0;
 }
 
 .param-group label {
-  font-size: 13px;
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
   font-weight: 500;
-  color: #555;
+  color: #666;
 }
 
 .param-group select {
@@ -67,42 +76,29 @@
   background-color: white;
   cursor: pointer;
   transition: border-color 0.2s ease;
+  width: 100%;
 }
 
-/* Checkbox Parameter Styles */
+/* Checkbox Parameter Styles - match SplitterSettings */
 .param-group.checkbox {
-  flex-direction: row;
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin: 2px 0;
-}
-
-/* Parameters Subsection */
-.params-subsection {
-  margin-top: 8px;
-  padding: 8px;
-  background-color: #fafafa;
-  border-radius: 4px;
-  border-left: 3px solid #4a6cf7;
-}
-
-.param-group.checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
+  margin-bottom: 12px;
 }
 
 .param-group.checkbox label {
   margin: 0;
-  font-weight: normal;
   cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  font-weight: normal;
 }
 
-/* Parameters Subsection */
-.params-subsection {
-  margin-top: 12px;
-  padding: 12px;
-  background-color: #fafafa;
-  border-radius: 4px;
-  border-left: 3px solid #4a6cf7;
+.param-group.checkbox input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: #4a6cf7;
 }
