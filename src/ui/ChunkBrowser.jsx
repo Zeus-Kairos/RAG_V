@@ -62,16 +62,34 @@ const ChunkBrowser = () => {
       if (activeFramework === 'langchain') {
         // Langchain framework settings
         formData.append('framework', 'langchain');
-        formData.append('markdown_header_splitting', splitterSettings.isMarkdownEnabled ? 'true' : 'false');
-        formData.append('recursive_splitting', splitterSettings.isRecursiveEnabled ? 'true' : 'false');
         
-        // Add markdown settings
-        formData.append('header_levels', splitterSettings.markdownSettings.headerLevels);
-        formData.append('strip_headers', splitterSettings.markdownSettings.stripHeaders ? 'true' : 'false');
+        // Prepare chunkers array from Langchain settings
+        const chunkers = [];
         
-        // Add recursive settings
-        formData.append('chunk_size', splitterSettings.recursiveSettings.chunkSize);
-        formData.append('chunk_overlap', splitterSettings.recursiveSettings.chunkOverlap);
+        // Add markdown_header chunker if enabled
+        if (splitterSettings.isMarkdownEnabled) {
+          chunkers.push({
+            "chunker": "markdown_header",
+            "params": {
+              "header_levels": splitterSettings.markdownSettings.headerLevels,
+              "strip_headers": splitterSettings.markdownSettings.stripHeaders
+            }
+          });
+        }
+        
+        // Add recursive chunker if enabled
+        if (splitterSettings.isRecursiveEnabled) {
+          chunkers.push({
+            "chunker": "recursive",
+            "params": {
+              "chunk_size": splitterSettings.recursiveSettings.chunkSize,
+              "chunk_overlap": splitterSettings.recursiveSettings.chunkOverlap
+            }
+          });
+        }
+        
+        // Add chunkers as JSON string
+        formData.append('chunkers', JSON.stringify(chunkers));
       } else if (activeFramework === 'chonkie') {
         // Chonkie framework settings
         formData.append('framework', 'chonkie');
@@ -271,57 +289,65 @@ const ChunkBrowser = () => {
                     </div>
                   </div>
                   <div className="chunk-run-params">
-                    {/* Special handling for Chonkie framework parameters */}
-                    {run.framework === 'chonkie' && run.parameters.chunkers && (
+                    {/* Special handling for frameworks with chunkers */}
+                    {run.framework && run.parameters.chunkers && (
                       <>
                         {/* Display each chunker with its parameters */}
                         {run.parameters.chunkers.map((chunker, index) => (
-                          <React.Fragment key={`chonkie-chunker-${index}`}>
+                          <React.Fragment key={`${run.framework}-chunker-${index}`}>
                             {/* Chunker type with enabled styling */}
                             <span className="param-label">
                               {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
                             </span>
                             
-                            {/* Chunk Size */}
-                            <span className="param-label param-label-digital">
-                              Chunk Size: {chunker.params.chunk_size}
-                            </span>
-                            
-                            {/* Chunk Overlap (only for Sentence chunker) */}
-                            {chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined && (
-                              <span className="param-label param-label-digital">
-                                Chunk Overlap: {chunker.params.chunk_overlap}
-                              </span>
-                            )}
-                            
-                            {/* Semantic Chunker Parameters */}
-                            {chunker.chunker === 'semantic' && (
-                              <>
-                                {/* Threshold */}
-                                {chunker.params.threshold !== undefined && (
-                                  <span className="param-label param-label-digital">
-                                    Threshold: {chunker.params.threshold}
-                                  </span>
-                                )}
-                                
-                                {/* Similarity Window */}
-                                {chunker.params.similarity_window !== undefined && (
-                                  <span className="param-label param-label-digital">
-                                    Similarity Window: {chunker.params.similarity_window}
-                                  </span>
-                                )}
-                              </>
-                            )}
+                            {/* Display all parameters for this chunker based on type */}
+                            {Object.entries(chunker.params).map(([paramName, paramValue]) => {
+                              // Format parameter name to be more readable
+                              const displayName = paramName
+                                .replace(/_/g, ' ')    
+                                .replace(/\b\w/g, l => l.toUpperCase());
+                              
+                              // Format value based on type
+                              let displayValue = paramValue;
+                              if (typeof paramValue === 'boolean') {
+                                displayValue = paramValue ? 'Enabled' : 'Disabled';
+                              } else if (typeof paramValue === 'object' && paramValue !== null) {
+                                // Convert objects and arrays to string representation for display
+                                displayValue = JSON.stringify(paramValue);
+                              }
+                              
+                              // Determine parameter type for styling
+                              let paramClass = "param-label";
+                              if (typeof paramValue === "boolean") {
+                                // Boolean values get standard styling
+                              } else if (typeof paramValue === "number" || (!isNaN(Number(paramValue)) && paramValue !== "")) {
+                                paramClass += " param-label-digital";
+                              }
+                              
+                              return (
+                                <span key={paramName} className={paramClass}>
+                                  {displayName}: {displayValue}
+                                </span>
+                              );
+                            })}
                           </React.Fragment>
                         ))}
                       </>
                     )}
                     
-                    {/* Display all other parameters (excluding chunkers for Chonkie framework) */}
+                    {/* Display all other parameters (excluding chunkers since we're displaying it specially) */}
                     {Object.entries(run.parameters).map(([key, value]) => {
-                      // Skip chunkers for Chonkie framework since we're displaying it specially
-                      if (run.framework === 'chonkie' && key === 'chunkers') {
+                      // Skip chunkers since we're displaying it specially above
+                      if (key === 'chunkers') {
                         return null;
+                      }
+                      
+                      // Check if this parameter is part of a disabled feature (for legacy parameters)
+                      let isDisabled = false;
+                      if (key === 'header_levels' || key === 'strip_headers') {
+                        isDisabled = run.parameters.markdown_header_splitting === false;
+                      } else if (key === 'chunk_size' || key === 'chunk_overlap') {
+                        isDisabled = run.parameters.recursive_splitting === false;
                       }
                       
                       // Format parameter name to be more readable
@@ -338,25 +364,12 @@ const ChunkBrowser = () => {
                         displayValue = JSON.stringify(value);
                       }
                       
-                      // Check if this parameter is part of a disabled feature
-                      const isDisabled = (() => {
-                        // Check parent feature flags
-                        if (key === 'header_levels' || key === 'strip_headers') {
-                          return run.parameters.markdown_header_splitting === false;
-                        }
-                        if (key === 'chunk_size' || key === 'chunk_overlap') {
-                          return run.parameters.recursive_splitting === false;
-                        }
-                        // Check if the parameter itself is disabled (boolean false)
-                        return displayValue === "Disabled";
-                      })();
-                      
                       // Determine parameter type for styling
                       let paramClass = "param-label";
                       if (isDisabled) {
                         paramClass += " param-label-disabled";
                       } else if (typeof value === "boolean") {
-                        // Keep boolean values as original styling
+                        // Boolean values get standard styling
                       } else if (typeof value === "number" || (!isNaN(Number(value)) && value !== "")) {
                         paramClass += " param-label-digital";
                       }

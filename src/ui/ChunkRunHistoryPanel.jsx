@@ -345,12 +345,48 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             padding: 20px;
           }
           
-          .container {
+          html, body {
+            height: 100%;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+          }
+          
+          * {
+            box-sizing: border-box;
+          }
+          
+          h1 {
+            margin-bottom: 20px;
+          }
+          
+          .main-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 40px); /* Subtract body padding */
+            width: 100%;
+          }
+          
+          /* Header row styling */
+          .header-row {
             display: flex;
             flex-direction: ${hasChunkRuns && isSingleRun ? 'column' : 'row'};
             gap: 20px;
-            max-width: 100%;
-            height: 100%;
+            margin-bottom: -1px; /* Overlap with content row border */
+            flex-shrink: 0; /* Don't shrink headers */
+          }
+          
+          /* Scrollable content row styling */
+          .scroll-container {
+            display: flex;
+            flex-direction: ${hasChunkRuns && isSingleRun ? 'column' : 'row'};
+            gap: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+            flex-shrink: 1;
+            scrollbar-width: thin;
+            min-height: 0; /* Allow shrinking below content size */
           }
           
           .run-column {
@@ -358,40 +394,65 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             background: white;
             border: 1px solid #ddd;
             border-radius: 8px;
-            padding: 15px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
             display: flex;
             flex-direction: column;
           }
           
+          /* Shared header styling */
           .run-header {
             font-size: 16px;
             font-weight: bold;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
+            padding: 15px;
             border-bottom: 1px solid #eee;
             color: #333;
+            background: white;
+            margin: 0;
+            border-radius: 8px 8px 0 0;
+            height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
           }
           
+          /* Content column styling */
+          .content-column {
+            flex: 1;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Allow shrinking below content size */
+          }
+          
+          /* Column content wrapper */
+          .column-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+          }
+          
+          /* Text container styling - no independent scrolling */
           .text-container {
             --scrollbar-gutter-size: 14px; /* fallback gutter width */
             flex: 1;
-            overflow-x: auto;
-            overflow-y: auto; /* allow scroll only when needed */
+            overflow: visible; /* Allow content to overflow into scroll container */
             scrollbar-gutter: stable both-edges; /* reserve space consistently */
             font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
             line-height: 1.5;
             background: #fafafa;
             border: 1px solid #eee;
-            border-radius: 4px;
+            border-radius: 0 0 4px 4px;
             padding: 10px;
             padding-right: calc(10px + var(--scrollbar-gutter-size)); /* manual gutter fallback */
             position: relative;
           }
 
-          /* Hide scrollbars but keep scroll functionality */
+          /* Hide scrollbars on text containers, show them on the main scroll container */
           .text-container {
             scrollbar-width: none; /* Firefox */
           }
@@ -399,6 +460,31 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           .text-container::-webkit-scrollbar {
             width: 0;
             height: 0;
+          }
+          
+          /* Show scrollbars on main scroll container */
+          .scroll-container {
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: #ccc #f0f0f0; /* Firefox */
+          }
+          
+          .scroll-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+          }
+          
+          .scroll-container::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 4px;
+          }
+          
+          .scroll-container::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+          }
+          
+          .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #999;
           }
           
           .chunk-text {
@@ -474,19 +560,27 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       </head>
       <body>
         <h1>Chunk Visualization: ${fileName}</h1>
-        <div class="container">
+        <div class="main-container">
     `;
 
     // Show Parsed Text column only when no chunk runs are selected
     if (!hasChunkRuns) {
       html += `
-        <div class="run-column">
-          <div class="run-header">
-            <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
-            <div style="font-size: 12px; color: #666;">Original parsed content of the file</div>
+        <div class="header-row">
+          <div class="run-column">
+            <div class="run-header">
+              <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
+              <div style="font-size: 12px; color: #666;">Original parsed content of the file</div>
+            </div>
           </div>
-          <div class="text-container" style="position: relative;">
-            <div class="chunk-text">${escapeHtml(parsedText)}</div>
+        </div>
+        <div class="scroll-container">
+          <div class="content-column">
+            <div class="column-content">
+              <div class="text-container" style="position: relative;">
+                <div class="chunk-text">${escapeHtml(parsedText)}</div>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -523,127 +617,146 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       });
 
       // Helper function to format parameters for display
-      const formatParamsForDisplay = (params) => {
-        if (!params) return '';
-        
-        // Convert to object if it's a string
-        const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
-        
-        // Format parameters as readable strings
-        const paramStrings = [];
-        
-        // Handle Chonkie framework chunkers specially (check for chunkers array)
-        if (paramsObj.chunkers && Array.isArray(paramsObj.chunkers)) {
-          paramsObj.chunkers.forEach((chunker, index) => {
-            const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
-            paramStrings.push(`${chunkerType}: Enabled`);
-            paramStrings.push(`Chunk Size: ${chunker.params.chunk_size}`);
-            
-            // Add Sentence-specific params
-            if (chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined) {
-              paramStrings.push(`Chunk Overlap: ${chunker.params.chunk_overlap}`);
-            }
-            
-            // Add Semantic-specific params
-            if (chunker.chunker === 'semantic') {
-              if (chunker.params.threshold !== undefined) {
-                paramStrings.push(`Threshold: ${chunker.params.threshold}`);
-              }
-              if (chunker.params.similarity_window !== undefined) {
-                paramStrings.push(`Similarity Window: ${chunker.params.similarity_window}`);
-              }
-            }
-          });
-        } else {
-          // Handle other frameworks and regular parameters
-          Object.entries(paramsObj)
-            .forEach(([key, value]) => {
-              if (typeof value !== 'object' || value === null) {
-                // Format key to be more readable
-                const displayKey = key
-                  .replace(/_/g, ' ')
+        const formatParamsForDisplay = (params) => {
+          if (!params) return '';
+          
+          // Convert to object if it's a string
+          const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
+          
+          // Format parameters as readable strings
+          const paramStrings = [];
+          
+          // Handle chunkers array (for both frameworks)
+          if (paramsObj.chunkers && Array.isArray(paramsObj.chunkers)) {
+            paramsObj.chunkers.forEach((chunker, index) => {
+              const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
+              paramStrings.push(`${chunkerType}: Enabled`);
+              
+              // Display all parameters for this chunker based on type
+              Object.entries(chunker.params).forEach(([paramName, paramValue]) => {
+                // Format parameter name to be more readable
+                const displayName = paramName
+                  .replace(/_/g, ' ')    
                   .replace(/\b\w/g, l => l.toUpperCase());
                 
                 // Format value based on type
-                let displayValue = value;
-                if (typeof value === 'boolean') {
-                  displayValue = value ? 'Enabled' : 'Disabled';
+                let displayValue = paramValue;
+                if (typeof paramValue === 'boolean') {
+                  displayValue = paramValue ? 'Enabled' : 'Disabled';
                 }
                 
-                paramStrings.push(`${displayKey}: ${displayValue}`);
-              }
+                paramStrings.push(`${displayName}: ${displayValue}`);
+              });
             });
-        }
-        
-        return paramStrings.join(', ');
-      };
+          } else {
+            // Handle other frameworks and regular parameters
+            Object.entries(paramsObj)
+              .forEach(([key, value]) => {
+                if (typeof value !== 'object' || value === null) {
+                  // Format key to be more readable
+                  const displayKey = key
+                    .replace(/_/g, ' ')    
+                    .replace(/\b\w/g, l => l.toUpperCase());
+                  
+                  // Format value based on type
+                  let displayValue = value;
+                  if (typeof value === 'boolean') {
+                    displayValue = value ? 'Enabled' : 'Disabled';
+                  }
+                  
+                  paramStrings.push(`${displayKey}: ${displayValue}`);
+                }
+              });
+          }
+          
+          return paramStrings.join(', ');
+        };
 
-      // Process each chunk run
+      // Generate headers first
+      html += '<div class="header-row">';
       runIds.forEach((runId, runIndex) => {
-      const runChunks = chunksByRunId[runId];
-      const framework = runFrameworkMap.get(parseInt(runId));
-      // Use consistent color for the same framework
-      const baseColor = frameworkColors.get(framework);
-      const runParams = runParamsMap.get(parseInt(runId));
-      const formattedParams = formatParamsForDisplay(runParams);
-      
-      // Find positions for all chunks and filter out those with no match
-      let lastStart = -1;
-      // Check if markdown header splitting was disabled (use exact match in that case)
-      const useExactMatch = runParams && runParams.markdown_header_splitting === false;
-      // IMPORTANT: enforce document order before applying the increasing-start constraint.
-      // The API may not return chunks sorted, and an out-of-order chunk would fail matching
-      // once minStart has advanced past its true location.
-      const runChunksSorted = [...runChunks].sort((a, b) => {
-        const aId = typeof a.chunk_id === 'string' ? a.chunk_id : '';
-        const bId = typeof b.chunk_id === 'string' ? b.chunk_id : '';
-        const aParts = aId.split('_');
-        const bParts = bId.split('_');
-        const aIdx = parseInt(aParts[aParts.length - 1], 10);
-        const bIdx = parseInt(bParts[bParts.length - 1], 10);
-        if (!Number.isNaN(aIdx) && !Number.isNaN(bIdx)) return aIdx - bIdx;
-        // Fallback: stable string compare
-        return String(aId).localeCompare(String(bId));
-      });
-
-      const chunksWithPositions = runChunksSorted
-        .map(chunk => {
-          const minStart = lastStart + 1; // enforce strictly after previous start
-          const positions = findChunkPositions(chunk.content, parsedText, minStart, useExactMatch);
-          if (!positions) return null;
-          lastStart = positions.start_idx;
-          return { ...chunk, ...positions };
-        })
-        .filter(chunk => chunk !== null);
-      const highlightedText = formatTextWithBoundaryMarkers(
-        parsedText,
-        chunksWithPositions,
-        colors
-      );
-      
-      // Generate HTML for this run
-      html += `
-        <div class="run-column">
-          <div class="run-header" style="height: 80px; display: flex; flex-direction: column; justify-content: flex-start;">
-            <div style="margin-bottom: 5px; font-weight: bold;">Chunk Run ID: ${runId} (${chunksWithPositions.length}/${runChunks.length} chunks matched)</div>
-            <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word;">Framework: <span style="background-color: ${baseColor}; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; opacity: 0.8;">${framework}</span></div>
-            <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word; margin-top: 4px;">${formattedParams || 'No parameters available'}</div>
-          </div>
-          <div class="text-container" style="position: relative;">
-            <div class="chunk-text">${highlightedText}</div>
-      `;
-      
-      html += `
-          </div>
-          <div class="legend">
-            <div class="legend-item">
-              <span class="legend-color" style="background-color: ${baseColor}; opacity: 0.3;"></span>
-              <span>Framework: ${framework} | Run Parameters: ${formattedParams}</span>
+        const runChunks = chunksByRunId[runId];
+        const framework = runFrameworkMap.get(parseInt(runId));
+        const baseColor = frameworkColors.get(framework);
+        const runParams = runParamsMap.get(parseInt(runId));
+        const formattedParams = formatParamsForDisplay(runParams);
+        
+        html += `
+          <div class="run-column">
+            <div class="run-header">
+              <div style="margin-bottom: 5px; font-weight: bold;">Chunk Run ID: ${runId} (${runChunks.length} chunks)</div>
+              <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word;">Framework: <span style="background-color: ${baseColor}; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; opacity: 0.8;">${framework}</span></div>
+              <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word; margin-top: 4px;">${formattedParams || 'No parameters available'}</div>
             </div>
           </div>
-        </div>
-      `;
-    });
+        `;
+      });
+      html += '</div>';
+      
+      // Generate scrollable content
+      html += '<div class="scroll-container">';
+      runIds.forEach((runId, runIndex) => {
+        const runChunks = chunksByRunId[runId];
+        const framework = runFrameworkMap.get(parseInt(runId));
+        const baseColor = frameworkColors.get(framework);
+        const runParams = runParamsMap.get(parseInt(runId));
+        const formattedParams = formatParamsForDisplay(runParams);
+        
+        // Find positions for all chunks and filter out those with no match
+        let lastStart = -1;
+        // Check if markdown header splitting was disabled (use exact match in that case)
+        const useExactMatch = runParams && runParams.markdown_header_splitting === false;
+        // IMPORTANT: enforce document order before applying the increasing-start constraint.
+        // The API may not return chunks sorted, and an out-of-order chunk would fail matching
+        // once minStart has advanced past its true location.
+        const runChunksSorted = [...runChunks].sort((a, b) => {
+          const aId = typeof a.chunk_id === 'string' ? a.chunk_id : '';
+          const bId = typeof b.chunk_id === 'string' ? b.chunk_id : '';
+          const aParts = aId.split('_');
+          const bParts = bId.split('_');
+          const aIdx = parseInt(aParts[aParts.length - 1], 10);
+          const bIdx = parseInt(bParts[bParts.length - 1], 10);
+          if (!Number.isNaN(aIdx) && !Number.isNaN(bIdx)) return aIdx - bIdx;
+          // Fallback: stable string compare
+          return String(aId).localeCompare(String(bId));
+        });
+
+        const chunksWithPositions = runChunksSorted
+          .map(chunk => {
+            const minStart = lastStart + 1; // enforce strictly after previous start
+            const positions = findChunkPositions(chunk.content, parsedText, minStart, useExactMatch);
+            if (!positions) return null;
+            lastStart = positions.start_idx;
+            return { ...chunk, ...positions };
+          })
+          .filter(chunk => chunk !== null);
+        const highlightedText = formatTextWithBoundaryMarkers(
+          parsedText,
+          chunksWithPositions,
+          colors
+        );
+        
+        // Generate HTML for this run's content
+        html += `
+          <div class="content-column">
+            <div class="column-content">
+              <div class="text-container" style="position: relative;">
+                <div class="chunk-text">${highlightedText}</div>
+            `;
+        
+        html += `
+              </div>
+              <div class="legend">
+                <div class="legend-item">
+                  <span class="legend-color" style="background-color: ${baseColor}; opacity: 0.3;"></span>
+                  <span>Framework: ${framework} | Run Parameters: ${formattedParams}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
     }
     
     html += `
@@ -766,53 +879,62 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                       </div>
                     </div>
                     <div className="chunk-run-params">
-                      {/* Special handling for Chonkie framework parameters */}
-                    {run.framework === 'chonkie' && run.parameters.chunkers && (
-                      <>
-                        {/* Display each chunker with its parameters */}
-                        {run.parameters.chunkers.map((chunker, index) => (
-                          <React.Fragment key={`chonkie-chunker-${index}`}>
-                            {/* Chunker type with enabled styling */}
-                            <span className="param-label">
-                              {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
-                            </span>
-                            
-                            {/* Chunk Size */}
-                            <span className="param-label param-label-digital">
-                              Chunk Size: {chunker.params.chunk_size}
-                            </span>
-                            
-                            {/* Chunk Overlap (only for Sentence chunker) */}
-                            {chunker.chunker === 'sentence' && chunker.params.chunk_overlap !== undefined && (
-                              <span className="param-label param-label-digital">
-                                Chunk Overlap: {chunker.params.chunk_overlap}
+                      {/* Special handling for frameworks with chunkers */}
+                      {run.framework && run.parameters.chunkers && (
+                        <>
+                          {/* Display each chunker with its parameters */}
+                          {run.parameters.chunkers.map((chunker, index) => (
+                            <React.Fragment key={`${run.framework}-chunker-${index}`}>
+                              {/* Chunker type with enabled styling */}
+                              <span className="param-label">
+                                {chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1)}: Enabled
                               </span>
-                            )}
-                            
-                            {/* Semantic Chunker Parameters */}
-                            {chunker.chunker === 'semantic' && (
-                              <>
-                                {/* Threshold */}
-                                <span className="param-label param-label-digital">
-                                  Threshold: {chunker.params.threshold}
-                                </span>
+                              
+                              {/* Display all parameters for this chunker based on type */}
+                              {Object.entries(chunker.params).map(([paramName, paramValue]) => {
+                                // Format parameter name to be more readable
+                                const displayName = paramName
+                                  .replace(/_/g, ' ')    
+                                  .replace(/\b\w/g, l => l.toUpperCase());
                                 
-                                {/* Similarity Window */}
-                                <span className="param-label param-label-digital">
-                                  Similarity Window: {chunker.params.similarity_window}
-                                </span>
-                              </>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </>
-                    )}
+                                // Format value based on type
+                                let displayValue = paramValue;
+                                if (typeof paramValue === 'boolean') {
+                                  displayValue = paramValue ? 'Enabled' : 'Disabled';
+                                }
+                                
+                                // Determine parameter type for styling
+                                let paramClass = "param-label";
+                                if (typeof paramValue === "boolean") {
+                                  // Boolean values get standard styling
+                                } else if (typeof paramValue === "number" || (!isNaN(Number(paramValue)) && paramValue !== "")) {
+                                  paramClass += " param-label-digital";
+                                }
+                                
+                                return (
+                                  <span key={paramName} className={paramClass}>
+                                    {displayName}: {displayValue}
+                                  </span>
+                                );
+                              })}
+                            </React.Fragment>
+                          ))}
+                        </>
+                      )}
                       
-                      {/* Display all other parameters (excluding chunkers for Chonkie framework) */}
+                      {/* Display all other parameters (excluding chunkers since we're displaying it specially) */}
                       {Object.entries(run.parameters).map(([key, value]) => {
-                        // Skip chunkers for Chonkie framework since we're displaying it specially
-                        if (run.framework === 'chonkie' && key === 'chunkers') {
+                        // Skip chunkers since we're displaying it specially above
+                        if (key === 'chunkers') {
                           return null;
+                        }
+                        
+                        // Check if this parameter is part of a disabled feature (for legacy parameters)
+                        let isDisabled = false;
+                        if (key === 'header_levels' || key === 'strip_headers') {
+                          isDisabled = run.parameters.markdown_header_splitting === false;
+                        } else if (key === 'chunk_size' || key === 'chunk_overlap') {
+                          isDisabled = run.parameters.recursive_splitting === false;
                         }
                         
                         // Format parameter name to be more readable
@@ -826,25 +948,12 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                           displayValue = value ? 'Enabled' : 'Disabled';
                         }
                         
-                        // Check if this parameter is part of a disabled feature
-                        const isDisabled = (() => {
-                          // Check parent feature flags
-                          if (key === 'header_levels' || key === 'strip_headers') {
-                            return run.parameters.markdown_header_splitting === false;
-                          }
-                          if (key === 'chunk_size' || key === 'chunk_overlap') {
-                            return run.parameters.recursive_splitting === false;
-                          }
-                          // Check if the parameter itself is disabled (boolean false)
-                          return displayValue === "Disabled";
-                        })();
-                        
                         // Determine parameter type for styling
                         let paramClass = "param-label";
                         if (isDisabled) {
                           paramClass += " param-label-disabled";
                         } else if (typeof value === "boolean") {
-                          // Keep boolean values as original styling
+                          // Boolean values get standard styling
                         } else if (typeof value === "number" || (!isNaN(Number(value)) && value !== "")) {
                           paramClass += " param-label-digital";
                         }
