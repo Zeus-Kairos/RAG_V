@@ -914,15 +914,12 @@ const KnowledgebaseBrowser = () => {
 
   return (
     <div className="knowledgebase-browser">
-      <div className="kb-header">
-        <h2>Knowledge Base</h2>
-      </div>
+      
 
       {error && <div className="kb-error">{error}</div>}
 
       {/* Knowledgebase Selector */}
       <div className="kb-knowledgebase-selector">
-        <div className="kb-knowledgebase-label">Knowledgebase:</div>
         <div className="kb-knowledgebase-list-wrapper">
           <div className="kb-knowledgebase-list">
             {knowledgebases.map((kb) => (
