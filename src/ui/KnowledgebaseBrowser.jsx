@@ -46,6 +46,92 @@ const KnowledgebaseBrowser = () => {
     confirmText: 'Confirm',
     cancelText: 'Cancel'
   });
+
+  // State for parsing
+  const [isParsing, setIsParsing] = useState(false);
+  const [showParseDialog, setShowParseDialog] = useState(false);
+  const [parsingResults, setParsingResults] = useState([]);
+  const [currentParsingItem, setCurrentParsingItem] = useState(null);
+  const [currentParsingPath, setCurrentParsingPath] = useState('');
+  const [parseDialogBodyRef, setParseDialogBodyRef] = useState(null);
+
+  // Parse a file or folder
+  const parseItem = async (itemId, itemName, itemType, fullPath) => {
+    // Show the parsing dialog
+    setCurrentParsingItem({ id: itemId, name: itemName, type: itemType });
+    setCurrentParsingPath(fullPath);
+    setParsingResults([]);
+    setShowParseDialog(true);
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const activeKB = knowledgebases.find(kb => kb.is_active);
+      if (!activeKB) {
+        throw new Error('No active knowledgebase found');
+      }
+
+      // Call the new path-based parsing API endpoint
+      const endpoint = `/api/parse-files/${activeKB.name}/${encodeURIComponent(fullPath)}`;
+      const response = await fetchWithAuth(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          // Additional parsing parameters can be added here if needed
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to parse item');
+      }
+
+      // Process streaming response if needed
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const results = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const result = JSON.parse(line);
+              results.push(result);
+              setParsingResults(prev => [...prev, result]);
+            } catch (parseError) {
+              console.error('Error parsing result:', parseError);
+            }
+          }
+        }
+      }
+
+      setParsingResults(results);
+      
+      // Refresh the directory contents to show updated parsing status
+      const currentCachePath = currentPath.join('/').replace(/^\//, '');
+      fetchDirectoryContents(currentCachePath, true);
+      refreshFileBrowser(currentCachePath);
+    } catch (err) {
+      setError(err.message);
+      setParsingResults(prev => [...prev, {
+        filename: itemName,
+        status: 'failed',
+        error: err.message
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Cache for directory contents - key is path, value is the fetched data
   const [directoryCache, setDirectoryCache] = useState({});
@@ -1097,20 +1183,46 @@ const KnowledgebaseBrowser = () => {
       {/* Breadcrumb Navigation */}
       <div className="kb-breadcrumb">
         <div className="kb-breadcrumb-content">
-          <span 
-            className="breadcrumb-item"
-            onClick={() => setCurrentPath([''])}
-          >
-            Root
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span 
+              className="breadcrumb-item"
+              onClick={() => setCurrentPath([''])}
+            >
+              Root
+            </span>
+            {/* Show count for root folder if currentPath is just [''] */}
+            {currentPath.length === 1 && fileItems.length > 0 && (
+              <span className="breadcrumb-folder-count">
+                ({fileItems.filter(item => item.type === 'folder').length} folders, 
+                {fileItems.filter(item => item.type === 'file').length} files)
+              </span>
+            )}
+            {/* Run Parsing button for Root */}
+            {currentPath.length === 1 && (
+              <button 
+                className="kb-btn kb-btn-secondary kb-breadcrumb-btn parse-btn"
+                onClick={() => {
+                  // Root path is empty string
+                  const rootPath = '';
+                  parseItem(0, 'Root', 'folder', rootPath);
+                }}
+                disabled={isLoading}
+                title="Run parsing on all files in Root directory"
+              >
+                🔄 Parse
+              </button>
+            )}
+          </div>
           {currentPath.slice(1).map((folder, index) => (
             <React.Fragment key={index}>
               <span className="breadcrumb-separator">/</span>
-              <span 
-                className="breadcrumb-item"
-                onClick={() => setCurrentPath(currentPath.slice(0, index + 2))}
-              >
-                {folder}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span 
+                  className="breadcrumb-item"
+                  onClick={() => setCurrentPath(currentPath.slice(0, index + 2))}
+                >
+                  {folder}
+                </span>
                 {/* Show count only for the last folder in the breadcrumb (current folder) */}
                 {index === currentPath.slice(1).length - 1 && fileItems.length > 0 && (
                   <span className="breadcrumb-folder-count">
@@ -1118,16 +1230,24 @@ const KnowledgebaseBrowser = () => {
                     {fileItems.filter(item => item.type === 'file').length} files)
                   </span>
                 )}
-              </span>
+                {/* Run Parsing button for current folder in breadcrumb */}
+                {index === currentPath.slice(1).length - 1 && (
+                  <button 
+                    className="kb-btn kb-btn-secondary kb-breadcrumb-btn parse-btn"
+                    onClick={() => {
+                      // Construct full path for the current folder in breadcrumb
+                      const fullPath = currentPath.slice(1, index + 2).join('/');
+                      parseItem(0, folder, 'folder', fullPath);
+                    }}
+                    disabled={isLoading}
+                    title={`Run parsing on all files in ${folder} directory`}
+                  >
+                    🔄 Parse
+                  </button>
+                )}
+              </div>
             </React.Fragment>
           ))}
-          {/* Show count for root folder if currentPath is just [''] */}
-          {currentPath.length === 1 && fileItems.length > 0 && (
-            <span className="breadcrumb-folder-count">
-              ({fileItems.filter(item => item.type === 'folder').length} folders, 
-              {fileItems.filter(item => item.type === 'file').length} files)
-            </span>
-          )}
         </div>
         
         <div className="kb-breadcrumb-actions">
@@ -1236,6 +1356,19 @@ const KnowledgebaseBrowser = () => {
                                       ({(item.file_size / 1024).toFixed(2)} KB)
                                     </span>
                                   )}
+                                  {/* Run Parsing button next to name/size, before view button */}
+                                  <button 
+                                    className="item-action parse-action item-parse-inline-btn"
+                                    onClick={() => {
+                                      // Construct full path for file
+                                      const fullPath = [...currentPath.slice(1), item.name].join('/');
+                                      parseItem(item.id, item.name, item.type, fullPath);
+                                    }}
+                                    title={`Run parsing on ${item.name}`}
+                                    disabled={isLoading}
+                                  >
+                                    🔄 Parse
+                                  </button>
                                   <button 
                                     className="item-action view-btn item-history-inline-btn"
                                     onClick={() => {
@@ -1249,6 +1382,21 @@ const KnowledgebaseBrowser = () => {
                                     📑
                                   </button>
                                 </>
+                              )}
+                              {/* Run Parsing button for folders (no view button) */}
+                              {item.type === 'folder' && (
+                                <button 
+                                  className="item-action parse-action item-parse-inline-btn"
+                                  onClick={() => {
+                                    // Construct full path for folder
+                                    const fullPath = [...currentPath.slice(1), item.name].join('/');
+                                    parseItem(item.id, item.name, item.type, fullPath);
+                                  }}
+                                  title={`Run parsing on ${item.name}`}
+                                  disabled={isLoading}
+                                >
+                                  🔄 Parse
+                                </button>
                               )}
                             </div>
                             {item.uploaded_time && (
@@ -1402,6 +1550,114 @@ const KnowledgebaseBrowser = () => {
                 disabled={isUploading || selectedFiles.length === 0}
               >
                 {isUploading ? 'Uploading...' : 'Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Parsing Dialog */}
+      {showParseDialog && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog" style={{ maxWidth: '700px' }}>
+            <div className="dialog-header">
+              <h3>Parsing Files</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => {
+                  setShowParseDialog(false);
+                  setParsingResults([]);
+                  setCurrentParsingItem(null);
+                  setCurrentParsingPath('');
+                }}
+                disabled={isLoading}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body" ref={parseDialogBodyRef}>
+              <div className="parse-info">
+                <p>Parsing: <strong>{currentParsingItem?.name}</strong> ({currentParsingItem?.type})</p>
+                <p>Path: <code>{currentParsingPath || '/'}</code></p>
+              </div>
+              
+              {/* Real-time Parsing Results */}
+              {parsingResults.length > 0 && (
+                <div className="upload-results">
+                  <p>Parsing Results:</p>
+                  <div className="upload-results-list">
+                    {parsingResults.map((result, index) => {
+                      // Skip folder results (no status key)
+                      if (!result.status) {
+                        return null;
+                      }
+                      
+                      // Get status icon and message based on result
+                      let statusIcon, statusClass;
+                      switch (result.status) {
+                        case 'success':
+                          statusIcon = '✅';
+                          statusClass = 'upload-success';
+                          break;
+                        case 'failed':
+                          statusIcon = '❌';
+                          statusClass = 'upload-failed';
+                          break;
+                        default:
+                          statusIcon = '⏳';
+                          statusClass = 'upload-processing';
+                      }
+                      
+                      return (
+                        <div key={index} className={`upload-result-item ${statusClass}`}>
+                          <div className="upload-result-header">
+                            <span className="upload-result-icon">{statusIcon}</span>
+                            <span className="upload-result-filename">{result.filename || `File ${result.file_id}`}</span>
+                            <span className="upload-result-status">
+                              {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
+                            </span>
+                          </div>
+                          {result.status === 'success' && (
+                            <div className="upload-result-details">
+                              {result.content_length !== undefined && (
+                                <span>Content Length: {result.content_length} chars</span>
+                              )}
+                            </div>
+                          )}
+                          {result.status === 'failed' && result.error && (
+                            <div className="upload-result-error">
+                              {result.error}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {isLoading && (
+                <div className="uploading-indicator">
+                  <div className="loading-spinner"></div>
+                  <span>
+                    {parsingResults.some(result => result.status) ? 
+                      `Parsing files... (${parsingResults.filter(result => result.status).length} files processed)` : 
+                      'Starting parsing process...'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => {
+                  setShowParseDialog(false);
+                  setParsingResults([]);
+                  setCurrentParsingItem(null);
+                  setCurrentParsingPath('');
+                }}
+                disabled={isLoading}
+              >
+                Close
               </button>
             </div>
           </div>

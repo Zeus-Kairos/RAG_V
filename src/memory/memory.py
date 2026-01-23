@@ -8,6 +8,7 @@ from langgraph.store.base import BaseStore
 from langgraph.store.memory import InMemoryStore
 
 from .knowledgebase import KnowledgebaseManager
+from .parse import ParserManager
 from .chunks import ChunkingManager
 from src.utils.logging_config import get_logger
 
@@ -52,6 +53,10 @@ class MemoryManager:
         
         # Initialize chunking manager
         self.chunking_manager = ChunkingManager(self.conn)
+        
+        # Initialize parser manager
+        from .parse import ParserManager
+        self.parser_manager = ParserManager(self.conn)
         
         # Mark as initialized
         self._initialized = True    

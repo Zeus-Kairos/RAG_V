@@ -50,7 +50,6 @@ class KnowledgebaseManager:
                     file_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     filename TEXT NOT NULL,
                     filepath TEXT NOT NULL UNIQUE,
-                    parsed_text TEXT,
                     uploaded_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     knowledgebase_id INTEGER NOT NULL,
                     file_size INTEGER,
@@ -103,10 +102,10 @@ class KnowledgebaseManager:
             # Create root folder                    
             cur.execute(
                 """
-                INSERT INTO files (filename, filepath, parsed_text, knowledgebase_id, file_size, description, type, parent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO files (filename, filepath, knowledgebase_id, file_size, description, type, parent)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                ('root', root_path, None, knowledgebase_id, None, 'root folder for the knowledgebase', 'folder', None)
+                ('root', root_path, knowledgebase_id, None, 'root folder for the knowledgebase', 'folder', None)    
             )
             
             # Set all other knowledgebases to inactive
@@ -215,14 +214,13 @@ class KnowledgebaseManager:
             raise
 
 
-    def add_file_by_knowledgebase_name(self, filename: str, filepath: str, parsed_text: str, knowledgebase_name: str, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
+    def add_file_by_knowledgebase_name(self, filename: str, filepath: str, knowledgebase_name: str, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
         """
         Add a new file record to the database using knowledgebase name.
         
         Args:
             filename: Name of the file
             filepath: Path to the uploaded file
-            parsed_text: Text content of the parsed file
             knowledgebase_name: Name of the knowledgebase associated with the file
             file_size: Size of the file in bytes (required for file type)
             description: Description of the file or folder
@@ -245,20 +243,19 @@ class KnowledgebaseManager:
             knowledgebase_id = knowledgebase[0]
             
             # Call the main add_file method with knowledgebase_id
-            return self.add_file(filename, filepath, parsed_text, knowledgebase_id, file_size, description, type, parentFolder)
+            return self.add_file(filename, filepath, knowledgebase_id, file_size, description, type, parentFolder)
 
         except Exception as e:
             logger.error(f"Error adding file: {e}")
             raise
     
-    def add_file(self, filename: str, filepath: str, parsed_text: str, knowledgebase_id: int, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
+    def add_file(self, filename: str, filepath: str, knowledgebase_id: int, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
         """
         Add a new file record to the database.
         
         Args:
             filename: Name of the file
             filepath: Path to the uploaded file
-            parsed_text: Text content of the parsed file
             knowledgebase_id: ID of the knowledgebase associated with the file
             file_size: Size of the file in bytes (required for file type)
             description: Description of the file or folder
@@ -284,18 +281,17 @@ class KnowledgebaseManager:
             # Insert the file record with UPSERT (update if filepath exists)
             cur.execute(
                 """
-                INSERT INTO files (filename, filepath, parsed_text, knowledgebase_id, file_size, description, type, parent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO files (filename, filepath, knowledgebase_id, file_size, description, type, parent)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (filepath) DO UPDATE
                 SET filename = excluded.filename,
-                    parsed_text = excluded.parsed_text,
                     file_size = excluded.file_size,
                     description = excluded.description,
                     type = excluded.type,
                     parent = excluded.parent,
                     uploaded_time = CURRENT_TIMESTAMP
                 """,
-                (filename, filepath, parsed_text, knowledgebase_id, file_size, description, type, parent_id)
+                (filename, filepath, knowledgebase_id, file_size, description, type, parent_id)
             )
             file_id = cur.lastrowid
             
@@ -329,7 +325,7 @@ class KnowledgebaseManager:
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT file_id, filename, filepath, parsed_text, uploaded_time, knowledgebase_id, file_size, description, type, parent      
+                SELECT file_id, filename, filepath, uploaded_time, knowledgebase_id, file_size, description, type, parent      
                 FROM files
                 WHERE knowledgebase_id = ?
                 ORDER BY uploaded_time DESC
@@ -381,7 +377,7 @@ class KnowledgebaseManager:
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT file_id, filename, filepath, parsed_text, uploaded_time, knowledgebase_id, file_size, description, type, parent  
+                SELECT file_id, filename, filepath, uploaded_time, knowledgebase_id, file_size, description, type, parent  
                 FROM files
                 WHERE file_id = ?
             """, (file_id,))
@@ -389,6 +385,29 @@ class KnowledgebaseManager:
             return file
         except Exception as e:
             logger.error(f"Error getting file by ID: {e}")
+            raise
+
+    def get_file_by_path(self, filepath: str) -> tuple:
+        """
+        Get a specific file by filepath.
+        
+        Args:
+            filepath: Path to the file
+            
+        Returns:
+            File record if found, None otherwise
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute("""
+                SELECT file_id, filename, filepath, uploaded_time, knowledgebase_id, file_size, description, type, parent  
+                FROM files
+                WHERE filepath = ?
+            """, (filepath,))
+            file = cur.fetchone()
+            return file
+        except Exception as e:
+            logger.error(f"Error getting file by filepath: {e}")
             raise
     
     def delete_file(self, file_id: int) -> bool:
@@ -433,19 +452,20 @@ class KnowledgebaseManager:
             logger.error(f"Error deleting file: {e}")
             raise
 
-    def get_files_by_path_prefix(self, path_prefix: str) -> List[int]:
+    def get_files_by_path_prefix(self, path_prefix: str, include_folders: bool = False) -> List[int]:
         """
         Get all file IDs with filepath starting with the given prefix.
         
         Args:
             path_prefix: The path prefix to match
+            include_folders: Whether to include folder IDs in the result
             
         Returns:
-            List of file IDs that match the path prefix
+            List of file IDs
         """
         try:
             cur = self.conn.cursor()
-            logger.debug(f"Path prefix: {path_prefix}")
+            logger.debug(f"Path prefix: {path_prefix}, include folders: {include_folders}")
             
             # Properly escape backslashes for SQL LIKE pattern
             # Also handle both Windows and Unix path formats
@@ -454,10 +474,16 @@ class KnowledgebaseManager:
             path_prefix_unix = normalized_path_prefix.replace('\\', '/')
             
             # SQLite uses LIKE (case-insensitive with COLLATE NOCASE) instead of ILIKE
-            cur.execute(
-                "SELECT file_id FROM files WHERE type = 'file' AND (filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
-                (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
-            )
+            if include_folders:
+                cur.execute(
+                    "SELECT file_id, type FROM files WHERE (filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
+                    (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                )
+            else:
+                cur.execute(
+                    "SELECT file_id FROM files WHERE type = 'file' AND (filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
+                    (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                )
             file_ids = [row[0] for row in cur.fetchall()]
             logger.debug(f"File IDs: {file_ids}")
             return file_ids

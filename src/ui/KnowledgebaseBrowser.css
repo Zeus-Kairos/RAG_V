@@ -1180,17 +1180,34 @@
   background-color: #e8f5e8;
 }
 
+/* Add parse button specific style */
+.item-action.parse-action {
+  color: #2196f3;
+}
+
+.item-action.parse-action:hover {
+  background-color: #e3f2fd;
+}
+
 /* Always show inline chunk history button */
-.item-history-inline-btn {
+.item-history-inline-btn, 
+.item-parse-inline-btn {
   opacity: 1 !important;
   margin-left: 6px;
   padding: 4px 8px;
-  font-size: 16px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
   transition: all 0.2s ease;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.item-history-inline-btn {
+  font-size: 16px;
+  color: #4caf50;
 }
 
 .item-history-inline-btn:hover {
@@ -1198,6 +1215,24 @@
   border-color: rgba(76, 175, 80, 0.3);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Always show inline parse button */
+.item-parse-inline-btn {
+  color: #2196f3;
+  font-weight: 500;
+}
+
+.item-parse-inline-btn:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+  border-color: rgba(33, 150, 243, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Hide parse button in actions menu since we now show it inline */
+.item-actions .parse-action {
+  display: none;
 }
 
 @media (max-width: 768px) {

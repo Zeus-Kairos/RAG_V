@@ -206,34 +206,6 @@ async def list_knowledgebases():
         logger.error(f"Error listing knowledgebases: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# API endpoint to rename a knowledgebase
-@app.put("/api/knowledgebase/{kb_id}/rename")
-async def rename_knowledgebase(kb_id: int, rename_data: dict):
-    """Rename a knowledgebase."""
-    try:
-        if "name" not in rename_data:
-            return {
-                "success": False,
-                "message": "Name field is required"
-            }
-        
-        new_name = rename_data["name"]
-        success = memory_manager.knowledgebase_manager.rename_knowledgebase(kb_id, new_name)
-        if success:
-            return {
-                "success": True,
-                "message": "Knowledgebase renamed successfully"
-            }
-        return {
-            "success": False,
-            "message": "Failed to rename knowledgebase"
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error renaming knowledgebase: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
 # API endpoint to update knowledgebase description
 @app.put("/api/knowledgebase/{kb_id}/description")
 async def update_knowledgebase_description(kb_id: int, description_data: dict):
@@ -348,7 +320,7 @@ async def create_folder(
 
         try:
             memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
-                name, new_folder_path, "", knowledge_base, type="folder", parentFolder=parent_dir)
+                name, new_folder_path, knowledge_base, type="folder", parentFolder=parent_dir, description="")
         except Exception as db_error:
             logger.debug(f"Folder may already exist in database: {db_error}")
         
@@ -379,9 +351,9 @@ async def delete_folder(
 
         shutil.rmtree(folder_path)
         
-        file_ids = memory_manager.knowledgebase_manager.get_files_by_path_prefix(folder_path)
-        indexer = get_indexer(knowledge_base)
-        indexer.delete_file_chunks(file_ids, save=True)
+        # file_ids = memory_manager.knowledgebase_manager.get_files_by_path_prefix(folder_path)
+        # indexer = get_indexer(knowledge_base)
+        # indexer.delete_file_chunks(file_ids, save=True)
         memory_manager.knowledgebase_manager.delete_file_by_path(folder_path)
         
         return {
@@ -414,9 +386,9 @@ async def delete_file(
         
         os.remove(full_file_path)
         
-        file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
-        indexer = get_indexer(knowledge_base)
-        indexer.delete_file_chunks([file_id], save=True)
+        # file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
+        # indexer = get_indexer(knowledge_base)
+        # indexer.delete_file_chunks([file_id], save=True)
         
         return {
             "success": True,
@@ -483,13 +455,41 @@ async def stream_upload_files(
         pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
         
         async def generate():
-            async for result in pipeline.upload_and_parse_files(DEFAULT_USER_ID, knowledge_base, files, directory):
+            async for result in pipeline.upload_files(DEFAULT_USER_ID, knowledge_base, files, directory):
                 yield json.dumps(result) + "\n"
         
         return StreamingResponse(generate(), media_type="application/x-ndjson")
     except Exception as e:
         logger.exception(f"Error in stream uploading: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for parsing file or folder by path (with path parameter)
+@app.post("/api/parse-files/{kb_name}/{path:path}")
+async def parse_files(kb_name: str, path: str, request: Request):
+    """Parse a file or folder by path."""
+    try:
+        # Get all form data as a dictionary
+        form_data = await request.form()
+        filepath = get_upload_dir(DEFAULT_USER_ID, kb_name, path)
+
+        # Extract parameters from form data
+        parameters = form_data.get('parameters', {})
+
+        pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
+        async def generate():
+            async for result in pipeline.parse_files(filepath, parameters=parameters):
+                yield json.dumps(result) + "\n"
+
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
+    except Exception as e:
+        logger.error(f"Error parsing file: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for parsing root folder (empty path)
+@app.post("/api/parse-files/{kb_name}/")
+async def parse_files_root(kb_name: str, request: Request):
+    """Parse the root folder of a knowledgebase."""
+    return await parse_files(kb_name, "", request)
 
 @app.post("/api/chunk-files/{kb_id}")
 async def chunk_files(
