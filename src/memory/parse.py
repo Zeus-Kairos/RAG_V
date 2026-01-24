@@ -210,6 +210,42 @@ class ParserManager:
             logger.error(f"Error getting parsed content by file ID: {e}")
             raise
 
+    def get_parsed_content_by_run_id(self, file_id: int, parse_run_id: int) -> Dict[str, Any]:
+        """
+        Get parsed content for a specific parse run ID.
+        
+        Args:
+            file_id: ID of the file
+            parse_run_id: Optional filter for parse run ID
+            
+        Returns:
+            Parsed content dictionary
+        """
+        try:
+            cur = self.conn.cursor()     
+
+            cur.execute(
+                "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active, time FROM parsed WHERE file_id = ? AND parse_run_id = ?",
+                (file_id, parse_run_id)
+            )
+            
+            parsed_contents = []
+            for row in cur.fetchall():
+                parsed_contents.append({
+                    "parse_id": row[0],
+                    "file_id": row[1],
+                    "parse_run_id": row[2],
+                    "parsed_text": row[3],
+                    "parser": row[4],
+                    "parameters": json.loads(row[5]),
+                    "is_active": bool(row[6])
+                })
+            
+            return parsed_contents
+        except Exception as e:
+            logger.error(f"Error getting parsed content by run ID: {e}")
+            raise
+
     def get_parse_runs_by_file_id(self, file_id: int) -> List[Dict[str, Any]]:
         """
         Get all parse run records for a specific file.

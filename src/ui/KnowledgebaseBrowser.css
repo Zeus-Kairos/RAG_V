@@ -477,12 +477,12 @@
   cursor: not-allowed;
 }
 
-.dialog-footer button:first-child {
+.dialog-footer button:first-child:not(.dialog-primary):not(.dialog-danger) {
   background-color: #f1f3f4;
   color: #333;
 }
 
-.dialog-footer button:first-child:hover:not(:disabled) {
+.dialog-footer button:first-child:not(.dialog-primary):not(.dialog-danger):hover:not(:disabled) {
   background-color: #e8eaed;
 }
 

@@ -639,6 +639,26 @@ async def get_file_by_id(file_id: int):
         logger.error(f"Error getting file by ID: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to get parsed content by file_id and parse_run_id
+@app.get("/api/parsed-content/{file_id}/{parse_run_id}")
+async def get_parsed_content_by_run_id(file_id: int, parse_run_id: int):
+    """Get parsed content for a specific file and parse run ID."""
+    try:
+        parsed_content = memory_manager.parser_manager.get_parsed_content_by_run_id(file_id, parse_run_id)
+        if not parsed_content:
+            return {
+                "success": False,
+                "message": f"No parsed content found for file ID {file_id} and parse run ID {parse_run_id}"
+            }
+        
+        return {
+            "success": True,
+            "parsed_content": parsed_content
+        }
+    except Exception as e:
+        logger.error(f"Error getting parsed content by run ID: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
