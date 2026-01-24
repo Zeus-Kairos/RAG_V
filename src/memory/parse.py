@@ -40,20 +40,6 @@ class ParserManager:
                 )
             """)
             
-            # Create parse_run_file table for mapping parse runs to files
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS parse_run_file (
-                    parse_run_id INTEGER NOT NULL,
-                    file_id INTEGER NOT NULL,
-                    parser TEXT NOT NULL,
-                    parameters TEXT DEFAULT '{}',
-                    time TIMESTAMP,
-                    PRIMARY KEY (parse_run_id, file_id),
-                    FOREIGN KEY (parse_run_id) REFERENCES parse_run(id) ON DELETE CASCADE,
-                    FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE
-                )
-            """)
-            
             # Create parsed table for storing parsed content
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS parsed (
@@ -64,16 +50,15 @@ class ParserManager:
                     parser TEXT NOT NULL,
                     parameters TEXT DEFAULT '{}',
                     is_active INTEGER DEFAULT 0,
+                    time TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE,
                     FOREIGN KEY (parse_run_id) REFERENCES parse_run(id) ON DELETE CASCADE
                 )
             """)
             
             # Create indexes for efficient queries
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_parse_run_file_parse_run_id ON parse_run_file(parse_run_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_parse_run_file_file_id ON parse_run_file(file_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_file_id ON parsed(file_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_parse_run_id ON parsed(parse_run_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_file_id ON parsed(file_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_is_active ON parsed(is_active)")
 
             self.conn.commit()
@@ -135,15 +120,10 @@ class ParserManager:
             cur = self.conn.cursor()
             
             params_json = json.dumps(parameters)
-
-            cur.execute(
-                "INSERT INTO parse_run_file (parse_run_id, file_id, parser, parameters, time) VALUES (?, ?, ?, ?, ?)",
-                (parse_run_id, file_id, parser, params_json, parse_run_time)
-            )
             
             cur.execute(
-                "INSERT INTO parsed (file_id, parse_run_id, parsed_text, parser, parameters, is_active) VALUES (?, ?, ?, ?, ?, ?)",
-                (file_id, parse_run_id, parsed_text, parser, params_json, 1 if is_active else 0)
+                "INSERT INTO parsed (file_id, parse_run_id, parsed_text, parser, parameters, is_active, time) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (file_id, parse_run_id, parsed_text, parser, params_json, 1 if is_active else 0, parse_run_time)
             )
             parsed_id = cur.lastrowid
             
@@ -204,12 +184,12 @@ class ParserManager:
             
             if is_active is not None:
                 cur.execute(
-                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active FROM parsed WHERE file_id = ? AND is_active = ?",
+                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active, time FROM parsed WHERE file_id = ? AND is_active = ?",
                     (file_id, 1 if is_active else 0)
                 )
             else:
                 cur.execute(
-                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active FROM parsed WHERE file_id = ?",
+                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active, time FROM parsed WHERE file_id = ?",
                     (file_id,)
                 )
             
@@ -243,7 +223,7 @@ class ParserManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT parse_run_id, file_id, parser, parameters, time FROM parse_run_file WHERE file_id = ?",
+                "SELECT parse_run_id, file_id, parser, parameters, time FROM parsed WHERE file_id = ?",
                 (file_id,)
             )
             
@@ -276,7 +256,7 @@ class ParserManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT file_id FROM parse_run_file WHERE parse_run_id = ?",
+                "SELECT file_id FROM parsed WHERE parse_run_id = ?",
                 (parse_run_id,)
             )
             

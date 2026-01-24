@@ -123,11 +123,17 @@ const KnowledgebaseBrowser = () => {
         // Build cache key prefix for the parsed folder
         const cachePrefix = `${activeKB.id}:${fullPath}`;
         
-        // Clear all cache entries that start with this prefix (including subfolders)
+        // Clear all cache entries that match:
+        // - For root (fullPath is empty): all keys starting with `${activeKB.id}:`
+        // - For non-root: exact key match or keys starting with `${cachePrefix}/`
         setDirectoryCache(prevCache => {
           const updatedCache = { ...prevCache };
           Object.keys(updatedCache).forEach(key => {
-            if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+            if (fullPath === '' && key.startsWith(cachePrefix)) {
+              // Root case: clear all keys for this knowledgebase
+              delete updatedCache[key];
+            } else if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+              // Non-root case: clear exact match and subfolders
               delete updatedCache[key];
             }
           });
@@ -137,7 +143,11 @@ const KnowledgebaseBrowser = () => {
         // Also clear from the ref immediately
         const updatedRefCache = { ...directoryCacheRef.current };
         Object.keys(updatedRefCache).forEach(key => {
-          if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+          if (fullPath === '' && key.startsWith(cachePrefix)) {
+            // Root case: clear all keys for this knowledgebase
+            delete updatedRefCache[key];
+          } else if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+            // Non-root case: clear exact match and subfolders
             delete updatedRefCache[key];
           }
         });
