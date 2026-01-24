@@ -206,6 +206,46 @@ async def list_knowledgebases():
         logger.error(f"Error listing knowledgebases: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to get root directory info with parse runs
+@app.get("/api/knowledgebase/{kb_id}/root-info")
+async def get_root_directory_info(kb_id: int, knowledge_base: str = "default"):
+    """Get root directory information with parse runs"""
+    try:
+        # Get knowledgebase root path
+        root_path = get_upload_dir(DEFAULT_USER_ID, knowledge_base, "")
+        
+        root_info = memory_manager.knowledgebase_manager.get_file_by_path(root_path)
+        
+        if not root_info:
+            raise HTTPException(status_code=404, detail="Root directory not found")
+        
+        file_id = root_info[0]
+        filename = root_info[1]
+        uploaded_time = root_info[2]
+        description = root_info[6]
+        
+        # Get parse runs for the root directory
+        parse_runs = memory_manager.parser_manager.get_parse_runs_by_file_id(file_id)
+        
+        # Create root directory object with parse runs
+        root_directory = {
+            "id": file_id,
+            "name": filename,
+            "uploaded_time": uploaded_time if uploaded_time else None,
+            "description": description,
+            "parse_runs": parse_runs
+        }
+        
+        return {
+            "success": True,
+            "root": root_directory
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting root directory info: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint to update knowledgebase description
 @app.put("/api/knowledgebase/{kb_id}/description")
 async def update_knowledgebase_description(kb_id: int, description_data: dict):

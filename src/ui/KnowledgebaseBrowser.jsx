@@ -33,6 +33,9 @@ const KnowledgebaseBrowser = () => {
   const [selectedFileId, setSelectedFileId] = useState(null);
   const [selectedFileName, setSelectedFileName] = useState(null);
   const [editKBDescription, setEditKBDescription] = useState('');
+  // State variables for root directory parse runs
+  const [rootParseRuns, setRootParseRuns] = useState([]);
+  const [rootFileId, setRootFileId] = useState(null);
   
   // State variables for bulk editing file/folder descriptions
   const [showEditDescriptionsModal, setShowEditDescriptionsModal] = useState(false);
@@ -75,6 +78,34 @@ const KnowledgebaseBrowser = () => {
       if (!activeKB) {
         throw new Error('No active knowledgebase found');
       }
+
+      // Clear cache for the parsed path and all its subpaths before parsing
+      // This ensures fresh data is fetched after parsing
+      const cachePrefix = `${activeKB.id}:${fullPath}`;
+      
+      // Get parent path to also clear its cache (so it refreshes subfolder parse indicators)
+      const parentPath = fullPath.split('/').slice(0, -1).join('/');
+      const parentCacheKey = `${activeKB.id}:${parentPath}`;
+      
+      // Function to recursively clear cache for this folder and all subfolders
+      const clearCacheRecursively = (cache) => {
+        const updatedCache = { ...cache };
+        Object.keys(updatedCache).forEach(key => {
+          // Delete if the key matches:
+          // 1. The exact folder or starts with the folder path followed by /
+          // 2. The parent folder's cache key (to refresh subfolder indicators in parent view)
+          if (key === cachePrefix || key.startsWith(`${cachePrefix}/`) || key === parentCacheKey) {
+            delete updatedCache[key];
+          }
+        });
+        return updatedCache;
+      };
+      
+      // Clear from state
+      setDirectoryCache(prev => clearCacheRecursively(prev));
+      
+      // Clear from ref immediately
+      directoryCacheRef.current = clearCacheRecursively(directoryCacheRef.current);
 
       // Call the new path-based parsing API endpoint
       const endpoint = `/api/parse-files/${activeKB.name}/${encodeURIComponent(fullPath)}`;
@@ -165,6 +196,27 @@ const KnowledgebaseBrowser = () => {
       const currentViewPath = currentPath.join('/').replace(/^\//, '');
       fetchDirectoryContents(currentViewPath, true);
       refreshFileBrowser(currentViewPath);
+      
+      // If we parsed the root directory or if we're currently in the root directory,
+      // refresh the root parse runs to update the indicators
+      if (fullPath === '' || currentViewPath === '') {
+        const activeKB = knowledgebases.find(kb => kb.is_active);
+        if (activeKB) {
+          try {
+            // Refresh root parse runs
+            const rootInfoResponse = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/root-info?knowledge_base=${encodeURIComponent(activeKB.name)}`);
+            if (rootInfoResponse.ok) {
+              const rootInfo = await rootInfoResponse.json();
+              if (rootInfo.success && rootInfo.root && rootInfo.root.parse_runs) {
+                setRootParseRuns(rootInfo.root.parse_runs);
+                setRootFileId(rootInfo.root.id);
+              }
+            }
+          } catch (err) {
+            console.error('Error refreshing root parse runs after parsing:', err);
+          }
+        }
+      }
     } catch (err) {
       setError(err.message);
       setParsingResults(prev => [...prev, {
@@ -201,6 +253,33 @@ const KnowledgebaseBrowser = () => {
       setCurrentKnowledgebase(activeKB.name);
     }
   }, [knowledgebases]);
+
+  // Fetch root directory's parse runs when knowledgebases change or when we're in the root directory
+  useEffect(() => {
+    const fetchRootParseRuns = async () => {
+      const activeKB = knowledgebases.find(kb => kb.is_active);
+      if (!activeKB || !activeKB.id) {
+        return;
+      }
+
+      try {
+        // Get root directory's info with parse runs directly
+        const rootInfoResponse = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/root-info?knowledge_base=${encodeURIComponent(activeKB.name)}`);
+        if (rootInfoResponse.ok) {
+          const rootInfo = await rootInfoResponse.json();
+          if (rootInfo.success && rootInfo.root && rootInfo.root.parse_runs) {
+            setRootParseRuns(rootInfo.root.parse_runs);
+            setRootFileId(rootInfo.root.id);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching root parse runs:', err);
+      }
+    };
+
+    // Always fetch when knowledgebases change, and also when we're in the root directory
+    fetchRootParseRuns();
+  }, [knowledgebases, currentPath]);
 
   // Fetch directory contents - memoized with useCallback to prevent infinite loops
   const fetchDirectoryContents = useCallback(async (path, forceRefresh = false) => {
@@ -1241,6 +1320,25 @@ const KnowledgebaseBrowser = () => {
             >
               Root
             </span>
+            {/* Show parse indicators for Root */}
+            {rootParseRuns && rootParseRuns.length > 0 && (
+              <div className="item-parse-runs">
+                {rootParseRuns.map((run) => (
+                  <div 
+                    key={run.id}
+                    className="parse-run-indicator"
+                    style={{ backgroundColor: 'black' }}
+                    title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedParseRun(run);
+                      setSelectedParseRunItem({ id: rootFileId, name: 'Root', type: 'folder' });
+                      setShowParseRunPopup(true);
+                    }}
+                  ></div>
+                ))}
+              </div>
+            )}
             {/* Show count for root folder if currentPath is just [''] */}
             {currentPath.length === 1 && fileItems.length > 0 && (
               <span className="breadcrumb-folder-count">
