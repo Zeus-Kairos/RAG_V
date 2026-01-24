@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from './store';
 import useKnowledgebaseStore from './store';
 import ChunkRunHistoryPanel from './ChunkRunHistoryPanel';
+import ParseRunPopup from './ParseRunPopup';
 import './KnowledgebaseBrowser.css';
 
 const KnowledgebaseBrowser = () => {
@@ -54,6 +55,10 @@ const KnowledgebaseBrowser = () => {
   const [currentParsingItem, setCurrentParsingItem] = useState(null);
   const [currentParsingPath, setCurrentParsingPath] = useState('');
   const [parseDialogBodyRef, setParseDialogBodyRef] = useState(null);
+  // State for parse run popup
+  const [showParseRunPopup, setShowParseRunPopup] = useState(false);
+  const [selectedParseRun, setSelectedParseRun] = useState(null);
+  const [selectedParseRunItem, setSelectedParseRunItem] = useState(null);
 
   // Parse a file or folder
   const parseItem = async (itemId, itemName, itemType, fullPath) => {
@@ -266,7 +271,8 @@ const KnowledgebaseBrowser = () => {
             name: folder.name,
             type: 'folder',
             uploaded_time: folder.uploaded_time,
-            description: folder.description
+            description: folder.description,
+            parse_runs: folder.parse_runs || []
           });
         });
       }
@@ -1401,65 +1407,68 @@ const KnowledgebaseBrowser = () => {
                                       ({(item.file_size / 1024).toFixed(2)} KB)
                                     </span>
                                   )}
-                                  {/* Parse run colored squares */}
-                                  {item.parse_runs && item.parse_runs.length > 0 && (
-                                    <div className="item-parse-runs">
-                                      {item.parse_runs.map((run, index) => {
-                                        // Generate consistent color based on parser name
-                                        const hash = run.parser.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                                        const hue = hash % 360;
-                                        const color = `hsl(${hue}, 70%, 60%)`;
-                                        return (
-                                          <div 
-                                            key={run.id}
-                                            className="parse-run-indicator"
-                                            style={{ backgroundColor: color }}
-                                            title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}`}
-                                          ></div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                  {/* Run Parsing button next to name/size, before view button */}
-                                  <button 
-                                    className="item-action parse-action item-parse-inline-btn"
-                                    onClick={() => {
-                                      // Construct full path for file
-                                      const fullPath = [...currentPath.slice(1), item.name].join('/');
-                                      parseItem(item.id, item.name, item.type, fullPath);
-                                    }}
-                                    title={`Run parsing on ${item.name}`}
-                                    disabled={isLoading}
-                                  >
-                                    🔄 Parse
-                                  </button>
-                                  <button 
-                                    className="item-action view-btn item-history-inline-btn"
-                                    onClick={() => {
-                                      setSelectedFileId(item.id);
-                                      setSelectedFileName(item.name);
-                                      setShowChunkRunPanel(true);
-                                    }}
-                                    title="View parsed text and chunks"
-                                  >
-                                    {/* Document sections icon representing chunks */}
-                                    📑
-                                  </button>
                                 </>
                               )}
-                              {/* Run Parsing button for folders (no view button) */}
-                              {item.type === 'folder' && (
+                              {/* Parse run colored squares - moved outside file-specific conditional */}
+                              {item.parse_runs && item.parse_runs.length > 0 && (
+                                <div className="item-parse-runs">
+                                  {item.parse_runs.map((run, index) => {
+                                    // For folders, use fixed black color; for files, use color based on parser name
+                                    let color;
+                                    if (item.type === 'folder') {
+                                      color = 'black';
+                                    } else {
+                                      // Generate consistent color based on parser name for files
+                                      const hash = run.parser.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                                      const hue = hash % 360;
+                                      color = `hsl(${hue}, 70%, 60%)`;
+                                    }
+                                    return (
+                                      <div 
+                                        key={run.id}
+                                        className="parse-run-indicator"
+                                        style={{ backgroundColor: color }}
+                                        title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // Show parse run popup
+                                          setSelectedParseRun(run);
+                                          setSelectedParseRunItem(item);
+                                          setShowParseRunPopup(true);
+                                        }}
+                                      ></div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {/* Run Parsing button - different for files and folders */}
+                              <button 
+                                className="item-action parse-action item-parse-inline-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Construct full path for item
+                                  const fullPath = [...currentPath.slice(1), item.name].join('/');
+                                  parseItem(item.id, item.name, item.type, fullPath);
+                                }}
+                                title={`Run parsing on ${item.name}`}
+                                disabled={isLoading}
+                              >
+                                🔄 Parse
+                              </button>
+                              {/* View button only for files */}
+                              {item.type === 'file' && (
                                 <button 
-                                  className="item-action parse-action item-parse-inline-btn"
-                                  onClick={() => {
-                                    // Construct full path for folder
-                                    const fullPath = [...currentPath.slice(1), item.name].join('/');
-                                    parseItem(item.id, item.name, item.type, fullPath);
+                                  className="item-action view-btn item-history-inline-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFileId(item.id);
+                                    setSelectedFileName(item.name);
+                                    setShowChunkRunPanel(true);
                                   }}
-                                  title={`Run parsing on ${item.name}`}
-                                  disabled={isLoading}
+                                  title="View parsed text and chunks"
                                 >
-                                  🔄 Parse
+                                  {/* Document sections icon representing chunks */}
+                                  📑
                                 </button>
                               )}
                             </div>
@@ -1727,6 +1736,28 @@ const KnowledgebaseBrowser = () => {
           </div>
         </div>
       )}
+
+      {/* Parse Run Popup Component */}
+      <ParseRunPopup
+        show={showParseRunPopup}
+        parseRun={selectedParseRun}
+        item={selectedParseRunItem}
+        onClose={() => {
+          setShowParseRunPopup(false);
+          setSelectedParseRun(null);
+          setSelectedParseRunItem(null);
+        }}
+        isLoading={isLoading}
+        setIsLoading={setIsLoading}
+        setError={setError}
+        knowledgebases={knowledgebases}
+        fetchDirectoryContents={fetchDirectoryContents}
+        currentPath={currentPath}
+        refreshFileBrowser={refreshFileBrowser}
+        setSelectedFileId={setSelectedFileId}
+        setSelectedFileName={setSelectedFileName}
+        setShowChunkRunPanel={setShowChunkRunPanel}
+      />
 
       {/* Create Knowledgebase Modal */}
       {showCreateKBModal && (

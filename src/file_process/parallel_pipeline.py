@@ -251,11 +251,22 @@ class ParallelFileProcessingPipeline:
             type = file_dict['type']
 
             if type == 'folder':
+                parsed_id = self.memory_manager.parser_manager.add_parsed_content(
+                    file_id=file_id,
+                    parse_run_id=parse_run_id,
+                    parse_run_time=parse_run_time,
+                    parsed_text="",
+                    parser="combined",
+                    parameters=parameters,
+                    is_active=True
+                )
                 return {
                     "file_id": file_id,
                     "filename": filename,
                     "parse_run_id": parse_run_id,
-                    "parsed": True
+                    "parse_run_time": parse_run_time,
+                    "parsed": True,
+                    "parsed_id": parsed_id
                 }
             
             # Parse the file (run sync method in thread pool)

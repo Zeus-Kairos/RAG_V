@@ -274,15 +274,19 @@ async def list_directory(
             description = item[4]
             type = item[5]
             
+            # Get parse runs for both files and folders
+            parse_runs = memory_manager.parser_manager.get_parse_runs_by_file_id(file_id)
+            if file_id == 344:
+                logger.info(parse_runs)
             if type == 'folder':
                 folders.append({
                     "id": file_id,
                     "name": filename,
                     "uploaded_time": uploaded_time if uploaded_time else None,
-                    "description": description
+                    "description": description,
+                    "parse_runs": parse_runs
                 })
             else:
-                parse_runs = memory_manager.parser_manager.get_parse_runs_by_file_id(file_id)
                 files.append({
                     "id": file_id,
                     "name": filename,
