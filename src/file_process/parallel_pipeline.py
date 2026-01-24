@@ -189,7 +189,7 @@ class ParallelFileProcessingPipeline:
         file_dict = dict(file)
 
         # Create a parse run
-        parse_run_id = self.memory_manager.parser_manager.create_parse_run(
+        parse_run_id, parse_run_time = self.memory_manager.parser_manager.create_parse_run(
             file_id=file_dict['file_id']
         )        
                 
@@ -200,8 +200,6 @@ class ParallelFileProcessingPipeline:
         else:
             # parse the file
             file_ids = [file_dict['file_id']]
-
-        self.memory_manager.parser_manager.add_files_to_parse_run(parse_run_id, file_ids)
         
         # Create tasks for parallel parsing of each file
         tasks = []
@@ -209,7 +207,8 @@ class ParallelFileProcessingPipeline:
             task = self._parse_single_file(
                 file_id,
                 parameters,
-                parse_run_id
+                parse_run_id,
+                parse_run_time
             )
             tasks.append(task)
         
@@ -221,13 +220,14 @@ class ParallelFileProcessingPipeline:
             except Exception as e:
                 logger.error(f"Unexpected error in parallel parsing: {e}")
     
-    async def _parse_single_file(self, file_id: int, parameters: Dict[str, Any], parse_run_id: int) -> Dict[str, Any]:
+    async def _parse_single_file(self, file_id: int, parameters: Dict[str, Any], parse_run_id: int, parse_run_time: str) -> Dict[str, Any]:
         """Parse a single file.
         
         Args:
             file_id: File ID from the database
             parameters: Parser parameters as a dictionary
             parse_run_id: ID of the parse run
+            parse_run_time: Time of the parse run
             
         Returns:
             Dict containing parse results
@@ -264,7 +264,8 @@ class ParallelFileProcessingPipeline:
             result = {
                 "file_id": file_id,
                 "filename": filename,
-                "parse_run_id": parse_run_id
+                "parse_run_id": parse_run_id,
+                "parse_run_time": parse_run_time
             }
             
             if parse_result["success"]:
@@ -277,6 +278,7 @@ class ParallelFileProcessingPipeline:
                 parsed_id = self.memory_manager.parser_manager.add_parsed_content(
                     file_id=file_id,
                     parse_run_id=parse_run_id,
+                    parse_run_time=parse_run_time,
                     parsed_text=parse_result["content"],
                     parser="default",
                     parameters=parameters,

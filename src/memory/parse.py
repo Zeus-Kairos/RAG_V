@@ -45,6 +45,9 @@ class ParserManager:
                 CREATE TABLE IF NOT EXISTS parse_run_file (
                     parse_run_id INTEGER NOT NULL,
                     file_id INTEGER NOT NULL,
+                    parser TEXT NOT NULL,
+                    parameters TEXT DEFAULT '{}',
+                    time TIMESTAMP,
                     PRIMARY KEY (parse_run_id, file_id),
                     FOREIGN KEY (parse_run_id) REFERENCES parse_run(id) ON DELETE CASCADE,
                     FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE
@@ -86,7 +89,7 @@ class ParserManager:
             file_id: File ID of the parse run
             
         Returns:
-            The created parse_run ID
+            The created parse_run ID and time
         """
         try:
             cur = self.conn.cursor()
@@ -95,51 +98,31 @@ class ParserManager:
                 "INSERT INTO parse_run (file_id) VALUES (?)",
                 (file_id,)  
             )
+            # Get the parse_run ID from the last inserted row
             parse_run_id = cur.lastrowid
+            
+            # Get the time for the newly created parse run
+            cur.execute(
+                "SELECT time FROM parse_run WHERE id = ?",
+                (parse_run_id,)  
+            )
+            row = cur.fetchone()
+            parse_run_time = row[0]
+            
             self.conn.commit()
-            return parse_run_id
+            return parse_run_id, parse_run_time
         except Exception as e:
             logger.error(f"Error creating parse run: {e}")
             raise
     
-    def add_files_to_parse_run(self, parse_run_id: int, file_ids: List[int]) -> int:
-        """
-        Add files to a parse run.
-        
-        Args:
-            parse_run_id: ID of the parse run
-            file_ids: List of file IDs to associate with the parse run
-            
-        Returns:
-            The number of files added
-        """
-        try:
-            cur = self.conn.cursor()
-            
-            # Prepare data for insertion
-            parse_run_file_data = []
-            for file_id in file_ids:
-                parse_run_file_data.append((parse_run_id, file_id))
-            
-            # Insert parse_run_file records
-            cur.executemany(
-                "INSERT INTO parse_run_file (parse_run_id, file_id) VALUES (?, ?)",
-                parse_run_file_data
-            )
-            
-            self.conn.commit()
-            return cur.rowcount
-        except Exception as e:
-            logger.error(f"Error adding files to parse run: {e}")
-            raise
-    
-    def add_parsed_content(self, file_id: int, parse_run_id: int, parsed_text: str, parser: str, parameters: dict, is_active: bool = True) -> int:
+    def add_parsed_content(self, file_id: int, parse_run_id: int, parse_run_time: str, parsed_text: str, parser: str, parameters: dict, is_active: bool = True) -> int:
         """
         Add parsed content to the database.
         
         Args:
             file_id: ID of the file
             parse_run_id: ID of the parse run
+            parse_run_time: Time of the parse run
             parsed_text: Parsed text content
             parser: Name of the parser used
             parameters: Parser parameters as a dictionary
@@ -152,6 +135,11 @@ class ParserManager:
             cur = self.conn.cursor()
             
             params_json = json.dumps(parameters)
+
+            cur.execute(
+                "INSERT INTO parse_run_file (parse_run_id, file_id, parser, parameters, time) VALUES (?, ?, ?, ?, ?)",
+                (parse_run_id, file_id, parser, params_json, parse_run_time)
+            )
             
             cur.execute(
                 "INSERT INTO parsed (file_id, parse_run_id, parsed_text, parser, parameters, is_active) VALUES (?, ?, ?, ?, ?, ?)",
@@ -241,6 +229,39 @@ class ParserManager:
         except Exception as e:
             logger.error(f"Error getting parsed content by file ID: {e}")
             raise
+
+    def get_parse_runs_by_file_id(self, file_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all parse run records for a specific file.
+        
+        Args:
+            file_id: ID of the file
+            
+        Returns:
+            List of parse run records, each with 'id', 'file_id', 'parser', 'parameters', and 'time'     
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT parse_run_id, file_id, parser, parameters, time FROM parse_run_file WHERE file_id = ?",
+                (file_id,)
+            )
+            
+            parse_runs = []
+            for row in cur.fetchall():
+                parse_runs.append({
+                    "id": row[0],
+                    "file_id": row[1],
+                    "parser": row[2],
+                    "parameters": json.loads(row[3]),
+                    "time": row[4]
+                })
+            
+            return parse_runs
+        except Exception as e:
+            logger.error(f"Error getting parse runs by file ID: {e}")
+            raise
+
     
     def get_files_by_parse_run_id(self, parse_run_id: int) -> List[int]:
         """

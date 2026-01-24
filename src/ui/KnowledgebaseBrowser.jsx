@@ -117,10 +117,39 @@ const KnowledgebaseBrowser = () => {
 
       setParsingResults(results);
       
+      // Clear cache for the parsed folder and all its subfolders
+      // This ensures fresh data is fetched when navigating to any affected directories
+      if (activeKB) {
+        // Build cache key prefix for the parsed folder
+        const cachePrefix = `${activeKB.id}:${fullPath}`;
+        
+        // Clear all cache entries that start with this prefix (including subfolders)
+        setDirectoryCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          Object.keys(updatedCache).forEach(key => {
+            if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+              delete updatedCache[key];
+            }
+          });
+          return updatedCache;
+        });
+        
+        // Also clear from the ref immediately
+        const updatedRefCache = { ...directoryCacheRef.current };
+        Object.keys(updatedRefCache).forEach(key => {
+          if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+            delete updatedRefCache[key];
+          }
+        });
+        directoryCacheRef.current = updatedRefCache;
+      }
+      
       // Refresh the directory contents to show updated parsing status
-      const currentCachePath = currentPath.join('/').replace(/^\//, '');
-      fetchDirectoryContents(currentCachePath, true);
-      refreshFileBrowser(currentCachePath);
+      // Always refresh the current directory that the user is viewing
+      // This ensures parse run info appears correctly even if user navigated during parsing
+      const currentViewPath = currentPath.join('/').replace(/^\//, '');
+      fetchDirectoryContents(currentViewPath, true);
+      refreshFileBrowser(currentViewPath);
     } catch (err) {
       setError(err.message);
       setParsingResults(prev => [...prev, {
@@ -137,13 +166,18 @@ const KnowledgebaseBrowser = () => {
   const [directoryCache, setDirectoryCache] = useState({});
   const [isDragging, setIsDragging] = useState(false);
   
-  // Ref to access the latest directoryCache without triggering re-renders
+  // Refs to access the latest state without triggering re-renders
   const directoryCacheRef = React.useRef(directoryCache);
+  const currentPathRef = React.useRef(currentPath);
   
-  // Update the ref whenever directoryCache changes
+  // Update refs whenever their state changes
   useEffect(() => {
     directoryCacheRef.current = directoryCache;
   }, [directoryCache]);
+  
+  useEffect(() => {
+    currentPathRef.current = currentPath;
+  }, [currentPath]);
   
   // Update currentKnowledgebase when knowledgebases change
   useEffect(() => {
@@ -236,7 +270,8 @@ const KnowledgebaseBrowser = () => {
             type: 'file',
             uploaded_time: file.uploaded_time,
             file_size: file.file_size,
-            description: file.description
+            description: file.description,
+            parse_runs: file.parse_runs || []
           });
         });
       }
@@ -1355,6 +1390,25 @@ const KnowledgebaseBrowser = () => {
                                     <span className="item-size">
                                       ({(item.file_size / 1024).toFixed(2)} KB)
                                     </span>
+                                  )}
+                                  {/* Parse run colored squares */}
+                                  {item.parse_runs && item.parse_runs.length > 0 && (
+                                    <div className="item-parse-runs">
+                                      {item.parse_runs.map((run, index) => {
+                                        // Generate consistent color based on parser name
+                                        const hash = run.parser.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                                        const hue = hash % 360;
+                                        const color = `hsl(${hue}, 70%, 60%)`;
+                                        return (
+                                          <div 
+                                            key={run.id}
+                                            className="parse-run-indicator"
+                                            style={{ backgroundColor: color }}
+                                            title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}`}
+                                          ></div>
+                                        );
+                                      })}
+                                    </div>
                                   )}
                                   {/* Run Parsing button next to name/size, before view button */}
                                   <button 

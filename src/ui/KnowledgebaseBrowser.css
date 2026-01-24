@@ -1235,6 +1235,28 @@
   display: none;
 }
 
+/* Parse Run Indicators */
+.item-parse-runs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.parse-run-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+  margin-right: 2px;
+  transition: transform 0.2s ease;
+  cursor: help;
+}
+
+.parse-run-indicator:hover {
+  transform: scale(1.2);
+}
+
 @media (max-width: 768px) {
   .kb-items {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

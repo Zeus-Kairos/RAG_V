@@ -282,12 +282,14 @@ async def list_directory(
                     "description": description
                 })
             else:
+                parse_runs = memory_manager.parser_manager.get_parse_runs_by_file_id(file_id)
                 files.append({
                     "id": file_id,
                     "name": filename,
                     "uploaded_time": uploaded_time if uploaded_time else None,
                     "file_size": file_size,
-                    "description": description
+                    "description": description,
+                    "parse_runs": parse_runs
                 })
         
         return {
@@ -386,7 +388,7 @@ async def delete_file(
         
         os.remove(full_file_path)
         
-        # file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
+        memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
         # indexer = get_indexer(knowledge_base)
         # indexer.delete_file_chunks([file_id], save=True)
         
