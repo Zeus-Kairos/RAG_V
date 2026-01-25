@@ -241,12 +241,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: 8px;
   background-color: #ffffff;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   transition: all 0.2s ease;
   cursor: pointer;
+  min-height: 36px;
 }
 
 .kb-item:hover {
@@ -256,13 +257,22 @@
 
 .item-content {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 6px;
   flex: 1;
+  line-height: 1.4;
 }
 
 .item-icon {
-  font-size: 24px;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-bottom: -2px;
+  vertical-align: middle;
 }
 
 .item-name {
@@ -272,6 +282,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
+  vertical-align: middle;
 }
 
 .item-details {
@@ -780,16 +792,24 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
+  line-height: 20px;
 }
 
 .edit-description-item-header .item-icon {
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
 .edit-description-item-header .item-name {
   font-weight: 600;
   color: #333;
   font-size: 14px;
+  line-height: 20px;
 }
 
 .edit-description-item-header .item-size {
