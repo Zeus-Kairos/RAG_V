@@ -14,7 +14,19 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
         throw new Error('No active knowledgebase found');
       }
 
-      const response = await fetchWithAuth(`/api/parse-run/${parseRunId}`, {
+      // Construct the path for the DELETE endpoint
+      let endpointUrl;
+      if (item.name === 'Root' && item.type === 'folder') {
+        // For root, use the endpoint without path parameter
+        endpointUrl = `/api/parse-runs/${activeKB.name}/${parseRunId}`;
+      } else {
+        // For other items, construct the full path
+        const pathSegments = [...currentPath.slice(1), item.name];
+        const path = pathSegments.map(segment => encodeURIComponent(segment)).join('/');
+        endpointUrl = `/api/parse-runs/${activeKB.name}/${parseRunId}/${path}`;
+      }
+
+      const response = await fetchWithAuth(endpointUrl, {
         method: 'DELETE',
       });
 

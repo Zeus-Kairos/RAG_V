@@ -721,6 +721,33 @@ async def set_active_parse_run(file_id: int, parse_run_id: int):
         logger.error(f"Error setting active parse run: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.delete("/api/parse-runs/{kb_name}/{parse_run_id}/{path:path}")
+async def delete_parse_run(kb_name: str, parse_run_id: int, path: str):
+    """Delete a parse run and all associated records.
+
+    Args:
+        kb_name: Name of the knowledgebase
+        parse_run_id: ID of the parse run to delete
+        path: Path of the file or folder to delete the parse run for
+    """
+    try:
+        path_in_knowledgebase = get_upload_dir(DEFAULT_USER_ID, kb_name, path.lstrip('/'))
+        success = memory_manager.parser_manager.delete_parse_run(parse_run_id, path_in_knowledgebase)
+        if success:
+            return {
+                "success": True,
+                "message": f"Parse run {parse_run_id} deleted successfully for path {path}"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Parse run {parse_run_id} not found for path {path}")
+    except Exception as e:
+        logger.error(f"Error deleting parse run: {e}")
+
+@app.delete("/api/parse-runs/{kb_name}/{parse_run_id}")
+async def delete_parse_run_root(kb_name: str, parse_run_id: int):
+    """Delete a parse run and all associated records for the root folder of a knowledgebase."""
+    return await delete_parse_run(kb_name, parse_run_id, "")
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

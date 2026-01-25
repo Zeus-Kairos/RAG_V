@@ -339,12 +339,13 @@ class ParserManager:
             logger.error(f"Error setting active parse run: {e}")
             raise
     
-    def delete_parse_run(self, parse_run_id: int) -> bool:
+    def delete_parse_run(self, parse_run_id: int, filepath: str) -> bool:
         """
         Delete a parse run and all associated records.
         
         Args:
             parse_run_id: ID of the parse run to delete
+            filepath: Path of the file or folder to delete the parse run for
             
         Returns:
             True if deletion was successful
@@ -352,13 +353,57 @@ class ParserManager:
         try:
             cur = self.conn.cursor()
             
+            # Get file type and path
             cur.execute(
-                "DELETE FROM parse_run WHERE id = ?",
-                (parse_run_id,)
+                "SELECT file_id, type, filepath FROM files WHERE filepath = ?",
+                (filepath,)
             )
+            file_info = cur.fetchone()
+            
+            if not file_info:
+                raise ValueError(f"File with filepath {filepath} not found")
+            
+            file_id, file_type, file_path = file_info[0], file_info[1], file_info[2]
+   
+            # Delete the parse_run record. If the parse was run on this file_id, all children will be deleted as CASCADE
+            cur.execute(
+                "DELETE FROM parse_run WHERE id = ? AND file_id = ?",
+                (parse_run_id, file_id)
+            )
+            if cur.rowcount > 0:
+                self.conn.commit()
+                return True
+                                 
+            if file_type == 'file':
+                cur.execute(
+                    "DELETE FROM parsed WHERE parse_run_id = ? AND file_id = ?",
+                    (parse_run_id, file_id)
+                )
+                logger.info(f"Delete parsed record for file {file_path}")
+            else:  # folder
+                # Convert backslashes to forward slashes for consistent path matching
+                path_prefix_windows = filepath.replace('\\', '\\\\')
+                path_prefix_unix = filepath.replace('\\', '/')
+                
+                # If it's a folder, delete all records with filepath under the folder with the parse_run_id
+                # Get all file_ids for files under this folder
+                cur.execute(
+                    "SELECT file_id FROM files WHERE filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\'",
+                    (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                )
+                folder_file_ids = [row[0] for row in cur.fetchall()]
+                
+                if folder_file_ids:
+                    # Delete all parsed records for these files with the given parse_run_id
+                    placeholders = ','.join('?' * len(folder_file_ids))
+                    cur.execute(
+                        f"DELETE FROM parsed WHERE parse_run_id = ? AND file_id IN ({placeholders})",
+                        (parse_run_id, *folder_file_ids)
+                    )
+                    logger.info(f"Delete {len(folder_file_ids)} parsed records under folder {filepath}")
             
             self.conn.commit()
-            return cur.rowcount > 0
+            return True
         except Exception as e:
             logger.error(f"Error deleting parse run: {e}")
             raise
