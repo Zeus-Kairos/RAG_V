@@ -345,8 +345,8 @@ class ParallelFileProcessingPipeline:
                 chunk_parameters=kwargs
             )
             
-            # Get all files from the knowledgebase
-            files = self.memory_manager.knowledgebase_manager.get_files_by_knowledgebase_id(knowledgebase_id)
+            # Get all parsed files from the knowledgebase
+            files = self.memory_manager.knowledgebase_manager.get_parsed_files_by_knowledgebase_id(knowledgebase_id)
             
             # Filter out files that are folders or don't have parsed content
             valid_files = []
@@ -392,6 +392,7 @@ class ParallelFileProcessingPipeline:
         file_id = file['file_id']
         filename = file['filename']
         parsed_text = file['parsed_text']
+        parse_run_id = file['parse_run_id']
         
         try:
             logger.info(f"Starting to chunk file: {filename} (ID: {file_id})")
@@ -400,7 +401,8 @@ class ParallelFileProcessingPipeline:
             metadata = {
                 "file_id": file_id,
                 "filename": filename,
-                "filepath": file['filepath']
+                "filepath": file['filepath'],
+                "parse_run_id": parse_run_id
             }
             
             # Split the file content into chunks
@@ -422,6 +424,7 @@ class ParallelFileProcessingPipeline:
                 chunks_to_insert.append({
                     "chunk_id": doc.metadata["chunk_id"],
                     "file_id": file_id,
+                    "parse_run_id": parse_run_id,
                     "chunk_run_id": chunk_run_id,
                     "content": doc.page_content,
                     "metadata": doc.metadata
@@ -434,6 +437,7 @@ class ParallelFileProcessingPipeline:
             
             return {
                 "file_id": file_id,
+                "parse_run_id": parse_run_id,
                 "filename": filename,
                 "status": "completed",
                 "chunks_count": chunks_added,

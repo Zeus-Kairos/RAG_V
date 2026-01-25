@@ -312,28 +312,32 @@ class KnowledgebaseManager:
             logger.error(f"Error adding file: {e}")
             raise
     
-    def get_files_by_knowledgebase_id(self, knowledgebase_id: int) -> list:
+    def get_parsed_files_by_knowledgebase_id(self, knowledgebase_id: int) -> list:
         """
-        Get all files for a specific knowledgebase.
+        Get all parsed files for a specific knowledgebase.
+        
+        A parsed file is a file that has a active parsed record in the parsed table.
         
         Args:
             knowledgebase_id: ID of the knowledgebase
             
         Returns:
-            List of file records
+            List of file records with active parsed_text and parse_run_id
         """
         try:
             cur = self.conn.cursor()
             cur.execute("""
-                SELECT file_id, filename, filepath, uploaded_time, knowledgebase_id, file_size, description, type, parent      
-                FROM files
-                WHERE knowledgebase_id = ?
-                ORDER BY uploaded_time DESC
+                SELECT f.file_id, f.filename, f.filepath, f.uploaded_time, f.knowledgebase_id, f.file_size, f.description, f.type, f.parent, 
+                       p.parsed_text, p.parse_run_id      
+                FROM files f
+                JOIN parsed p ON f.file_id = p.file_id AND p.is_active = 1
+                WHERE f.knowledgebase_id = ?
+                ORDER BY f.uploaded_time DESC
             """, (knowledgebase_id,))
             files = cur.fetchall()
             return files
         except Exception as e:
-            logger.error(f"Error getting files by knowledgebase ID: {e}")
+            logger.error(f"Error getting parsed files by knowledgebase ID: {e}")
             raise
 
     def get_files_by_parent(self, knowledgebase_id: int, parentFolder: str):

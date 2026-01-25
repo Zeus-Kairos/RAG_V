@@ -48,6 +48,7 @@ class ChunkingManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     chunk_id TEXT NOT NULL,
                     file_id INTEGER NOT NULL,
+                    parse_run_id INTEGER NOT NULL,
                     chunk_run_id INTEGER NOT NULL,
                     content TEXT NOT NULL,
                     metadata TEXT DEFAULT '{}',
@@ -181,6 +182,7 @@ class ChunkingManager:
                 chunk_data.append((
                     chunk["chunk_id"],
                     chunk["file_id"],
+                    chunk["parse_run_id"],
                     chunk["chunk_run_id"],
                     chunk["content"],
                     json.dumps(chunk.get("metadata", {}))
@@ -189,8 +191,8 @@ class ChunkingManager:
             # Insert chunks with UPSERT (update if chunk_id exists)
             cur.executemany(
                 """
-                INSERT INTO chunks (chunk_id, file_id, chunk_run_id, content, metadata) 
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO chunks (chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata) 
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 chunk_data
             )
@@ -203,24 +205,24 @@ class ChunkingManager:
     
     def get_chunks_by_file_id(self, file_id: int, chunk_run_ids: List[int] = None) -> List[Dict[str, Any]]:
         """
-        Get all chunks for a specific file.
+        Get all chunks for a specific file with active parse_run_id.
         
         Args:
             file_id: ID of the file
             
         Returns:
-            List of chunk records
+            List of chunk records with active parse_run_id
         """
         try:
             cur = self.conn.cursor()
             if chunk_run_ids:
                 cur.execute(
-                    "SELECT chunk_id, file_id, chunk_run_id, content, metadata FROM chunks WHERE file_id = ? AND chunk_run_id IN ({})".format(','.join('?'*len(chunk_run_ids))),
+                    "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata FROM chunks c JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id AND p.is_active = 1 WHERE c.file_id = ? AND c.chunk_run_id IN ({}) ".format(','.join('?'*len(chunk_run_ids))),
                     (file_id, *chunk_run_ids)
                 )
             else:
                 cur.execute(
-                    "SELECT chunk_id, file_id, chunk_run_id, content, metadata FROM chunks WHERE file_id = ?",
+                    "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata FROM chunks c JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id AND p.is_active = 1 WHERE c.file_id = ?",
                     (file_id,)
                 )
             
@@ -229,9 +231,10 @@ class ChunkingManager:
                 chunks.append({
                     "chunk_id": row[0],
                     "file_id": row[1],
-                    "chunk_run_id": row[2],
-                    "content": row[3],
-                    "metadata": json.loads(row[4])
+                    "parse_run_id": row[2],
+                    "chunk_run_id": row[3],
+                    "content": row[4],
+                    "metadata": json.loads(row[5])
                 })
             
             return chunks
@@ -252,7 +255,7 @@ class ChunkingManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT chunk_id, file_id, chunk_run_id, content, metadata FROM chunks WHERE chunk_run_id = ?",
+                "SELECT chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata FROM chunks WHERE chunk_run_id = ?",
                 (chunk_run_id,)
             )
             
@@ -261,9 +264,10 @@ class ChunkingManager:
                 chunks.append({
                     "chunk_id": row[0],
                     "file_id": row[1],
-                    "chunk_run_id": row[2],
-                    "content": row[3],
-                    "metadata": json.loads(row[4])
+                    "parse_run_id": row[2],
+                    "chunk_run_id": row[3],
+                    "content": row[4],
+                    "metadata": json.loads(row[5])
                 })
             
             return chunks
@@ -402,6 +406,7 @@ class ChunkingManager:
                 "SELECT DISTINCT chunk_run.id, chunk_run.knowledgebase_id, chunk_run.framework, chunk_run.parameters, chunk_run.run_time "
                 "FROM chunk_run "
                 "JOIN chunks ON chunk_run.id = chunks.chunk_run_id "
+                "JOIN parsed ON chunks.parse_run_id = parsed.parse_run_id AND parsed.is_active = 1 "
                 "WHERE chunks.file_id = ? "
                 "ORDER BY chunk_run.run_time DESC",
                 (file_id,)
