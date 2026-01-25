@@ -403,6 +403,34 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
     newWindow.document.close();
   };
 
+  // Set active parse run
+  const handleSetActiveParseRun = async (parseRunId) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetchWithAuth(`/api/parse-runs/set-active/${item.id}/${parseRunId}`, {
+        method: 'PUT',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to set active parse run');
+      }
+
+      // Refresh the file browser to show updated active status
+      const currentViewPath = currentPath.join('/').replace(/^\//, '');
+      fetchDirectoryContents(currentViewPath, true);
+      refreshFileBrowser(currentViewPath);
+      
+      // Close the popup
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // View parsed content for a parse run
   const handleViewParseRun = async (parseRunId, item) => {
     if (item.type === 'file') {
@@ -501,15 +529,22 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
               className="dialog-primary"
               onClick={() => handleViewParseRun(parseRun.id, item)}
             >
-              📑 View Parsed Content
+              📑 View
             </button>
           )}
+          <button 
+            className="dialog-secondary"
+            onClick={() => handleSetActiveParseRun(parseRun.id)}
+            disabled={isLoading}
+          >
+            ✅ Set Active
+          </button>
           <button 
             className="dialog-danger"
             onClick={() => handleDeleteParseRun(parseRun.id)}
             disabled={isLoading}
           >
-            🗑️ Delete Parse Run
+            🗑️ Delete
           </button>
           <button 
             onClick={onClose}

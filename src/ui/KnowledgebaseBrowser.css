@@ -1391,6 +1391,28 @@
   box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
+.dialog-secondary {
+  background-color: rgba(52, 168, 83, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dialog-secondary:hover:not(:disabled) {
+  background-color: rgba(45, 134, 66, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
 .dialog-danger {
   background-color: #e53935;
   color: white;

@@ -303,44 +303,30 @@ class ParserManager:
             logger.error(f"Error getting files by parse run ID: {e}")
             raise
     
-    def set_active_parsed_content(self, parse_id: int) -> bool:
+    def set_active_parse_run(self, file_id: int, parse_run_id: int) -> bool:
         """
-        Set a specific parsed content as active, deactivating all others for the same file.
+        Set a specific parse run as active, deactivating all others for the same file.
         
         Args:
-            parse_id: ID of the parsed content to set as active
+            file_id: ID of the file
+            parse_run_id: ID of the parse run to set as active
             
         Returns:
             True if the update was successful
         """
         try:
             cur = self.conn.cursor()
-            
-            # Start a transaction
-            cur.execute("BEGIN TRANSACTION")
-            
-            # Get the file_id for this parse_id
-            cur.execute(
-                "SELECT file_id FROM parsed WHERE parse_id = ?",
-                (parse_id,)
-            )
-            row = cur.fetchone()
-            if not row:
-                cur.execute("ROLLBACK")
-                return False
-            
-            file_id = row[0]
-            
+                       
             # Set all parsed content for this file to inactive
             cur.execute(
                 "UPDATE parsed SET is_active = 0 WHERE file_id = ?",
                 (file_id,)
             )
             
-            # Set the specified parsed content to active
+            # Set the specified parse run to active
             cur.execute(
-                "UPDATE parsed SET is_active = 1 WHERE parse_id = ?",
-                (parse_id,)
+                "UPDATE parsed SET is_active = 1 WHERE file_id = ? AND parse_run_id = ?",
+                (file_id, parse_run_id,)
             )
             
             # Commit the transaction
@@ -349,7 +335,7 @@ class ParserManager:
         except Exception as e:
             # Rollback on error
             self.conn.rollback()
-            logger.error(f"Error setting active parsed content: {e}")
+            logger.error(f"Error setting active parse run: {e}")
             raise
     
     def delete_parse_run(self, parse_run_id: int) -> bool:

@@ -398,7 +398,7 @@ class ChunkingManager:
             file_id: ID of the file
             
         Returns:
-            List of chunk run records
+            List of chunk run records with active parse_run_id
         """
         try:
             cur = self.conn.cursor()
@@ -406,7 +406,7 @@ class ChunkingManager:
                 "SELECT DISTINCT chunk_run.id, chunk_run.knowledgebase_id, chunk_run.framework, chunk_run.parameters, chunk_run.run_time "
                 "FROM chunk_run "
                 "JOIN chunks ON chunk_run.id = chunks.chunk_run_id "
-                "JOIN parsed ON chunks.parse_run_id = parsed.parse_run_id AND parsed.is_active = 1 "
+                "JOIN parsed ON chunks.parse_run_id = parsed.parse_run_id AND chunks.file_id = parsed.file_id AND parsed.is_active = 1 "
                 "WHERE chunks.file_id = ? "
                 "ORDER BY chunk_run.run_time DESC",
                 (file_id,)

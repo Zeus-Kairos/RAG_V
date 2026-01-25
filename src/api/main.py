@@ -621,6 +621,7 @@ async def get_chunk_runs_by_file(
     """Get chunk run history for a specific file."""
     try:
         chunk_runs = memory_manager.chunking_manager.get_chunk_runs_by_file_id(file_id)
+        logger.info(f"{len(chunk_runs)} chunk runs for file {file_id}")
         return {
             "success": True,
             "chunk_runs": chunk_runs
@@ -698,6 +699,26 @@ async def get_parsed_content_by_run_id(file_id: int, parse_run_id: int):
         }
     except Exception as e:
         logger.error(f"Error getting parsed content by run ID: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to set active parse run
+@app.put("/api/parse-runs/set-active/{file_id}/{parse_run_id}")
+async def set_active_parse_run(file_id: int, parse_run_id: int):
+    """Set a specific parse run as active for a file."""
+    try:
+        success = memory_manager.parser_manager.set_active_parse_run(file_id, parse_run_id)
+        if success:
+            return {
+                "success": True,
+                "message": f"Successfully set parse run {parse_run_id} as active for file {file_id}"
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"No parsed content found for file {file_id} and parse run {parse_run_id}"
+            }
+    except Exception as e:
+        logger.error(f"Error setting active parse run: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
