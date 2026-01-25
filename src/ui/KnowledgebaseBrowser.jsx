@@ -1326,9 +1326,13 @@ const KnowledgebaseBrowser = () => {
                 {rootParseRuns.map((run) => (
                   <div 
                     key={run.id}
-                    className="parse-run-indicator"
-                    style={{ backgroundColor: 'black' }}
-                    title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}`}
+                    className={`parse-run-indicator ${run.is_active ? 'parse-run-indicator-active' : ''}`}
+                    style={{ 
+                      backgroundColor: 'black',
+                      border: run.is_active ? '2px solid #4CAF50' : 'none',
+                      boxShadow: run.is_active ? '0 0 0 2px rgba(76, 175, 80, 0.3)' : 'none'
+                    }}
+                    title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}\n${run.is_active ? '✓ Active' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedParseRun(run);
@@ -1524,9 +1528,13 @@ const KnowledgebaseBrowser = () => {
                                     return (
                                       <div 
                                         key={run.id}
-                                        className="parse-run-indicator"
-                                        style={{ backgroundColor: color }}
-                                        title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}`}
+                                        className={`parse-run-indicator ${run.is_active ? 'parse-run-indicator-active' : ''}`}
+                                        style={{ 
+                                          backgroundColor: color,
+                                          border: run.is_active ? '2px solid #4CAF50' : 'none',
+                                          boxShadow: run.is_active ? '0 0 0 2px rgba(76, 175, 80, 0.3)' : 'none'
+                                        }}
+                                        title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}\n${run.is_active ? '✓ Active' : ''}`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           // Show parse run popup
@@ -1553,8 +1561,8 @@ const KnowledgebaseBrowser = () => {
                               >
                                 🔄 Parse
                               </button>
-                              {/* View button only for files */}
-                              {item.type === 'file' && (
+                              {/* View button only for files with parse runs */}
+                              {item.type === 'file' && item.parse_runs && item.parse_runs.length > 0 && (
                                 <button 
                                   className="item-action view-btn item-history-inline-btn"
                                   onClick={(e) => {

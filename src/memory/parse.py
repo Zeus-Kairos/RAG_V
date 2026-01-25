@@ -260,7 +260,7 @@ class ParserManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT parse_run_id, file_id, parser, parameters, time FROM parsed WHERE file_id = ?",
+                "SELECT parse_run_id, file_id, parser, parameters, time, is_active FROM parsed WHERE file_id = ?",
                 (file_id,)
             )
             
@@ -271,7 +271,8 @@ class ParserManager:
                     "file_id": row[1],
                     "parser": row[2],
                     "parameters": json.loads(row[3]),
-                    "time": row[4]
+                    "time": row[4],
+                    "is_active": bool(row[5])
                 })
             
             return parse_runs

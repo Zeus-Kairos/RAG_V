@@ -532,13 +532,19 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
               📑 View
             </button>
           )}
-          <button 
-            className="dialog-secondary"
-            onClick={() => handleSetActiveParseRun(parseRun.id)}
-            disabled={isLoading}
-          >
-            ✅ Set Active
-          </button>
+          {parseRun.is_active ? (
+            <div className="dialog-active-badge">
+              ✅ Active
+            </div>
+          ) : (
+            <button 
+              className="dialog-secondary"
+              onClick={() => handleSetActiveParseRun(parseRun.id)}
+              disabled={isLoading}
+            >
+              ✅ Set Active
+            </button>
+          )}
           <button 
             className="dialog-danger"
             onClick={() => handleDeleteParseRun(parseRun.id)}
