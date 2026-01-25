@@ -8,6 +8,12 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
   const [selectedChunkRuns, setSelectedChunkRuns] = useState(new Set());
   // Parsed Text option is always considered selected and can't be unselected
   const hasParsedTextSelected = true;
+  // State for parsed text metadata
+  const [parsedTextMetadata, setParsedTextMetadata] = useState({
+    parser: '',
+    time: '',
+    parse_run_id: ''
+  });
 
   const handleChunkRunSelect = (runId) => {
     const newSelected = new Set(selectedChunkRuns);
@@ -35,16 +41,28 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
 
     try {
       setIsLoading(true);
-      // Step 1: Get file parsed_text
+      // Step 1: Get file data with parsed content
       const fileResponse = await fetch(`http://localhost:8000/api/files/${fileId}`);
       if (!fileResponse.ok) {
         throw new Error('Failed to fetch file content');
       }
       const fileData = await fileResponse.json();
+      
+      // Step 2: Extract parsed content directly from file response
       const parsedText = fileData.success ? fileData.file.parsed_text : '';
-
+      const parsedTextParser = fileData.success ? fileData.file.parser : '';
+      const parsedTextTime = fileData.success ? fileData.file.time : '';
+      const parsedTextRunId = fileData.success ? fileData.file.parse_run_id : '';
+      
+      // Update component state for consistency
+      setParsedTextMetadata({
+        parser: parsedTextParser,
+        time: parsedTextTime,
+        parse_run_id: parsedTextRunId
+      });
+      
+      // Step 3: Get chunks for selected runs if any are selected
       let chunks = [];
-      // Step 2: Get chunks for selected runs if any are selected
       if (selectedChunkRuns.size > 0) {
         const selectedRunIds = Array.from(selectedChunkRuns);
         const chunkRunIds = selectedRunIds.join(',');
@@ -57,11 +75,15 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         chunks = chunksData.success ? chunksData.chunks : [];
       }
 
-      // Step 3: Populate the already-open window
+      // Step 4: Populate the already-open window
       setIsLoading(false);
       
-      // Step 4: Open new window with parsed_text, chunk boundaries, and run parameters
-      openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow);
+      // Step 5: Open new window with parsed_text, chunks, fileName, chunkRuns, visualizationWindow, and parsed text metadata
+      openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow, {
+        parser: parsedTextParser,
+        time: parsedTextTime,
+        parse_run_id: fileData.success ? fileData.file.parse_run_id : ''
+      });
     } catch (err) {
       console.error('Error opening chunks:', err);
       alert(`Failed to open chunks: ${err.message}`);
@@ -133,7 +155,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     return newWindow;
   };
 
-  const openChunksWindow = (parsedText, chunks, fileName, chunkRuns, existingWindow = null) => {
+  const openChunksWindow = (parsedText, chunks, fileName, chunkRuns, existingWindow = null, parsedTextMetadata = {}) => {
     // Group chunks by chunk_run_id if any chunks exist
     const chunksByRunId = chunks.length > 0 ? chunks.reduce((acc, chunk) => {
       const runId = chunk.chunk_run_id;
@@ -630,7 +652,9 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           <div class="run-column" style="min-width: auto; width: 100%;">
             <div class="run-header">
               <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
-              <div style="font-size: 12px; color: #666;">Original parsed content of the file</div>
+              <div style="font-size: 12px; color: #666;">
+                ${parsedTextMetadata.parse_run_id ? `Run ID: ${parsedTextMetadata.parse_run_id} | ` : ''}Parser: ${parsedTextMetadata.parser || 'Unknown'} | Time: ${parsedTextMetadata.time ? formatDateTime(parsedTextMetadata.time) : 'Unknown'}
+              </div>
             </div>
           </div>
         </div>
@@ -871,10 +895,11 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     newWindow.document.close();
   };
 
-  // Fetch chunk runs when fileId changes
+  // Fetch chunk runs and parsed text metadata when fileId changes
   useEffect(() => {
     if (fileId) {
       fetchChunkRuns(fileId);
+      fetchParsedTextMetadata(fileId);
     }
   }, [fileId]);
 
@@ -895,15 +920,45 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     }
   };
 
+  const fetchParsedTextMetadata = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/files/${id}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('File data response:', data); // Debug log
+        if (data.success) {
+          setParsedTextMetadata({
+            parser: data.file.parser || '',
+            time: data.file.time || '',
+            parse_run_id: data.file.parse_run_id || ''
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching parsed text metadata:', err);
+    }
+  };
+
   const formatDateTime = (dateTimeStr) => {
     if (!dateTimeStr) return '';
-    // Ensure datetime string is in ISO format with UTC timezone for correct parsing
-    const isoDateTimeStr = dateTimeStr
-      .replace(/\s+/, 'T') // Replace space with T to make ISO format
-      .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(?!Z$)/, '$1Z'); // Add Z if missing, indicating UTC
-    const date = new Date(isoDateTimeStr);
-    // Convert to local time and display in a readable format
-    return date.toLocaleString();
+    try {
+      // Always format as ISO with Z to ensure UTC parsing
+      // This ensures consistent behavior regardless of browser timezone settings
+      const isoDateTimeStr = dateTimeStr
+        .replace(/\s+/, 'T') // Replace space with T to make ISO format
+        .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(?!Z$)/, '$1Z'); // Add Z if missing, indicating UTC
+      
+      const date = new Date(isoDateTimeStr);
+      if (!isNaN(date.getTime())) {
+        // Convert UTC date to local time string
+        return date.toLocaleString();
+      }
+      
+      return dateTimeStr; // Fallback to original string if parsing fails
+    } catch (e) {
+      console.error('Error formatting date:', e);
+      return dateTimeStr; // Fallback to original string
+    }
   };
 
   const formatParameters = (params) => {
@@ -944,7 +999,22 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                   disabled={true}
                   title="Parsed Text is always included and cannot be unselected"
                 />
-                Parsed Text
+                Parsed Text 
+                {((parsedTextMetadata.parser !== undefined && parsedTextMetadata.parser !== '') || 
+                  parsedTextMetadata.parse_run_id !== undefined || 
+                  (parsedTextMetadata.time !== undefined && parsedTextMetadata.time !== '')) && (
+                  <span className="parsed-text-metadata">
+                    {parsedTextMetadata.parse_run_id !== undefined && (
+                      <span className="run-id-info">Run ID: {parsedTextMetadata.parse_run_id} | </span>
+                    )}
+                    {parsedTextMetadata.parser && (
+                      <span className="parser-info">Parser: {parsedTextMetadata.parser}</span>
+                    )}
+                    {parsedTextMetadata.time && (
+                      <span className="time-info">| Time: {formatDateTime(parsedTextMetadata.time)}</span>
+                    )}
+                  </span>
+                )}
               </label>
             </div>
             {chunkRuns.length > 0 && (

@@ -202,7 +202,8 @@ class ParserManager:
                     "parsed_text": row[3],
                     "parser": row[4],
                     "parameters": json.loads(row[5]),
-                    "is_active": bool(row[6])
+                    "is_active": bool(row[6]),
+                    "time": row[7]
                 })
             
             return parsed_contents
