@@ -316,8 +316,7 @@ async def list_directory(
             
             # Get parse runs for both files and folders
             parse_runs = memory_manager.parser_manager.get_parse_runs_by_file_id(file_id)
-            if file_id == 344:
-                logger.info(parse_runs)
+
             if type == 'folder':
                 folders.append({
                     "id": file_id,

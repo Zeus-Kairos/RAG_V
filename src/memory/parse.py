@@ -355,7 +355,7 @@ class ParserManager:
             
             # Get file type and path
             cur.execute(
-                "SELECT file_id, type, filepath FROM files WHERE filepath = ?",
+                "SELECT file_id, type FROM files WHERE filepath = ?",
                 (filepath,)
             )
             file_info = cur.fetchone()
@@ -363,7 +363,7 @@ class ParserManager:
             if not file_info:
                 raise ValueError(f"File with filepath {filepath} not found")
             
-            file_id, file_type, file_path = file_info[0], file_info[1], file_info[2]
+            file_id, file_type = file_info[0], file_info[1]
    
             # Delete the parse_run record. If the parse was run on this file_id, all children will be deleted as CASCADE
             cur.execute(
@@ -379,17 +379,20 @@ class ParserManager:
                     "DELETE FROM parsed WHERE parse_run_id = ? AND file_id = ?",
                     (parse_run_id, file_id)
                 )
-                logger.info(f"Delete parsed record for file {file_path}")
+                logger.info(f"Delete parsed record for file {filepath}")
             else:  # folder
-                # Convert backslashes to forward slashes for consistent path matching
-                path_prefix_windows = filepath.replace('\\', '\\\\')
-                path_prefix_unix = filepath.replace('\\', '/')
-                
                 # If it's a folder, delete all records with filepath under the folder with the parse_run_id
                 # Get all file_ids for files under this folder
+                # Properly handle both exact folder match and files under it
+                               
+                # Then, get all files under this folder with proper path matching
+                # Use LIKE patterns with path separators to avoid matching similar filenames
+                unix_pattern = f"{filepath}/%"
+                windows_pattern = f"{filepath}\\%"
+                
                 cur.execute(
-                    "SELECT file_id FROM files WHERE filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\'",
-                    (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                    "SELECT file_id FROM files WHERE (filepath = ? OR filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
+                    (filepath, windows_pattern, unix_pattern)
                 )
                 folder_file_ids = [row[0] for row in cur.fetchall()]
                 

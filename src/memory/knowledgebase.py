@@ -471,25 +471,41 @@ class KnowledgebaseManager:
             cur = self.conn.cursor()
             logger.debug(f"Path prefix: {path_prefix}, include folders: {include_folders}")
             
-            # Properly escape backslashes for SQL LIKE pattern
-            # Also handle both Windows and Unix path formats
-            normalized_path_prefix = path_prefix.replace('/', os.sep)
-            path_prefix_windows = normalized_path_prefix.replace('\\', '\\\\')
-            path_prefix_unix = normalized_path_prefix.replace('\\', '/')
-            
-            # SQLite uses LIKE (case-insensitive with COLLATE NOCASE) instead of ILIKE
-            if include_folders:
-                cur.execute(
-                    "SELECT file_id, type FROM files WHERE (filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
-                    (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
-                )
+            # Handle empty path prefix (root)
+            if not path_prefix:
+                if include_folders:
+                    cur.execute("SELECT file_id, type FROM files")
+                else:
+                    cur.execute("SELECT file_id FROM files WHERE type = 'file'")
             else:
-                cur.execute(
-                    "SELECT file_id FROM files WHERE type = 'file' AND (filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
-                    (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
-                )
+                # Simplified approach: use the original prefix and handle path separators
+                if path_prefix.endswith((os.sep, '/')):
+                    # If prefix already ends with separator, match all files under it
+                    like_pattern = f"{path_prefix}%"
+                    if include_folders:
+                        cur.execute("SELECT file_id, type FROM files WHERE filepath LIKE ?", (like_pattern,))
+                    else:
+                        cur.execute("SELECT file_id FROM files WHERE type = 'file' AND filepath LIKE ?", (like_pattern,))
+                else:
+                    # If prefix doesn't end with separator, match: 
+                    # 1. Exact matches (for folders)
+                    # 2. Files under the folder (with proper path separator)
+                    exact_match = path_prefix
+                    unix_like = f"{path_prefix}/%"
+                    windows_like = f"{path_prefix}\\%"
+                    
+                    if include_folders:
+                        cur.execute(
+                            "SELECT file_id, type FROM files WHERE filepath = ? OR filepath LIKE ? OR filepath LIKE ?",
+                            (exact_match, unix_like, windows_like)
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT file_id FROM files WHERE type = 'file' AND (filepath LIKE ? OR filepath LIKE ?)",
+                            (unix_like, windows_like)
+                        )
             file_ids = [row[0] for row in cur.fetchall()]
-            logger.debug(f"File IDs: {file_ids}")
+            logger.info(f"File IDs: {file_ids}")
             return file_ids
         except Exception as e:
             logger.error(f"Error getting files by path prefix: {e}")
