@@ -513,12 +513,12 @@ async def stream_upload_files(
 async def parse_files(kb_name: str, path: str, request: Request):
     """Parse a file or folder by path."""
     try:
-        # Get all form data as a dictionary
-        form_data = await request.form()
+        # Get JSON data from request body
+        request_data = await request.json()
         filepath = get_upload_dir(DEFAULT_USER_ID, kb_name, path)
 
-        # Extract parameters from form data
-        parameters = form_data.get('parameters', {})
+        # Extract parameters from request data
+        parameters = request_data.get('parameters', {})
 
         pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
         async def generate():
@@ -527,7 +527,7 @@ async def parse_files(kb_name: str, path: str, request: Request):
 
         return StreamingResponse(generate(), media_type="application/x-ndjson")
     except Exception as e:
-        logger.error(f"Error parsing file: {e}")
+        logger.exception(f"Error parsing file: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for parsing root folder (empty path)

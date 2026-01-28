@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import Any
+from typing import Any, Dict
 import pymupdf.layout
 import pymupdf4llm
 
@@ -12,6 +12,26 @@ class PdfParser:
     """
     PDF parsing module that converts PDF files to markdown format using pymupdf4llm.
     """
+    
+    def parse(self, file_path: str) -> str:
+        pass
+
+    @classmethod
+    def create(cls, parser: str, params: Dict[str, Any] = {}) -> "PdfParser":
+        if parser == "pymupdf4llm":
+            return PymuPdfParser(params)
+        elif parser == "default":
+            return PymuPdfParser(params)
+        else:
+            raise ValueError(f"Unknown PDF parser: {parser}")
+            
+
+class PymuPdfParser(PdfParser):
+    """
+    PDF parsing module that converts PDF files to markdown format using pymupdf4llm.
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
     
     def parse(self, file_path: str) -> str:
         """
@@ -47,5 +67,6 @@ class PdfParser:
             ignore_code=False,  # If True, avoids special formatting for mono-spaced text.
             extract_words=False,  # Adds word-level data to each page dictionary.
         )
+
 
         return md_text

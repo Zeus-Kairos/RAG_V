@@ -176,10 +176,7 @@ class ParallelFileProcessingPipeline:
         logger.info(f"Starting parallel parse pipeline: filepath={filepath}, parameters={parameters}")
         
         parameters = parameters or {}
-        
-        # Initialize file parser if not already initialized
-        if not self.file_parser:
-            self.file_parser = FileParser()
+        self.file_parser = FileParser(parameters)
 
         file = self.memory_manager.knowledgebase_manager.get_file_by_path(filepath)
         if not file:
@@ -291,8 +288,8 @@ class ParallelFileProcessingPipeline:
                     parse_run_id=parse_run_id,
                     parse_run_time=parse_run_time,
                     parsed_text=parse_result["content"],
-                    parser="default",
-                    parameters=parameters,
+                    parser=parse_result["parser"],
+                    parameters=parse_result["parameters"],
                     is_active=True
                 )
                 result["parsed_id"] = parsed_id
@@ -467,7 +464,6 @@ class ParallelFileProcessingPipeline:
         logger.info(f"Starting parallel upload pipeline: user_id={user_id}, knowledge_base={knowledge_base}, directory={directory}, file_count={len(files)}")
         
         self.file_uploader = FileUploader()
-        self.file_parser = FileParser()
         upload_dir = get_upload_dir(user_id, knowledge_base, directory)
         os.makedirs(upload_dir, exist_ok=True)
         

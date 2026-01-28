@@ -17,9 +17,9 @@ class FileParser:
     Supports Markdown, Plain Text, and HTML file types with batch processing capability.
     """
     
-    def __init__(self, pdf_parser: Optional[PdfParser] = None):
+    def __init__(self, parameters: Dict[str, Any] = {}):
         self.markdownable_parser = MarkItDown(enable_plugins=False)
-        self.pdf_parser = pdf_parser or PdfParser()
+        self.parser_params = parameters
     
     def _read_file_with_encoding(self, file_path: str) -> str:
         """
@@ -112,6 +112,8 @@ class FileParser:
         try:
             file_type = self.detect_file_type(file_path)
             
+            parser = "default"
+            params = {}
             parsed_content = None
             if file_type == 'markdown':
                 content = self._read_file_with_encoding(file_path)
@@ -123,7 +125,12 @@ class FileParser:
                 content = self._read_file_with_encoding(file_path)
                 parsed_content = self._parse_html(content)
             elif file_type == 'pdf':
-                parsed_content = self._parse_pdf(file_path)
+                if "pdf" in self.parser_params:
+                    parser = self.parser_params["pdf"].get("parser")
+                    params = self.parser_params["pdf"].get("parameters")
+                    parsed_content = self._parse_pdf(file_path, parser, params)
+                else:
+                    parsed_content = self._parse_pdf(file_path)
                 # Check if we got a list of page chunks or a single string
                 if isinstance(parsed_content, list):
                     logger.info(f"Parsed PDF content in {len(parsed_content)} pages")
@@ -145,6 +152,8 @@ class FileParser:
                             
             return {
                 'success': True,
+                'parser': parser,
+                'parameters': params,
                 'content': parsed_content,
                 'original_file': file_path,
                 'error': None
@@ -195,11 +204,16 @@ class FileParser:
         # Convert to markdown using html2text
         return converter.handle(cleaned_html)
 
-    def _parse_pdf(self, file_path: str) -> str:
+    def _parse_pdf(self, file_path: str, parser: str = "default", params: Dict[str, Any] = {}) -> str:
         """
         Parse PDF content using the injected PdfParser.
         """
-        return self.pdf_parser.parse(file_path)
+
+        pdf_parser = PdfParser.create(parser, params)
+
+        logger.info(f"Using PDF parser: {pdf_parser.__class__.__name__}")
+        
+        return pdf_parser.parse(file_path)
 
 
     def _parse_markdownable(self, file_path: str) -> str:

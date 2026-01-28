@@ -6,7 +6,7 @@ import ParseRunPopup from './ParseRunPopup';
 import './KnowledgebaseBrowser.css';
 
 const KnowledgebaseBrowser = () => {
-  const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser } = useKnowledgebaseStore();
+  const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser, parserSettings } = useKnowledgebaseStore();
   const [currentKnowledgebase, setCurrentKnowledgebase] = useState(knowledgebases.find(kb => kb.is_active)?.name || 'default');
   const [currentPath, setCurrentPath] = useState(['']);
   const [fileItems, setFileItems] = useState([]); // Contains files and folders with their descriptions
@@ -115,7 +115,20 @@ const KnowledgebaseBrowser = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          // Additional parsing parameters can be added here if needed
+          parameters: {
+            pdf: {
+              parser: parserSettings.pdf.framework,
+              parameters: parserSettings.pdf.params
+            },
+            docx: {
+              parser: parserSettings.docx.framework,
+              parameters: parserSettings.docx.params
+            },
+            pptx: {
+              parser: parserSettings.pptx.framework,
+              parameters: parserSettings.pptx.params
+            }
+          }
         }),
       });
 
