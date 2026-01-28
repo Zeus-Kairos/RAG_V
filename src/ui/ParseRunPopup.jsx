@@ -389,16 +389,16 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
                 <span class="detail-label">Parser</span>
                 <span class="detail-value">${escapeHtml(parseRun.parser)}</span>
               </div>
+              ${Object.keys(parseRun.parameters).length > 0 ? `
+              <div class="detail-item">
+                <span class="detail-label">Parameters</span>
+                <span class="detail-value">${escapeHtml(formatParamsForDisplay(parseRun.parameters))}</span>
+              </div>
+              ` : ''}
               <div class="detail-item">
                 <span class="detail-label">Time</span>
                 <span class="detail-value">${new Date(parseRun.time).toLocaleString()}</span>
               </div>
-              ${Object.keys(parseRun.parameters).length > 0 ? `
-              <div class="detail-item parameters-item">
-                <span class="detail-label">Parameters</span>
-                <div class="detail-value params-container concise">${escapeHtml(formatParamsForDisplay(parseRun.parameters))}</div>
-              </div>
-              ` : ''}
             </div>
           </div>
           <div class="text-container">

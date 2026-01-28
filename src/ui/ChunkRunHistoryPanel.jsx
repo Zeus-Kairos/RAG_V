@@ -12,7 +12,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
   const [parsedTextMetadata, setParsedTextMetadata] = useState({
     parser: '',
     time: '',
-    parse_run_id: ''
+    parse_run_id: '',
+    parameters: {}
   });
 
   const handleChunkRunSelect = (runId) => {
@@ -53,12 +54,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       const parsedTextParser = fileData.success ? fileData.file.parser : '';
       const parsedTextTime = fileData.success ? fileData.file.time : '';
       const parsedTextRunId = fileData.success ? fileData.file.parse_run_id : '';
+      const parsedTextParameters = fileData.success ? fileData.file.parameters : {};
       
       // Update component state for consistency
       setParsedTextMetadata({
         parser: parsedTextParser,
         time: parsedTextTime,
-        parse_run_id: parsedTextRunId
+        parse_run_id: parsedTextRunId,
+        parameters: parsedTextParameters
       });
       
       // Step 3: Get chunks for selected runs if any are selected
@@ -82,7 +85,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow, {
         parser: parsedTextParser,
         time: parsedTextTime,
-        parse_run_id: fileData.success ? fileData.file.parse_run_id : ''
+        parse_run_id: fileData.success ? fileData.file.parse_run_id : '',
+        parameters: fileData.success ? fileData.file.parameters : {}
       });
     } catch (err) {
       console.error('Error opening chunks:', err);
@@ -246,6 +250,54 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+
+    // Helper function to format parameters for display
+    const formatParamsForDisplay = (params) => {
+      if (!params || Object.keys(params).length === 0) return '';
+      
+      const paramStrings = [];
+      Object.entries(params).forEach(([key, value]) => {
+        // Format key to be more readable
+        const displayKey = key
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase());
+        
+        // Format value based on type
+        let displayValue = value;
+        if (typeof value === 'boolean') {
+          displayValue = value ? 'Enabled' : 'Disabled';
+        } else if (typeof value === 'object') {
+          displayValue = JSON.stringify(value);
+        }
+        
+        paramStrings.push(`${displayKey}: ${displayValue}`);
+      });
+      
+      return paramStrings.join(', ');
+    };
+
+    // Helper function to format date time
+    const formatDateTime = (dateTimeStr) => {
+      if (!dateTimeStr) return '';
+      try {
+        // Always format as ISO with Z to ensure UTC parsing
+        // This ensures consistent behavior regardless of browser timezone settings
+        const isoDateTimeStr = dateTimeStr
+          .replace(/\s+/, 'T') // Replace space with T to make ISO format
+          .replace(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(?!Z$)/, '$1Z'); // Add Z if missing, indicating UTC
+        
+        const date = new Date(isoDateTimeStr);
+        if (!isNaN(date.getTime())) {
+          // Convert UTC date to local time string
+          return date.toLocaleString();
+        }
+        
+        return dateTimeStr; // Fallback to original string if parsing fails
+      } catch (e) {
+        console.error('Error formatting date:', e);
+        return dateTimeStr; // Fallback to original string
+      }
+    };
 
     // Apply alpha to a hex color (expects #RRGGBB)
     const applyAlpha = (hex, alpha = 0.25) => {
@@ -647,13 +699,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
 
     // Show Parsed Text column only when no chunk runs are selected
     if (!hasChunkRuns) {
+      const parsedTextParams = parsedTextMetadata.parameters ? formatParamsForDisplay(parsedTextMetadata.parameters) : '';
       html += `
         <div class="header-row">
           <div class="run-column" style="min-width: auto; width: 100%;">
             <div class="run-header">
               <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
               <div style="font-size: 12px; color: #666;">
-                ${parsedTextMetadata.parse_run_id ? `Run ID: ${parsedTextMetadata.parse_run_id} | ` : ''}Parser: ${parsedTextMetadata.parser || 'Unknown'} | Time: ${parsedTextMetadata.time ? formatDateTime(parsedTextMetadata.time) : 'Unknown'}
+                ${parsedTextMetadata.parse_run_id ? `Run ID: ${parsedTextMetadata.parse_run_id} | ` : ''}Parser: ${parsedTextMetadata.parser || 'Unknown'} ${parsedTextParams ? `| Parameters: ${parsedTextParams}` : ''} | Time: ${parsedTextMetadata.time ? formatDateTime(parsedTextMetadata.time) : 'Unknown'}
               </div>
             </div>
           </div>
@@ -833,7 +886,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
               <div class="legend">
                 <div class="legend-item">
                   <span class="legend-color" style="background-color: ${baseColor}; opacity: 0.3;"></span>
-                  <span>Framework: ${framework} | Run Parameters: ${formattedParams}</span>
+                  <span>Framework: ${framework} | Run Parameters: ${formattedParams} | Parser: ${parsedTextMetadata.parser || 'Unknown'} ${parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0 ? `| Parser Parameters: ${formatParamsForDisplay(parsedTextMetadata.parameters)}` : ''}</span>
                 </div>
               </div>
             </div>
@@ -930,7 +983,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           setParsedTextMetadata({
             parser: data.file.parser || '',
             time: data.file.time || '',
-            parse_run_id: data.file.parse_run_id || ''
+            parse_run_id: data.file.parse_run_id || '',
+            parameters: data.file.parameters || {}
           });
         }
       }
@@ -970,6 +1024,30 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     }
   };
 
+  const formatParamsForDisplay = (params) => {
+    if (!params || Object.keys(params).length === 0) return '';
+    
+    const paramStrings = [];
+    Object.entries(params).forEach(([key, value]) => {
+      // Format key to be more readable
+      const displayKey = key
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase());
+      
+      // Format value based on type
+      let displayValue = value;
+      if (typeof value === 'boolean') {
+        displayValue = value ? 'Enabled' : 'Disabled';
+      } else if (typeof value === 'object') {
+        displayValue = JSON.stringify(value);
+      }
+      
+      paramStrings.push(`${displayKey}: ${displayValue}`);
+    });
+    
+    return paramStrings.join(', ');
+  };
+
   return (
     <div className="chunk-run-history-panel">
       <div className="chunk-run-history-panel-header">
@@ -1002,13 +1080,17 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                 Parsed Text 
                 {((parsedTextMetadata.parser !== undefined && parsedTextMetadata.parser !== '') || 
                   parsedTextMetadata.parse_run_id !== undefined || 
-                  (parsedTextMetadata.time !== undefined && parsedTextMetadata.time !== '')) && (
+                  (parsedTextMetadata.time !== undefined && parsedTextMetadata.time !== '') ||
+                  (parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0)) && (
                   <span className="parsed-text-metadata">
                     {parsedTextMetadata.parse_run_id !== undefined && (
                       <span className="run-id-info">Run ID: {parsedTextMetadata.parse_run_id} | </span>
                     )}
                     {parsedTextMetadata.parser && (
                       <span className="parser-info">Parser: {parsedTextMetadata.parser}</span>
+                    )}
+                    {parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0 && (
+                      <span className="params-info"> | Parameters: {formatParamsForDisplay(parsedTextMetadata.parameters)}</span>
                     )}
                     {parsedTextMetadata.time && (
                       <span className="time-info">| Time: {formatDateTime(parsedTextMetadata.time)}</span>
