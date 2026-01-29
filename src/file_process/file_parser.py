@@ -6,7 +6,7 @@ from markitdown import MarkItDown
 from bs4 import BeautifulSoup
 import html2text
 
-from src.file_process.pdf_parser import PdfParser
+from src.file_process.parsers import BaseParser
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -209,7 +209,7 @@ class FileParser:
         Parse PDF content using the injected PdfParser.
         """
 
-        pdf_parser = PdfParser.create(parser, params)
+        pdf_parser = BaseParser.create(parser, params)
 
         logger.info(f"Using PDF parser: {pdf_parser.__class__.__name__}")
         

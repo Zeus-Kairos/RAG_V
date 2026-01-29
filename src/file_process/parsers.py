@@ -3,12 +3,14 @@ import shutil
 from typing import Any, Dict
 import pymupdf.layout
 import pymupdf4llm
+from markitdown import MarkItDown
+from unstructured.partition.auto import partition
 
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-class PdfParser:
+class BaseParser:
     """
     PDF parsing module that converts PDF files to markdown format using pymupdf4llm.
     """
@@ -17,16 +19,20 @@ class PdfParser:
         pass
 
     @classmethod
-    def create(cls, parser: str, params: Dict[str, Any] = {}) -> "PdfParser":
+    def create(cls, parser: str, params: Dict[str, Any] = {}) -> "BaseParser":
         if parser == "pymupdf4llm":
             return PymuPdfParser(params)
+        elif parser == "MarkitDown":
+            return MarkitdownParser(params)
+        elif parser == "unstructured":
+            return UnstructuredParser(params)
         elif parser == "default":
             return PymuPdfParser(params)
         else:
-            raise ValueError(f"Unknown PDF parser: {parser}")
+            raise ValueError(f"Unknown parser: {parser}")
             
 
-class PymuPdfParser(PdfParser):
+class PymuPdfParser(BaseParser):
     """
     PDF parsing module that converts PDF files to markdown format using pymupdf4llm.
     """
@@ -68,5 +74,46 @@ class PymuPdfParser(PdfParser):
             extract_words=False,  # Adds word-level data to each page dictionary.
         )
 
-
         return md_text
+
+class MarkitdownParser(BaseParser):
+    """
+    PDF parsing module that converts PDF files to markdown format using markitdown4llm.
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a PDF file and return the markdown content.
+        
+        Args:
+            file_path: Path to the PDF file to parse
+            
+        Returns:
+            Parsed markdown content as string
+        """
+        md = MarkItDown(enable_plugins=False) # Set to True to enable plugins
+        result = md.convert(file_path)
+        return result.text_content
+
+class UnstructuredParser(BaseParser):
+    """
+    PDF parsing module that converts PDF files to markdown format using unstructured.
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+    
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a PDF file and return the markdown content.
+        
+        Args:
+            file_path: Path to the PDF file to parse
+            
+        Returns:
+            Parsed markdown content as string
+        """
+        elements = partition(file_path)
+        return "\n\n".join([str(el) for el in elements])
+       

@@ -604,6 +604,19 @@ const useKnowledgebaseStore = create((set, get) => {
       }));
     },
     
+    // Reset parser parameters for a file type
+    resetParserParams: (fileType) => {
+      set(prev => ({
+        parserSettings: {
+          ...prev.parserSettings,
+          [fileType]: {
+            ...prev.parserSettings[fileType],
+            params: {}
+          }
+        }
+      }));
+    },
+    
     // Logout function
     logout: () => {
       // Remove token from localStorage

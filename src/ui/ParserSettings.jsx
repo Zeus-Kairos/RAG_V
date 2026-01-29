@@ -6,12 +6,15 @@ const ParserSettings = () => {
   const {
     parserSettings,
     updateParserFramework,
-    updateParserParams
+    updateParserParams,
+    resetParserParams
   } = useKnowledgebaseStore();
 
   // Handle framework change
   const handleFrameworkChange = (fileType, framework) => {
     updateParserFramework(fileType, framework);
+    // Reset parameters when framework changes
+    resetParserParams(fileType);
   };
 
   // Handle parameter change
