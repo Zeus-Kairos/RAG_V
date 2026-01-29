@@ -1,0 +1,58 @@
+{
+  "parsers": {
+    "pdf": {
+      "name": "PDF Parser",
+      "frameworks": [
+        {
+          "name": "markitdown",
+          "params": {}
+        },
+        {
+          "name": "unstructured",
+          "params": {}
+        },
+        {
+          "name": "pymupdf4llm",
+          "params": {
+            "detectLayout": {
+              "type": "boolean",
+              "default": true,
+              "label": "Detect Layout"
+            },
+            "useOcr": {
+              "type": "boolean",
+              "default": false,
+              "label": "Use OCR"
+            }
+          }
+        }
+      ]
+    },
+    "docx": {
+      "name": "DOCX Parser",
+      "frameworks": [
+        {
+          "name": "markitdown",
+          "params": {}
+        },
+        {
+          "name": "unstructured",
+          "params": {}
+        }
+      ]
+    },
+    "pptx": {
+      "name": "PPTX Parser",
+      "frameworks": [
+        {
+          "name": "markitdown",
+          "params": {}
+        },
+        {
+          "name": "unstructured",
+          "params": {}
+        }
+      ]
+    }
+  }
+}

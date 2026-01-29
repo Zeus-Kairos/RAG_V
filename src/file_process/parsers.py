@@ -22,7 +22,7 @@ class BaseParser:
     def create(cls, parser: str, params: Dict[str, Any] = {}) -> "BaseParser":
         if parser == "pymupdf4llm":
             return PymuPdfParser(params)
-        elif parser == "MarkitDown":
+        elif parser == "markitdown":
             return MarkitdownParser(params)
         elif parser == "unstructured":
             return UnstructuredParser(params)
