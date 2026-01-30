@@ -61,6 +61,21 @@ class ChunkingManager:
             # Create indexes for efficient queries
             cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_file_id ON chunks(file_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_chunk_run_id ON chunks(chunk_run_id)")
+            
+            # Create trigger to automatically delete chunk_run when all chunks are deleted
+            cur.execute("""
+                CREATE TRIGGER IF NOT EXISTS delete_empty_chunk_run
+                AFTER DELETE ON chunks
+                FOR EACH ROW
+                BEGIN
+                    DELETE FROM chunk_run
+                    WHERE id = OLD.chunk_run_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM chunks
+                          WHERE chunk_run_id = OLD.chunk_run_id
+                      );
+                END;
+            """)
 
             self.conn.commit()
         except Exception as e:
@@ -297,29 +312,6 @@ class ChunkingManager:
             return cur.rowcount
         except Exception as e:
             logger.error(f"Error deleting chunks by file ID: {e}")
-            raise
-    
-    def delete_chunks_by_chunk_run_id(self, chunk_run_id: int) -> int:
-        """
-        Delete all chunks for a specific chunk run.
-        
-        Args:
-            chunk_run_id: ID of the chunk run
-            
-        Returns:
-            The number of chunks deleted
-        """
-        try:
-            cur = self.conn.cursor()
-            cur.execute(
-                "DELETE FROM chunks WHERE chunk_run_id = ?",
-                (chunk_run_id,)
-            )
-            
-            self.conn.commit()
-            return cur.rowcount
-        except Exception as e:
-            logger.error(f"Error deleting chunks by chunk run ID: {e}")
             raise
     
     def delete_chunk_run(self, chunk_run_id: int) -> bool:
