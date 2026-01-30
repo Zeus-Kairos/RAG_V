@@ -6,11 +6,12 @@ import EmbeddingSettings from './EmbeddingSettings';
 import SplitterSettings from './SplitterSettings';
 import ParserSettings from './ParserSettings';
 import ChunkBrowser from './ChunkBrowser';
+import RetrievalBrowser from './RetrievalBrowser';
 import ErrorBoundary from './ErrorBoundary';
 
 function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
-  const [activeTab, setActiveTab] = useState('knowledgebase'); // 'chunk' or 'knowledgebase'
+  const [activeTab, setActiveTab] = useState('knowledgebase'); // 'chunk', 'knowledgebase', or 'retrieval'
 
   // Initialize the app when it loads
   useEffect(() => {
@@ -32,7 +33,7 @@ function App() {
       <div className="sidebar">
         {activeTab === 'chunk' && <SplitterSettings />}
         {activeTab === 'knowledgebase' && <ParserSettings />}
-        {activeTab === 'chunk' && <EmbeddingSettings />}
+        {activeTab === 'retrieval' && <EmbeddingSettings />}
       </div>
       <div className="main-content">
         {/* Tab Navigation */}
@@ -49,6 +50,12 @@ function App() {
           >
             Chunk Browser
           </button>
+          <button 
+            className={`tab-btn ${activeTab === 'retrieval' ? 'active' : ''}`}
+            onClick={() => setActiveTab('retrieval')}
+          >
+            Retrieval Browser
+          </button>
         </div>
         
         {/* Tab Content */}
@@ -57,6 +64,11 @@ function App() {
           {activeTab === 'knowledgebase' && (
             <ErrorBoundary>
               <KnowledgebaseBrowser />
+            </ErrorBoundary>
+          )}
+          {activeTab === 'retrieval' && (
+            <ErrorBoundary>
+              <RetrievalBrowser />
             </ErrorBoundary>
           )}
         </div>
