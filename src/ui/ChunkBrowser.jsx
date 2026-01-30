@@ -232,7 +232,7 @@ const ChunkBrowser = () => {
             <button 
               className="chunk-browser-btn chunk-browser-btn-primary"
               onClick={handleRunChunking}
-              disabled={isRunning || (!activeKnowledgebase || activeKnowledgebase.file_count === 0)}
+              disabled={isRunning || (!activeKnowledgebase || activeKnowledgebase.parsed_file_count === 0)}
             >
               {isRunning ? 'Running...' : 'Run Chunking'}
             </button>
@@ -252,8 +252,8 @@ const ChunkBrowser = () => {
             </div>
             <div className="knowledge-meta">
               <div className="knowledge-meta-item">
-                <span className="meta-label">Files:</span>
-                <span className="meta-value">{activeKnowledgebase.file_count || 0}</span>
+                <span className="meta-label">Parsed Files:</span>
+                <span className="meta-value">{activeKnowledgebase.parsed_file_count || 0}</span>
               </div>
               <div className="knowledge-meta-item">
                 <span className="meta-label">Created:</span>

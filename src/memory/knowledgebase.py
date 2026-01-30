@@ -134,7 +134,7 @@ class KnowledgebaseManager:
             cur = self.conn.cursor()
             cur.execute("""
                 SELECT k.id, k.name, k.description, k.root_path, k.is_active, k.created_at, k.updated_at, 
-                       COUNT(CASE WHEN f.type = 'file' THEN 1 END) as file_count
+                       COUNT(CASE WHEN f.type = 'file' AND EXISTS (SELECT 1 FROM parsed p WHERE p.file_id = f.file_id) THEN 1 END) as parsed_file_count
                 FROM knowledgebase k
                 LEFT JOIN files f ON k.id = f.knowledgebase_id
                 GROUP BY k.id, k.name, k.description, k.root_path, k.is_active, k.created_at, k.updated_at
@@ -151,7 +151,7 @@ class KnowledgebaseManager:
                     "is_active": bool(row[4]),
                     "created_at": row[5],
                     "updated_at": row[6],
-                    "file_count": row[7]
+                    "parsed_file_count": row[7]
                 })
             return results
         except Exception as e:
