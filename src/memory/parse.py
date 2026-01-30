@@ -60,6 +60,22 @@ class ParserManager:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_parse_run_id ON parsed(parse_run_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_file_id ON parsed(file_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_parsed_is_active ON parsed(is_active)")
+            
+            # Create trigger to automatically delete parse_run when all parsed records are deleted
+            cur.execute("""
+                CREATE TRIGGER IF NOT EXISTS delete_empty_parse_run
+                AFTER DELETE ON parsed
+                FOR EACH ROW
+                BEGIN
+                    DELETE FROM parse_run
+                    WHERE id = OLD.parse_run_id
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM parsed
+                          WHERE parse_run_id = OLD.parse_run_id
+                      );
+                END;
+            """)
 
             self.conn.commit()
         except Exception as e:
@@ -364,22 +380,38 @@ class ParserManager:
                 raise ValueError(f"File with filepath {filepath} not found")
             
             file_id, file_type = file_info[0], file_info[1]
-   
-            # Delete the parse_run record. If the parse was run on this file_id, all children will be deleted as CASCADE
-            cur.execute(
-                "DELETE FROM parse_run WHERE id = ? AND file_id = ?",
-                (parse_run_id, file_id)
-            )
-            if cur.rowcount > 0:
-                self.conn.commit()
-                return True
                                  
             if file_type == 'file':
+                # Check if the parsed record being deleted is the active one
+                cur.execute(
+                    "SELECT is_active FROM parsed WHERE parse_run_id = ? AND file_id = ?",
+                    (parse_run_id, file_id)
+                )
+                parsed_record = cur.fetchone()
+                was_active = parsed_record and parsed_record[0]
+                
+                # Delete the parsed record
                 cur.execute(
                     "DELETE FROM parsed WHERE parse_run_id = ? AND file_id = ?",
                     (parse_run_id, file_id)
                 )
                 logger.info(f"Delete parsed record for file {filepath}")
+                
+                # If the deleted record was active, set the latest parsed record to active
+                if was_active:
+                    # Get the latest parsed record for this file
+                    cur.execute(
+                        "SELECT parse_id FROM parsed WHERE file_id = ? ORDER BY time DESC LIMIT 1",
+                        (file_id,)
+                    )
+                    latest_parsed = cur.fetchone()
+                    if latest_parsed:
+                        # Set the latest parsed record to active
+                        cur.execute(
+                            "UPDATE parsed SET is_active = 1 WHERE parse_id = ?",
+                            (latest_parsed[0],)
+                        )
+                        logger.info(f"Set latest parsed record {latest_parsed[0]} to active for file {filepath}")
             else:  # folder
                 # If it's a folder, delete all records with filepath under the folder with the parse_run_id
                 # Get all file_ids for files under this folder
@@ -391,12 +423,25 @@ class ParserManager:
                 windows_pattern = f"{filepath}\\%"
                 
                 cur.execute(
-                    "SELECT file_id FROM files WHERE (filepath = ? OR filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\')",
-                    (filepath, windows_pattern, unix_pattern)
+                    "SELECT file_id FROM files WHERE (filepath = ? OR filepath LIKE ? OR filepath LIKE ?)",
+                    (filepath, unix_pattern, windows_pattern)
                 )
                 folder_file_ids = [row[0] for row in cur.fetchall()]
                 
                 if folder_file_ids:
+                    # First, identify which files have the active parsed record being deleted
+                    files_with_active_deletion = []
+                    for file_id_in_folder in folder_file_ids:
+                        # Check if the parsed record being deleted is the active one
+                        cur.execute(
+                            "SELECT is_active FROM parsed WHERE parse_run_id = ? AND file_id = ?",
+                            (parse_run_id, file_id_in_folder)
+                        )
+                        parsed_record = cur.fetchone()
+                        was_active = parsed_record and parsed_record[0]
+                        if was_active:
+                            files_with_active_deletion.append(file_id_in_folder)
+                    
                     # Delete all parsed records for these files with the given parse_run_id
                     placeholders = ','.join('?' * len(folder_file_ids))
                     cur.execute(
@@ -404,6 +449,22 @@ class ParserManager:
                         (parse_run_id, *folder_file_ids)
                     )
                     logger.info(f"Delete {len(folder_file_ids)} parsed records under folder {filepath}")
+                    
+                    # For files where the deleted record was active, set the latest remaining parsed record to active
+                    for file_id_in_folder in files_with_active_deletion:
+                        # Get the latest parsed record for this file
+                        cur.execute(
+                            "SELECT parse_run_id FROM parsed WHERE file_id = ? ORDER BY time DESC LIMIT 1",
+                            (file_id_in_folder,)
+                        )
+                        latest_parsed = cur.fetchone()
+                        if latest_parsed:
+                            # Set the latest parsed record to active
+                            cur.execute(
+                                "UPDATE parsed SET is_active = 1 WHERE parse_run_id = ? AND file_id = ?",
+                                (latest_parsed[0], file_id_in_folder)
+                            )
+                            logger.info(f"Set latest parsed record {latest_parsed[0]} to active for file with id {file_id_in_folder}")
             
             self.conn.commit()
             return True

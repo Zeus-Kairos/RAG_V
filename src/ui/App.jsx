@@ -6,6 +6,7 @@ import EmbeddingSettings from './EmbeddingSettings';
 import SplitterSettings from './SplitterSettings';
 import ParserSettings from './ParserSettings';
 import ChunkBrowser from './ChunkBrowser';
+import ErrorBoundary from './ErrorBoundary';
 
 function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
@@ -53,7 +54,11 @@ function App() {
         {/* Tab Content */}
         <div className="tab-content">
           {activeTab === 'chunk' && <ChunkBrowser />}
-          {activeTab === 'knowledgebase' && <KnowledgebaseBrowser />}
+          {activeTab === 'knowledgebase' && (
+            <ErrorBoundary>
+              <KnowledgebaseBrowser />
+            </ErrorBoundary>
+          )}
         </div>
       </div>
     </div>

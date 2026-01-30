@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from './store';
 import useKnowledgebaseStore from './store';
 import ChunkRunHistoryPanel from './ChunkRunHistoryPanel';
@@ -19,8 +19,10 @@ const KnowledgebaseBrowser = () => {
   const [uploadResults, setUploadResults] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   // Refs for auto-scrolling
-  const uploadResultsListRef = React.useRef(null);
-  const uploadDialogBodyRef = React.useRef(null);
+  const uploadResultsListRef = useRef(null);
+  const uploadDialogBodyRef = useRef(null);
+  const parseResultsListRef = useRef(null);
+  const parseDialogBodyRef = useRef(null);
   // New state variables for knowledgebase management
   const [showCreateKBModal, setShowCreateKBModal] = useState(false);
   const [newKBName, setNewKBName] = useState('');
@@ -57,7 +59,6 @@ const KnowledgebaseBrowser = () => {
   const [parsingResults, setParsingResults] = useState([]);
   const [currentParsingItem, setCurrentParsingItem] = useState(null);
   const [currentParsingPath, setCurrentParsingPath] = useState('');
-  const [parseDialogBodyRef, setParseDialogBodyRef] = useState(null);
   // State for parse run popup
   const [showParseRunPopup, setShowParseRunPopup] = useState(false);
   const [selectedParseRun, setSelectedParseRun] = useState(null);
@@ -831,6 +832,19 @@ const KnowledgebaseBrowser = () => {
       uploadDialogBodyRef.current.scrollTop = uploadDialogBodyRef.current.scrollHeight;
     }
   }, [uploadResults]);
+  
+  // Auto-scroll to bottom when parsing results change
+  useEffect(() => {
+    // Scroll results list to bottom
+    if (parseResultsListRef.current) {
+      parseResultsListRef.current.scrollTop = parseResultsListRef.current.scrollHeight;
+    }
+    
+    // Scroll dialog body to bottom as well
+    if (parseDialogBodyRef.current) {
+      parseDialogBodyRef.current.scrollTop = parseDialogBodyRef.current.scrollHeight;
+    }
+  }, [parsingResults]);
 
   // Helper function to recursively process folder entries
   const processEntry = async (entry, basePath = '', fileList = [], folderList = []) => {
@@ -1777,7 +1791,7 @@ const KnowledgebaseBrowser = () => {
               {parsingResults.length > 0 && (
                 <div className="upload-results">
                   <p>Parsing Results:</p>
-                  <div className="upload-results-list">
+                  <div className="upload-results-list" ref={parseResultsListRef}>
                     {parsingResults.map((result, index) => {
                       // Skip folder results (no status key)
                       if (!result.status) {
