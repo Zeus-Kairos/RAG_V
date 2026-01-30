@@ -53,6 +53,7 @@ class ChunkingManager:
                     content TEXT NOT NULL,
                     metadata TEXT DEFAULT '{}',
                     FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE,
+                    FOREIGN KEY (parse_run_id) REFERENCES parse_run(id) ON DELETE CASCADE,
                     FOREIGN KEY (chunk_run_id) REFERENCES chunk_run(id) ON DELETE CASCADE
                 )
             """)

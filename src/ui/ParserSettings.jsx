@@ -103,7 +103,7 @@ const ParserSettings = () => {
               <label htmlFor={`${fileType}-framework`}>Framework:</label>
               <select
                 id={`${fileType}-framework`}
-                value={parserSettings[fileType]?.framework || parser.frameworks[0].name}
+                value={parserSettings[fileType]?.framework || parser.defaultFramework}
                 onChange={(e) => handleFrameworkChange(fileType, e.target.value)}
               >
                 {parser.frameworks.map(framework => (

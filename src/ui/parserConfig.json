@@ -2,6 +2,7 @@
   "parsers": {
     "pdf": {
       "name": "PDF Parser",
+      "defaultFramework": "pymupdf4llm",
       "frameworks": [
         {
           "name": "markitdown",
@@ -30,6 +31,7 @@
     },
     "docx": {
       "name": "DOCX Parser",
+      "defaultFramework": "markitdown",
       "frameworks": [
         {
           "name": "markitdown",
@@ -43,6 +45,7 @@
     },
     "pptx": {
       "name": "PPTX Parser",
+      "defaultFramework": "markitdown",
       "frameworks": [
         {
           "name": "markitdown",

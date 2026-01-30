@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 class BaseParser:
     """
-    PDF parsing module that converts PDF files to markdown format using pymupdf4llm.
+    File parsing module that converts files to markdown format using different parsers.
     """
     
     def parse(self, file_path: str) -> str:
@@ -27,7 +27,7 @@ class BaseParser:
         elif parser == "unstructured":
             return UnstructuredParser(params)
         elif parser == "default":
-            return PymuPdfParser(params)
+            return MarkitdownParser(params)
         else:
             raise ValueError(f"Unknown parser: {parser}")
             
@@ -64,9 +64,9 @@ class PymuPdfParser(BaseParser):
             show_progress=True,  # Displays a progress bar during processing.
             hdr_info=True,  # Optional, disables header detection logic.
             write_images=False,  # Saves images found in the document as files.
-            embed_images=True,  # Embeds images directly as base64 in markdown.
+            embed_images=False,  # Embeds images directly as base64 in markdown.
             # image_path=image_dir,
-            image_size_limit=0.05,  # Exclude small images below this size threshold.
+            image_size_limit=0.01,  # Exclude small images below this size threshold.
             force_text=True,  # Include text overlapping images/graphics.
             margins=0,  # Specify page margins for text extraction.
             table_strategy="lines_strict",  # Strategy for table detection.
@@ -85,10 +85,10 @@ class MarkitdownParser(BaseParser):
 
     def parse(self, file_path: str) -> str:
         """
-        Parse a PDF file and return the markdown content.
+        Parse a file and return the markdown content.
         
         Args:
-            file_path: Path to the PDF file to parse
+            file_path: Path to the file to parse
             
         Returns:
             Parsed markdown content as string
@@ -106,10 +106,10 @@ class UnstructuredParser(BaseParser):
     
     def parse(self, file_path: str) -> str:
         """
-        Parse a PDF file and return the markdown content.
+        Parse a file and return the markdown content.
         
         Args:
-            file_path: Path to the PDF file to parse
+            file_path: Path to the file to parse
             
         Returns:
             Parsed markdown content as string

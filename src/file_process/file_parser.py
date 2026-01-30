@@ -89,8 +89,12 @@ class FileParser:
             return 'html'
         elif extension in ['.pdf']:
             return 'pdf'
-        elif extension in ['.docx', '.pptx', '.xlsx']:
-            return 'markdownable'
+        elif extension in ['.docx']:
+            return 'docx'
+        elif extension in ['.pptx']:
+            return 'pptx'
+        elif extension in ['.xlsx']:
+            return 'xlsx'
         else:
             return 'unknown'
     
@@ -124,31 +128,20 @@ class FileParser:
             elif file_type == 'html':
                 content = self._read_file_with_encoding(file_path)
                 parsed_content = self._parse_html(content)
-            elif file_type == 'pdf':
-                if "pdf" in self.parser_params:
-                    parser = self.parser_params["pdf"].get("parser")
-                    params = self.parser_params["pdf"].get("parameters")
-                    parsed_content = self._parse_pdf(file_path, parser, params)
+            else:
+                if file_type in self.parser_params:
+                    parser = self.parser_params[file_type].get("parser")
+                    params = self.parser_params[file_type].get("parameters")
+                    parsed_content = self._parse_file(file_path, parser, params)
                 else:
-                    parsed_content = self._parse_pdf(file_path)
+                    parsed_content = self._parse_file(file_path)
                 # Check if we got a list of page chunks or a single string
                 if isinstance(parsed_content, list):
-                    logger.info(f"Parsed PDF content in {len(parsed_content)} pages")
+                    logger.info(f"Parsed file content in {len(parsed_content)} pages")
                     parsed_content = '\n\n'.join([page['text'] for page in parsed_content])
                 else:
                     # Single string case
-                    logger.info(f"Parsed PDF content")
-            elif file_type == 'markdownable':
-                # For binary files, don't read them directly as text
-                parsed_content = self._parse_markdownable(file_path)
-            else:
-                logger.warning(f"Unsupported file type for parsing: {file_path}")
-                return {
-                    'success': False,
-                    'content': None,
-                    'original_file': file_path,
-                    'error': f"Unsupported file type: {file_type}"
-                }
+                    logger.info(f"Parsed file content")
                             
             return {
                 'success': True,
@@ -204,23 +197,17 @@ class FileParser:
         # Convert to markdown using html2text
         return converter.handle(cleaned_html)
 
-    def _parse_pdf(self, file_path: str, parser: str = "default", params: Dict[str, Any] = {}) -> str:
+    def _parse_file(self, file_path: str, parser: str = "default", params: Dict[str, Any] = {}) -> str:
         """
-        Parse PDF content using the injected PdfParser.
+        Parse file content by using the injected Parser.
         """
 
-        pdf_parser = BaseParser.create(parser, params)
+        parser = BaseParser.create(parser, params)
 
-        logger.info(f"Using PDF parser: {pdf_parser.__class__.__name__}")
+        logger.info(f"Using parser: {parser.__class__.__name__}")
         
-        return pdf_parser.parse(file_path)
+        return parser.parse(file_path)
 
-
-    def _parse_markdownable(self, file_path: str) -> str:
-        """
-        Parse Markdownable content using MarkitDown.
-        """
-        return self.markdownable_parser.convert(file_path).text_content
     
     async def parse_batch(self, file_paths: List[str], save: bool = True) -> Dict[str, Any]:
         """

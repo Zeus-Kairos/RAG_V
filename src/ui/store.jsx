@@ -1,4 +1,20 @@
 import { create } from 'zustand';
+import parserConfig from './parserConfig.json';
+
+// Helper function to get default parameters for a framework
+const getDefaultParamsForFramework = (fileType, framework) => {
+  const parser = parserConfig.parsers[fileType];
+  if (!parser) return {};
+  
+  const frameworkConfig = parser.frameworks.find(f => f.name === framework);
+  if (!frameworkConfig || !frameworkConfig.params) return {};
+  
+  const defaultParams = {};
+  Object.entries(frameworkConfig.params).forEach(([paramName, paramConfig]) => {
+    defaultParams[paramName] = paramConfig.default;
+  });
+  return defaultParams;
+};
 
 // Helper function to get token from localStorage
 const getToken = () => {
@@ -99,19 +115,16 @@ const useKnowledgebaseStore = create((set, get) => {
     // Parser settings state
     parserSettings: {
       pdf: {
-        framework: 'pymupdf4llm',
-        params: {
-          detectLayout: true,
-          useOcr: false
-        }
+        framework: parserConfig.parsers.pdf.defaultFramework,
+        params: getDefaultParamsForFramework('pdf', parserConfig.parsers.pdf.defaultFramework)
       },
       docx: {
-        framework: 'MarkitDown',
-        params: {}
+        framework: parserConfig.parsers.docx.defaultFramework,
+        params: getDefaultParamsForFramework('docx', parserConfig.parsers.docx.defaultFramework)
       },
       pptx: {
-        framework: 'MarkitDown',
-        params: {}
+        framework: parserConfig.parsers.pptx.defaultFramework,
+        params: getDefaultParamsForFramework('pptx', parserConfig.parsers.pptx.defaultFramework)
       }
     },
 
@@ -654,19 +667,16 @@ const useKnowledgebaseStore = create((set, get) => {
         },
         parserSettings: {
           pdf: {
-            framework: 'pymupdf4llm',
-            params: {
-              detectLayout: true,
-              useOcr: false
-            }
+            framework: parserConfig.parsers.pdf.defaultFramework,
+            params: getDefaultParamsForFramework('pdf', parserConfig.parsers.pdf.defaultFramework)
           },
           docx: {
-            framework: 'MarkitDown',
-            params: {}
+            framework: parserConfig.parsers.docx.defaultFramework,
+            params: getDefaultParamsForFramework('docx', parserConfig.parsers.docx.defaultFramework)
           },
           pptx: {
-            framework: 'MarkitDown',
-            params: {}
+            framework: parserConfig.parsers.pptx.defaultFramework,
+            params: getDefaultParamsForFramework('pptx', parserConfig.parsers.pptx.defaultFramework)
           }
         },
         isLoading: false,
