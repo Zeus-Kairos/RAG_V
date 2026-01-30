@@ -1890,6 +1890,9 @@ const KnowledgebaseBrowser = () => {
         setSelectedFileId={setSelectedFileId}
         setSelectedFileName={setSelectedFileName}
         setShowChunkRunPanel={setShowChunkRunPanel}
+        directoryCache={directoryCache}
+        setDirectoryCache={setDirectoryCache}
+        directoryCacheRef={directoryCacheRef}
       />
 
       {/* Create Knowledgebase Modal */}

@@ -3,7 +3,7 @@ import { fetchWithAuth } from './store';
 
 const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoading, 
   setIsLoading, setError, knowledgebases, fetchDirectoryContents, currentPath, refreshFileBrowser, 
-  setSelectedFileId, setSelectedFileName, setShowChunkRunPanel }) => {
+  setSelectedFileId, setSelectedFileName, setShowChunkRunPanel, directoryCache, setDirectoryCache, directoryCacheRef }) => {
   // Delete a parse run
   const handleDeleteParseRun = async (parseRunId) => {
     setIsLoading(true);
@@ -16,14 +16,17 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
 
       // Construct the path for the DELETE endpoint
       let endpointUrl;
+      let fullPath = '';
+      
       if (item.name === 'Root' && item.type === 'folder') {
         // For root, use the endpoint without path parameter
         endpointUrl = `/api/parse-runs/${activeKB.name}/${parseRunId}`;
+        fullPath = '';
       } else {
         // For other items, construct the full path
         const pathSegments = [...currentPath.slice(1), item.name];
-        const path = pathSegments.map(segment => encodeURIComponent(segment)).join('/');
-        endpointUrl = `/api/parse-runs/${activeKB.name}/${parseRunId}/${path}`;
+        fullPath = pathSegments.map(segment => encodeURIComponent(segment)).join('/');
+        endpointUrl = `/api/parse-runs/${activeKB.name}/${parseRunId}/${fullPath}`;
       }
 
       const response = await fetchWithAuth(endpointUrl, {
@@ -33,6 +36,36 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Failed to delete parse run');
+      }
+
+      // Clear cache for the item and its subitems if it's a folder
+      if (item.type === 'folder' && directoryCache && setDirectoryCache && directoryCacheRef) {
+        // Build cache key prefix for the folder
+        const cachePrefix = `${activeKB.id}:${fullPath}`;
+        
+        // Function to recursively clear cache for this folder and all subfolders
+        const clearCacheRecursively = (cache) => {
+          const updatedCache = { ...cache };
+          Object.keys(updatedCache).forEach(key => {
+            // Delete if the key matches:
+            // 1. For root (fullPath is empty): all keys starting with `${activeKB.id}:`
+            // 2. For non-root: exact key match or keys starting with `${cachePrefix}/`
+            if (fullPath === '' && key.startsWith(cachePrefix)) {
+              // Root case: clear all keys for this knowledgebase
+              delete updatedCache[key];
+            } else if (key === cachePrefix || key.startsWith(`${cachePrefix}/`)) {
+              // Non-root case: clear exact match and subfolders
+              delete updatedCache[key];
+            }
+          });
+          return updatedCache;
+        };
+        
+        // Clear from state
+        setDirectoryCache(prev => clearCacheRecursively(prev));
+        
+        // Also clear from the ref immediately
+        directoryCacheRef.current = clearCacheRecursively(directoryCacheRef.current);
       }
 
       // Refresh current directory to show updated parse run info
