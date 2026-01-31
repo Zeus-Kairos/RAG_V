@@ -68,10 +68,25 @@ const EmbeddingSettings = () => {
     }
   };
   
-  const handleDeleteConfig = async (configId) => {
-    if (window.confirm('Are you sure you want to delete this embedding configuration?')) {
-      await deleteEmbeddingConfig(configId);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [configToDelete, setConfigToDelete] = useState(null);
+
+  const handleDeleteConfig = (configId) => {
+    setConfigToDelete(configId);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteConfig = async () => {
+    if (configToDelete) {
+      await deleteEmbeddingConfig(configToDelete);
+      setShowDeleteDialog(false);
+      setConfigToDelete(null);
     }
+  };
+
+  const cancelDeleteConfig = () => {
+    setShowDeleteDialog(false);
+    setConfigToDelete(null);
   };
   
   const handleSetActive = async (configId) => {
@@ -97,10 +112,11 @@ const EmbeddingSettings = () => {
       <div className="embedding-settings-header">
         <h3>Embedding Settings</h3>
         <button 
-          className="embedding-btn embedding-btn-primary"
+          className="embedding-icon-btn add"
           onClick={handleAddConfig}
+          title="Add Embedding Configuration"
         >
-          Add
+          +
         </button>
       </div>
       
@@ -112,39 +128,35 @@ const EmbeddingSettings = () => {
             <div 
               key={config.id} 
               className={`embedding-config-item ${activeEmbeddingConfig?.id === config.id ? 'active' : ''}`}
+              onClick={() => handleSetActive(config.id)}
             >
               <div className="embedding-config-header">
                 <div className="embedding-config-info">
                   <div className="embedding-config-name">{config.embedding_model}</div>
                   <div className="embedding-config-provider">{config.embedding_provider}</div>
                 </div>
-                <div className="embedding-config-status">
-                  {activeEmbeddingConfig?.id === config.id && (
-                    <span className="embedding-active-indicator">Active</span>
-                  )}
+                <div className="embedding-config-actions">
+                  <button 
+                    className="embedding-icon-btn edit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditConfig(config);
+                    }}
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    className="embedding-icon-btn delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteConfig(config.id);
+                    }}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
                 </div>
-              </div>
-              
-              <div className="embedding-config-actions">
-                <button 
-                  className="embedding-btn embedding-btn-secondary"
-                  onClick={() => handleSetActive(config.id)}
-                  disabled={activeEmbeddingConfig?.id === config.id}
-                >
-                  {activeEmbeddingConfig?.id === config.id ? 'Active' : 'Set Active'}
-                </button>
-                <button 
-                  className="embedding-btn embedding-btn-tertiary"
-                  onClick={() => handleEditConfig(config)}
-                >
-                  Edit
-                </button>
-                <button 
-                  className="embedding-btn embedding-btn-danger"
-                  onClick={() => handleDeleteConfig(config.id)}
-                >
-                  Delete
-                </button>
               </div>
             </div>
           ))
@@ -250,6 +262,42 @@ const EmbeddingSettings = () => {
                 onClick={handleSaveConfig}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="embedding-modal-overlay">
+          <div className="embedding-modal">
+            <div className="embedding-modal-header">
+              <h4>Delete Embedding Configuration</h4>
+              <button 
+                className="embedding-modal-close"
+                onClick={cancelDeleteConfig}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="embedding-modal-body">
+              <p>Are you sure you want to delete this embedding configuration?</p>
+            </div>
+            
+            <div className="embedding-modal-footer">
+              <button 
+                className="embedding-btn embedding-btn-secondary"
+                onClick={cancelDeleteConfig}
+              >
+                Cancel
+              </button>
+              <button 
+                className="embedding-btn embedding-btn-danger"
+                onClick={confirmDeleteConfig}
+              >
+                Delete
               </button>
             </div>
           </div>

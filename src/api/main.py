@@ -612,6 +612,27 @@ async def delete_chunk_run(
         logger.error(f"Error deleting chunk run: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to set active chunk run
+@app.patch("/api/chunk-runs/{run_id}/active")
+async def set_active_chunk_run(
+    run_id: int,
+    request: dict
+):
+    """Set a chunk run as active, deactivating all others for the same knowledgebase."""
+    try:
+        knowledgebase_id = request.get('knowledgebase_id')
+        if not knowledgebase_id:
+            raise HTTPException(status_code=400, detail="knowledgebase_id is required")
+        
+        memory_manager.chunking_manager.set_active_chunk_run(knowledgebase_id, run_id)
+        return {
+            "success": True,
+            "message": "Chunk run set as active successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error setting active chunk run: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint to get chunk runs by file_id
 @app.get("/api/chunk-runs/by-file/{file_id}")
 async def get_chunk_runs_by_file(

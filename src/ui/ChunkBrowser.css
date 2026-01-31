@@ -238,6 +238,34 @@
   transform: none;
 }
 
+.chunk-run-set-active-btn {
+  background: none;
+  border: 1px solid #4caf50;
+  font-size: 12px;
+  cursor: pointer;
+  color: #4caf50;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  margin-right: 6px;
+}
+
+.chunk-run-set-active-btn:hover {
+  background-color: rgba(76, 175, 80, 0.1);
+  transform: scale(1.05);
+}
+
+.chunk-run-set-active-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.chunk-run-set-active-btn.active {
+  background-color: rgba(76, 175, 80, 0.2);
+  font-weight: bold;
+}
+
 .chunk-run-params {
   display: flex;
   flex-wrap: wrap;

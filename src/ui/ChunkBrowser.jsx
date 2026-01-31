@@ -215,6 +215,15 @@ const ChunkBrowser = () => {
     <div className="chunk-browser">
       <div className="chunk-browser-header">
         <div className="chunk-browser-controls">
+          <div className="chunk-browser-actions">
+            <button 
+              className="chunk-browser-btn chunk-browser-btn-primary"
+              onClick={handleRunChunking}
+              disabled={isRunning || (!activeKnowledgebase || activeKnowledgebase.parsed_file_count === 0)}
+            >
+              {isRunning ? 'Running...' : 'Run Chunking'}
+            </button>
+          </div>
           <div className="framework-selection">
             <label htmlFor="framework-select">Framework:</label>
             <select
@@ -227,15 +236,6 @@ const ChunkBrowser = () => {
               <option value="langchain">Langchain</option>
               <option value="chonkie">Chonkie</option>
             </select>
-          </div>
-          <div className="chunk-browser-actions">
-            <button 
-              className="chunk-browser-btn chunk-browser-btn-primary"
-              onClick={handleRunChunking}
-              disabled={isRunning || (!activeKnowledgebase || activeKnowledgebase.parsed_file_count === 0)}
-            >
-              {isRunning ? 'Running...' : 'Run Chunking'}
-            </button>
           </div>
         </div>
         {error && <div className="error-message">{error}</div>}

@@ -37,6 +37,8 @@ class ChunkingManager:
                     knowledgebase_id INTEGER NOT NULL,
                     framework TEXT DEFAULT 'langchain',
                     parameters TEXT DEFAULT '{}',
+                    is_active INTEGER DEFAULT 1,
+                    in_sync INTEGER DEFAULT 1,
                     run_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE
                 )
@@ -88,10 +90,8 @@ class ChunkingManager:
         
         Args:
             knowledgebase_id: ID of the knowledgebase associated with this chunk run
-            markdown_header_splitting: Whether markdown header splitting is enabled
-            recursive_splitting: Whether recursive splitting is enabled
-            markdown_header_splitting_parameters: Markdown header splitting parameters as a dict
-            recursive_splitting_parameters: Recursive splitting parameters as a dict
+            framework: Framework name for chunk processing
+            chunk_parameters: Parameters for chunk processing as a dict
             
         Returns:
             The created chunk_run ID
@@ -101,9 +101,16 @@ class ChunkingManager:
             
             params_json = json.dumps(chunk_parameters)
             
+            # deactivate existing chunk run
             cur.execute(
-                "INSERT INTO chunk_run (knowledgebase_id, framework, parameters) VALUES (?, ?, ?)",
-                (knowledgebase_id, framework, params_json)
+                "UPDATE chunk_run SET is_active = 0 WHERE knowledgebase_id = ?",
+                (knowledgebase_id,)
+            )
+            self.conn.commit()
+
+            cur.execute(
+                "INSERT INTO chunk_run (knowledgebase_id, framework, parameters, is_active, in_sync) VALUES (?, ?, ?, ?, ?)",
+                (knowledgebase_id, framework, params_json, 1, 1)
             )
             chunk_run_id = cur.lastrowid
             self.conn.commit()
@@ -125,7 +132,7 @@ class ChunkingManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT id, knowledgebase_id, framework, parameters, run_time FROM chunk_run WHERE id = ?",
+                "SELECT id, knowledgebase_id, framework, parameters, is_active, in_sync, run_time FROM chunk_run WHERE id = ?",
                 (chunk_run_id,)
             )
             row = cur.fetchone()
@@ -135,34 +142,66 @@ class ChunkingManager:
                     "knowledgebase_id": row[1],
                     "framework": row[2],
                     "parameters": json.loads(row[3]),
-                    "run_time": row[4]
+                    "is_active": row[4],
+                    "in_sync": row[5],
+                    "run_time": row[6]
                 }
             return None
         except Exception as e:
             logger.error(f"Error getting chunk processing config: {e}")
             raise
-    
-    def get_latest_chunk_run_config(self, knowledgebase_id: int = None) -> dict:
+
+    def set_active_chunk_run(self, knowledgebase_id: int, chunk_run_id: int) -> None:
         """
-        Get the latest chunk run configuration.
+        Set the active chunk run configuration.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase associated with this chunk run
+            chunk_run_id: ID of the chunk_run record to set as active
+            
+        Returns:
+            None
+        """
+        try:
+            cur = self.conn.cursor()
+            
+            # deactivate existing chunk run
+            cur.execute(
+                "UPDATE chunk_run SET is_active = 0 WHERE knowledgebase_id = ?",
+                (knowledgebase_id,)
+            )
+            self.conn.commit()
+            
+            cur.execute(
+                "UPDATE chunk_run SET is_active = 1 WHERE id = ?",
+                (chunk_run_id,)
+            )
+            self.conn.commit()
+        except Exception as e:
+            logger.error(f"Error setting active chunk processing config: {e}")
+            raise
+    
+    def get_active_chunk_run_config(self, knowledgebase_id: int = None) -> dict:
+        """
+        Get the active chunk run configuration.
         
         Args:
             knowledgebase_id: Optional knowledgebase ID to filter by
             
         Returns:
-            Latest chunk run configuration if found, None otherwise
+            Active chunk run configuration if found, None otherwise
         """
         try:
             cur = self.conn.cursor()
             
             if knowledgebase_id:
                 cur.execute(
-                    "SELECT id, knowledgebase_id, framework, parameters, run_time FROM chunk_run WHERE knowledgebase_id = ? ORDER BY id DESC LIMIT 1",
+                    "SELECT id, knowledgebase_id, framework, parameters, is_active, in_sync, run_time FROM chunk_run WHERE knowledgebase_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1",
                     (knowledgebase_id,)
                 )
             else:
                 cur.execute(
-                    "SELECT id, knowledgebase_id, framework, parameters, run_time FROM chunk_run ORDER BY id DESC LIMIT 1"
+                    "SELECT id, knowledgebase_id, framework, parameters, is_active, in_sync, run_time FROM chunk_run WHERE is_active = 1 ORDER BY id DESC LIMIT 1"
                 )
             
             row = cur.fetchone()
@@ -172,11 +211,13 @@ class ChunkingManager:
                     "knowledgebase_id": row[1],
                     "framework": row[2],
                     "parameters": json.loads(row[3]),
-                    "run_time": row[4]
+                    "is_active": row[4],
+                    "in_sync": row[5],
+                    "run_time": row[6]
                 }
             return None
         except Exception as e:
-            logger.error(f"Error getting latest chunk processing config: {e}")
+            logger.error(f"Error getting active chunk processing config: {e}")
             raise
     
     def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:

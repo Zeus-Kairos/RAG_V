@@ -964,6 +964,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       const data = await response.json();
       if (data.success) {
         setChunkRuns(data.chunk_runs);
+        // Select all chunk runs by default
+        setSelectedChunkRuns(new Set(data.chunk_runs.map(run => run.id)));
       }
     } catch (err) {
       console.error('Error fetching chunk runs:', err);

@@ -279,9 +279,29 @@ class MemoryManager:
         """
         try:
             cur = self.conn.cursor()
+            
+            # Check if the record being deleted is active
+            cur.execute("SELECT is_active FROM embedding_configure WHERE id = ?", (id,))
+            record = cur.fetchone()
+            is_active_record = record and record[0] == 1
+            
+            # Delete the record
             cur.execute("DELETE FROM embedding_configure WHERE id = ?", (id,))
+            delete_success = cur.rowcount > 0
+            
+            # If we deleted an active record, set the first remaining record to active
+            if delete_success and is_active_record:
+                # Get all remaining records
+                cur.execute("SELECT id FROM embedding_configure")
+                remaining_records = cur.fetchall()
+                
+                if remaining_records:
+                    # Set the first remaining record as active
+                    first_record_id = remaining_records[0][0]
+                    cur.execute("UPDATE embedding_configure SET is_active = 1 WHERE id = ?", (first_record_id,))
+            
             self.conn.commit()
-            return cur.rowcount > 0
+            return delete_success
         except Exception as e:
             logger.error(f"Error deleting configuration: {e}")
             return False
