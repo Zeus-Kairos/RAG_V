@@ -39,12 +39,18 @@ def get_indexer(knowledge_base: str, embedding_config_id: str = None) -> Indexer
     """Get or create an Indexer for the given knowledge base."""
     if embedding_config_id is None:
         # Get active config if none specified
-        active_config = memory_manager.get_active_embedding_configuration()
+        active_config = memory_manager.embedding_manager.get_active_embedding_configuration()
         if active_config:
             embedding_config_id = active_config['id']
         else:
             raise HTTPException(status_code=400, detail="No active embedding configuration found")
-    indexer_key = f"{knowledge_base}_{embedding_config_id}"
+    active_chunk_run = memory_manager.chunking_manager.get_active_chunk_run_config(knowledge_base)
+    if active_chunk_run:
+        active_chunk_run_id = active_chunk_run['id']
+    else:
+        return None
+
+    indexer_key = f"{knowledge_base}_{active_chunk_run_id}_{embedding_config_id}"
     if indexer_key not in indexers:
         indexers[indexer_key] = Indexer(embedding_config_id, get_index_path(knowledge_base, embedding_config_id))
     return indexers[indexer_key]
@@ -104,12 +110,12 @@ async def lifespan(app: FastAPI):
 async def update_embedding_configuration(config_data: ConfigUpdate):
     """Update embedding configuration settings."""
     try:
-        updated_config = memory_manager.update_embedding_configuration(
+        updated_config = memory_manager.embedding_manager.update_embedding_configuration(
             id=config_data.id,
             embedding_base_url=config_data.embedding_base_url,
             embedding_provider=config_data.embedding_provider,
             embedding_api_key=config_data.embedding_api_key,
-            embedding_model=config_data.embedding_model,                     
+            embedding_model=config_data.embedding_model,                      
         )       
         
         return {
@@ -127,7 +133,7 @@ async def get_embedding_configuration():
     """Get embedding configuration settings."""
     try:
         # Get all embedding configurations
-        all_configs = memory_manager.get_all_embedding_configurations()
+        all_configs = memory_manager.embedding_manager.get_all_embedding_configurations()
         # Find the active config from the list using the is_active flag
         active_config = next((config for config in all_configs if config['is_active'] == 1), None)
         
@@ -145,7 +151,7 @@ async def get_embedding_configuration():
 async def set_active_embedding_configuration(config_id: str):
     """Set an embedding configuration as active, deactivating all others."""
     try:
-        updated_config = memory_manager.set_active_embedding_configuration(config_id)
+        updated_config = memory_manager.embedding_manager.set_active_embedding_configuration(config_id)
         return {
             "success": True,
             "message": "Embedding configuration set as active successfully",
@@ -160,7 +166,7 @@ async def set_active_embedding_configuration(config_id: str):
 async def delete_embedding_configuration(config_id: str):
     """Delete an embedding configuration by ID."""
     try:
-        success = memory_manager.delete_embedding_configuration(config_id)
+        success = memory_manager.embedding_manager.delete_embedding_configuration(config_id)
         if success:
             return {
                 "success": True,
