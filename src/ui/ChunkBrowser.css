@@ -178,6 +178,12 @@
   border-color: #4caf50;
 }
 
+.chunk-run-item.active {
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  background-color: rgba(76, 175, 80, 0.05);
+}
+
 .chunk-run-header {
   display: flex;
   justify-content: space-between;

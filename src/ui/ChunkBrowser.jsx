@@ -210,6 +210,37 @@ const ChunkBrowser = () => {
       setIsLoading(false);
     }
   };
+
+  // Set active chunk run
+  const handleSetActiveChunkRun = async (runId) => {
+    try {
+      if (!activeKnowledgebase) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`http://localhost:8000/api/chunk-runs/${runId}/active`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ knowledgebase_id: activeKnowledgebase.id })
+      });
+      
+      if (response.ok) {
+        // Refresh chunk runs to show updated active status
+        fetchChunkRuns(activeKnowledgebase.id);
+      } else {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to set active chunk run');
+      }
+    } catch (err) {
+      console.error('Error setting active chunk run:', err);
+      setError('Failed to set active chunk run');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   return (
     <div className="chunk-browser">
@@ -271,13 +302,21 @@ const ChunkBrowser = () => {
           ) : chunkRuns.length > 0 ? (
             <div className="chunk-run-list">
               {chunkRuns.map(run => (
-                <div key={run.id} className="chunk-run-item">
+                <div key={run.id} className={`chunk-run-item ${run.is_active ? 'active' : ''}`}>
                   <div className="chunk-run-header">
                     <div className="chunk-run-header-left">
                       <span className="chunk-run-framework">{run.framework}</span>
                       <span className="chunk-run-time">{formatDateTime(run.run_time)}</span>
                     </div>
                     <div className="chunk-run-header-actions">
+                      <button 
+                        className={`chunk-run-set-active-btn ${run.is_active ? 'active' : ''}`}
+                        onClick={() => handleSetActiveChunkRun(run.id)}
+                        disabled={isLoading}
+                        title="Set as active chunk run"
+                      >
+                        {run.is_active ? '✓ Active' : 'Set Active'}
+                      </button>
                       <button 
                         className="chunk-run-delete-btn"
                         onClick={() => deleteChunkRun(run.id)}

@@ -738,12 +738,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     ];
 
     if (hasChunkRuns) {
-      // Create mappings from runId to run parameters and framework
+      // Create mappings from runId to run parameters, framework, and active status
       const runParamsMap = new Map();
       const runFrameworkMap = new Map();
+      const runActiveMap = new Map();
       chunkRuns.forEach(run => {
         runParamsMap.set(run.id, run.parameters);
         runFrameworkMap.set(run.id, run.framework);
+        runActiveMap.set(run.id, run.is_active);
       });
       
       // Create framework-to-color mapping for consistent coloring
@@ -816,12 +818,18 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         const framework = runFrameworkMap.get(parseInt(runId));
         const baseColor = frameworkColors.get(framework);
         const runParams = runParamsMap.get(parseInt(runId));
+        const isActive = runActiveMap.get(parseInt(runId));
         const formattedParams = formatParamsForDisplay(runParams);
+        
+        const activeTag = isActive ? '<span style="background-color: rgba(76, 175, 80, 0.1); color: #4caf50; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px; border: 1px solid #4caf50;">Active</span>' : '';
         
         html += `
           <div class="run-column">
             <div class="run-header">
-              <div style="margin-bottom: 5px; font-weight: bold;">Chunk Run ID: ${runId} (${runChunks.length} chunks)</div>
+              <div style="margin-bottom: 5px; font-weight: bold; display: flex; align-items: center;">
+                <span>Chunk Run ID: ${runId} (${runChunks.length} chunks)</span>
+                ${activeTag}
+              </div>
               <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word;">Framework: <span style="background-color: ${baseColor}; color: white; padding: 2px 6px; border-radius: 3px; font-weight: bold; opacity: 0.8;">${framework}</span></div>
               <div style="font-size: 12px; color: #666; white-space: pre-wrap; max-width: 100%; overflow-wrap: break-word; margin-top: 4px;">${formattedParams || 'No parameters available'}</div>
             </div>
@@ -1117,7 +1125,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             {chunkRuns.length > 0 ? (
               <div className="chunk-run-list">
                 {chunkRuns.map(run => (
-                  <div key={run.id} className="chunk-run-item">
+                  <div key={run.id} className={`chunk-run-item ${run.is_active ? 'active' : ''}`}>
                     <div className="chunk-run-header">
                       <div className="chunk-run-header-left">
                         <input

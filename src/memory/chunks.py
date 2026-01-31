@@ -371,14 +371,30 @@ class ChunkingManager:
             # Start a transaction
             cur.execute("BEGIN TRANSACTION")
             
-            # Delete chunks first (foreign key constraint will handle this automatically)
-            # Then delete the chunk_run record
+            # if the active chunk run is the one to be deleted, set the latest chunk run in the same knowledgebase as active
+            chunk_run_to_delete = self.get_chunk_run_config(chunk_run_id)
+            knowledgebase_id = chunk_run_to_delete["knowledgebase_id"]
             cur.execute(
                 "DELETE FROM chunk_run WHERE id = ?",
                 (chunk_run_id,)
             )
-            
-            if cur.rowcount > 0:
+            delete_success = cur.rowcount > 0
+
+            if delete_success and chunk_run_to_delete["is_active"]:
+                # First get the latest chunk run ID for this knowledgebase
+                cur.execute(
+                    "SELECT id FROM chunk_run WHERE knowledgebase_id = ? ORDER BY id DESC LIMIT 1",
+                    (knowledgebase_id,)
+                )
+                latest_run = cur.fetchone()
+                if latest_run:
+                    # Then update it to be active
+                    cur.execute(
+                        "UPDATE chunk_run SET is_active = 1 WHERE id = ?",
+                        (latest_run[0],)
+                    )
+                        
+            if delete_success:
                 # Commit the transaction
                 self.conn.commit()
                 return True
@@ -405,7 +421,7 @@ class ChunkingManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT id, knowledgebase_id, framework, parameters, run_time FROM chunk_run WHERE knowledgebase_id = ? ORDER BY run_time DESC",
+                "SELECT id, knowledgebase_id, framework, parameters, is_active, in_sync, run_time FROM chunk_run WHERE knowledgebase_id = ? ORDER BY run_time DESC",
                 (knowledgebase_id,)
             )
             
@@ -416,7 +432,9 @@ class ChunkingManager:
                     "knowledgebase_id": row[1],
                     "framework": row[2],
                     "parameters": json.loads(row[3]),
-                    "run_time": row[4]
+                    "is_active": row[4],
+                    "in_sync": row[5],
+                    "run_time": row[6]
                 })
             
             return chunk_runs
@@ -437,7 +455,7 @@ class ChunkingManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT DISTINCT chunk_run.id, chunk_run.knowledgebase_id, chunk_run.framework, chunk_run.parameters, chunk_run.run_time "
+                "SELECT DISTINCT chunk_run.id, chunk_run.knowledgebase_id, chunk_run.framework, chunk_run.parameters, chunk_run.is_active, chunk_run.in_sync, chunk_run.run_time "
                 "FROM chunk_run "
                 "JOIN chunks ON chunk_run.id = chunks.chunk_run_id "
                 "JOIN parsed ON chunks.parse_run_id = parsed.parse_run_id AND chunks.file_id = parsed.file_id AND parsed.is_active = 1 "
@@ -453,7 +471,9 @@ class ChunkingManager:
                     "knowledgebase_id": row[1],
                     "framework": row[2],
                     "parameters": json.loads(row[3]),
-                    "run_time": row[4]
+                    "is_active": row[4],
+                    "in_sync": row[5],
+                    "run_time": row[6]
                 })
             
             return chunk_runs
