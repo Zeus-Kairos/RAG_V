@@ -3,6 +3,78 @@ import useKnowledgebaseStore from './store';
 import './ParserSettings.css';
 import parserConfig from './parserConfig.json';
 
+// Custom select component for frameworks with color indicators
+const FrameworkSelect = ({ fileType, parser, value, onChange }) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  
+  const handleSelect = (frameworkName) => {
+    onChange(frameworkName);
+    setIsOpen(false);
+  };
+  
+  const selectedFramework = parser.frameworks.find(f => f.name === value);
+  
+  return (
+    <div className="custom-select-container">
+      <div 
+        className="custom-select-selected"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {selectedFramework && (
+          <>
+            {/* Color indicator for selected framework */}
+            <span className="framework-color-indicator" style={{ 
+              display: 'inline-block', 
+              width: '12px', 
+              height: '12px', 
+              borderRadius: '50%', 
+              backgroundColor: (() => {
+                const hash = selectedFramework.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const hue = hash % 360;
+                return `hsl(${hue}, 70%, 60%)`;
+              })(), 
+              marginRight: '8px',
+              verticalAlign: 'middle'
+            }} />
+            <span>{selectedFramework.name}</span>
+          </>
+        )}
+        <span className="custom-select-arrow">▼</span>
+      </div>
+      {isOpen && (
+        <div className="custom-select-dropdown">
+          {parser.frameworks.map(framework => {
+            // Generate color based on framework name using the same logic as in KnowledgebaseBrowser
+            const hash = framework.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const hue = hash % 360;
+            const color = `hsl(${hue}, 70%, 60%)`;
+            
+            return (
+              <div 
+                key={framework.name}
+                className={`custom-select-option ${value === framework.name ? 'selected' : ''}`}
+                onClick={() => handleSelect(framework.name)}
+              >
+                <span className="framework-color-indicator" style={{ 
+                  display: 'inline-block', 
+                  width: '12px', 
+                  height: '12px', 
+                  borderRadius: '50%', 
+                  backgroundColor: color, 
+                  marginRight: '8px',
+                  verticalAlign: 'middle'
+                }}>
+                </span>
+                <span>{framework.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ParserSettings = () => {
   const {
     parserSettings,
@@ -93,46 +165,43 @@ const ParserSettings = () => {
         <h3>Parser Settings</h3>
       </div>
 
-      {Object.entries(parserConfig.parsers).map(([fileType, parser]) => (
-        <div key={fileType} className="parser-section">
-          <div className="parser-section-header">
-            <h4>{parser.name}</h4>
-          </div>
-          <div className="parser-section-content">
-            <div className="param-group">
-              <label htmlFor={`${fileType}-framework`}>Framework:</label>
-              <select
-                id={`${fileType}-framework`}
-                value={parserSettings[fileType]?.framework || parser.defaultFramework}
-                onChange={(e) => handleFrameworkChange(fileType, e.target.value)}
-              >
-                {parser.frameworks.map(framework => (
-                  <option key={framework.name} value={framework.name}>
-                    {framework.name}
-                  </option>
-                ))}
-              </select>
+      {Object.entries(parserConfig.parsers).map(([fileType, parser]) => {
+        return (
+          <div key={fileType} className="parser-section">
+            <div className="parser-section-header">
+              <h4>{parser.name}</h4>
             </div>
-
-            {/* Framework specific parameters */}
-            {parserSettings[fileType]?.framework && (
-              <div className="params-subsection">
-                {parser.frameworks
-                  .find(f => f.name === parserSettings[fileType].framework)
-                  ?.params && Object.entries(
-                    parser.frameworks
-                      .find(f => f.name === parserSettings[fileType].framework)
-                      .params
-                  ).map(([paramName, paramConfig]) => (
-                    <div key={paramName}>
-                      {renderParamInput(fileType, paramName, paramConfig)}
-                    </div>
-                  ))}
+            <div className="parser-section-content">
+              <div className="param-group">
+                <label htmlFor={`${fileType}-framework`}>Framework:</label>
+                <FrameworkSelect
+                  fileType={fileType}
+                  parser={parser}
+                  value={parserSettings[fileType]?.framework || parser.defaultFramework}
+                  onChange={(framework) => handleFrameworkChange(fileType, framework)}
+                />
               </div>
-            )}
+
+              {/* Framework specific parameters */}
+              {parserSettings[fileType]?.framework && (
+                <div className="params-subsection">
+                  {parser.frameworks
+                    .find(f => f.name === parserSettings[fileType].framework)
+                    ?.params && Object.entries(
+                      parser.frameworks
+                        .find(f => f.name === parserSettings[fileType].framework)
+                        .params
+                    ).map(([paramName, paramConfig]) => (
+                      <div key={paramName}>
+                        {renderParamInput(fileType, paramName, paramConfig)}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

@@ -22,8 +22,9 @@
   border: 1px solid #e0e0e0;
   border-radius: 6px;
   margin-bottom: 12px;
-  overflow: hidden;
 }
+
+
 
 .parser-section:last-child {
   margin-bottom: 0;
@@ -68,16 +69,7 @@
   color: #666;
 }
 
-.param-group select {
-  padding: 6px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 13px;
-  background-color: white;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-  width: 100%;
-}
+
 
 /* Checkbox Parameter Styles - match SplitterSettings */
 .param-group.checkbox {
@@ -101,4 +93,92 @@
   width: 16px;
   height: 16px;
   accent-color: #4a6cf7;
+}
+
+/* Custom Select Container */
+.custom-select-container {
+  position: relative;
+  width: 100%;
+  font-size: 13px;
+}
+
+/* Selected Option */
+.custom-select-selected {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.custom-select-selected:hover {
+  border-color: #4a6cf7;
+}
+
+.custom-select-selected:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.1);
+}
+
+/* Select Arrow */
+.custom-select-arrow {
+  font-size: 10px;
+  color: #666;
+  margin-left: 8px;
+  transition: transform 0.2s ease;
+}
+
+.custom-select-container.open .custom-select-arrow {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.custom-select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Dropdown Options */
+.custom-select-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-select-option:hover {
+  background-color: #f5f5f5;
+}
+
+.custom-select-option.selected {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+/* Framework Color Indicator */
+.framework-color-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
