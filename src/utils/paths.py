@@ -27,7 +27,7 @@ def get_upload_dir(user_id: int, knowledge_base: str, directory: str) -> str:
     return os.path.join(BASE_UPLOAD_DIR, str(user_id), knowledge_base, "origin", *parts)
 
 
-def get_index_path(knowledgebase_name: str, embedding_config_id: str) -> str:
+def get_index_path(knowledgebase_name: str, chunk_run_id:int, embedding_config_id: str) -> str:
     """Generate a unique index path for the given knowledgebase_name.
     
     Args:
@@ -37,7 +37,7 @@ def get_index_path(knowledgebase_name: str, embedding_config_id: str) -> str:
     Returns:
         Unique index path as a string
     """
-    return f"./index/{knowledgebase_name}/{embedding_config_id}"
+    return f"./index/{knowledgebase_name}/{chunk_run_id}_{embedding_config_id}"
 
 def get_relative_path_from_origin(folder: str) -> str:
     """Get the relative path from the origin folder.

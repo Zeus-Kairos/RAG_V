@@ -35,7 +35,7 @@ memory_manager = MemoryManager()
 
 indexers = {}
 
-def get_indexer(knowledge_base: str, embedding_config_id: str = None) -> Indexer:
+def get_indexer(knowledge_base: str, chunk_run_id: int = None, embedding_config_id: str = None) -> Indexer:
     """Get or create an Indexer for the given knowledge base."""
     if embedding_config_id is None:
         # Get active config if none specified
@@ -44,15 +44,16 @@ def get_indexer(knowledge_base: str, embedding_config_id: str = None) -> Indexer
             embedding_config_id = active_config['id']
         else:
             raise HTTPException(status_code=400, detail="No active embedding configuration found")
-    active_chunk_run = memory_manager.chunking_manager.get_active_chunk_run_config(knowledge_base)
-    if active_chunk_run:
-        active_chunk_run_id = active_chunk_run['id']
-    else:
-        return None
+    if chunk_run_id is None:
+        active_chunk_run = memory_manager.chunking_manager.get_active_chunk_run_config(knowledge_base)
+        if active_chunk_run:
+            chunk_run_id = active_chunk_run['id']
+        else:
+            return None
 
-    indexer_key = f"{knowledge_base}_{active_chunk_run_id}_{embedding_config_id}"
+    indexer_key = f"{knowledge_base}_{chunk_run_id}_{embedding_config_id}"
     if indexer_key not in indexers:
-        indexers[indexer_key] = Indexer(embedding_config_id, get_index_path(knowledge_base, embedding_config_id))
+        indexers[indexer_key] = Indexer(embedding_config_id, get_index_path(knowledge_base, chunk_run_id, embedding_config_id))
     return indexers[indexer_key]
 
 @asynccontextmanager
@@ -501,8 +502,6 @@ async def stream_upload_files(
 ):
     """Upload one or more files to a knowledge base and stream results as they complete."""
     try:        
-        # indexer = get_indexer(knowledge_base)
-        # pipeline = ParallelFileProcessingPipeline(indexer, memory_manager)
         pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
         
         async def generate():
@@ -513,6 +512,61 @@ async def stream_upload_files(
     except Exception as e:
         logger.exception(f"Error in stream uploading: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/index-files/{kb_name}/{chunk_run_id}/{embedding_config_id}")
+async def index_files(kb_name: str, chunk_run_id: int, embedding_config_id: str):
+    """Index files in a knowledgebase."""
+    try:
+        indexer = get_indexer(kb_name, chunk_run_id, embedding_config_id)
+        pipeline = ParallelFileProcessingPipeline(memory_manager=memory_manager)
+        async def generate():
+            async for result in pipeline.index_all_chunks(indexer, chunk_run_id, embedding_config_id):
+                yield json.dumps(result) + "\n"
+
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
+    except Exception as e:
+        logger.exception(f"Error indexing chunks: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/index-runs/{kb_id}")
+async def get_index_runs(kb_id: int):
+    """Get index runs for a knowledgebase."""
+    try:
+        index_runs = memory_manager.index_manager.get_index_runs_by_knowledgebase_id(kb_id)
+        logger.info(f"{len(index_runs)} index runs for knowledgebase {kb_id}")
+        return {
+            "success": True,
+            "index_runs": index_runs
+        }
+    except Exception as e:
+        logger.exception(f"Error getting index runs: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to delete an index run by ID
+@app.delete("/api/index-runs/{kb_name}/{index_run_id}")
+async def delete_index_run(kb_name: str, index_run_id: int):
+    """Delete an index run by ID."""
+    try:
+        index_run = memory_manager.index_manager.get_index_run_by_id(index_run_id)
+        chunk_run_id = index_run["chunk_run_id"]
+        embedding_config_id = index_run["embedding_configure_id"]
+        indexer = get_indexer(kb_name, chunk_run_id, embedding_config_id)
+        indexer.delete_file_chunks(save=True)
+
+        success = memory_manager.index_manager.delete_index_run(index_run_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Index run deleted successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to delete index run"
+        }
+    except Exception as e:
+        logger.error(f"Error deleting index run: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 # API endpoint for parsing file or folder by path (with path parameter)
 @app.post("/api/parse-files/{kb_name}/{path:path}")

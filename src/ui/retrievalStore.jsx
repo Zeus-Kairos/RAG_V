@@ -1,69 +1,16 @@
 import { create } from 'zustand';
 import { fetchWithAuth } from './store';
 
-// Mock data for demonstration purposes
-const mockIndexRuns = [
-  {
-    id: 1,
-    time: new Date().toISOString(),
-    status: 'completed',
-    files_indexed: 5,
-    embedding_config: 'text-embedding-ada-002',
-    duration: '10 seconds'
-  },
-  {
-    id: 2,
-    time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    status: 'completed',
-    files_indexed: 3,
-    embedding_config: 'text-embedding-ada-002',
-    duration: '5 seconds'
-  },
-  {
-    id: 3,
-    time: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    status: 'failed',
-    files_indexed: 0,
-    embedding_config: 'text-embedding-ada-002',
-    duration: '2 seconds',
-    error: 'API key not found'
-  }
-];
-
-const mockRetrievalResults = [
-  {
-    id: 1,
-    document_id: 123,
-    document_name: 'Sample Document 1',
-    relevance_score: 0.95,
-    snippet: 'This is a sample document about artificial intelligence and machine learning techniques...',
-    file_path: 'documents/sample1.pdf'
-  },
-  {
-    id: 2,
-    document_id: 124,
-    document_name: 'Sample Document 2',
-    relevance_score: 0.87,
-    snippet: 'Machine learning models require large amounts of data to train effectively...',
-    file_path: 'documents/sample2.pdf'
-  },
-  {
-    id: 3,
-    document_id: 125,
-    document_name: 'Sample Document 3',
-    relevance_score: 0.75,
-    snippet: 'Natural language processing is a subfield of artificial intelligence...',
-    file_path: 'documents/sample3.pdf'
-  }
-];
-
 const useRetrievalStore = create((set, get) => {
   return {
     // Initial state
     retrievalResults: [],
-    indexRuns: mockIndexRuns,
+    indexRuns: [],
     isIndexing: false,
     currentQuery: '',
+    activeKnowledgebase: { name: 'default' }, // Default knowledgebase
+    activeChunkRun: null,
+    activeEmbeddingConfig: null,
     
     // Action functions
     setCurrentQuery: (query) => {
@@ -74,29 +21,108 @@ const useRetrievalStore = create((set, get) => {
       try {
         set({ isIndexing: true, error: null });
         
-        // Simulate API call with delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        let { activeKnowledgebase, activeChunkRun, activeEmbeddingConfig } = get();
         
-        // Add new mock index run
-        const newRun = {
-          id: mockIndexRuns.length + 1,
-          time: new Date().toISOString(),
-          status: 'completed',
-          files_indexed: Math.floor(Math.random() * 10) + 1,
-          embedding_config: 'text-embedding-ada-002',
-          duration: `${Math.floor(Math.random() * 15) + 1} seconds`
-        };
+        // Ensure we have all required parameters
+        if (!activeKnowledgebase || !activeKnowledgebase.name) {
+          throw new Error('No active knowledgebase selected');
+        }
         
-        set({ 
-          indexRuns: [newRun, ...get().indexRuns],
-          isIndexing: false 
+        // Always fetch the latest active chunk run to ensure we're using the most recent one
+        await get().fetchActiveChunkRun(activeKnowledgebase.id);
+        // Get updated state
+        ({ activeChunkRun } = get());
+        if (!activeChunkRun || !activeChunkRun.id) {
+          throw new Error('No active chunk run selected');
+        }
+        
+        // Always fetch the latest active embedding config to ensure we're using the most recent one
+        await get().fetchActiveEmbeddingConfig();
+        // Get updated state
+        ({ activeEmbeddingConfig } = get());
+        if (!activeEmbeddingConfig || !activeEmbeddingConfig.id) {
+          throw new Error('No active embedding configuration selected');
+        }
+        
+        // Call the API endpoint
+        const kbName = activeKnowledgebase.name;
+        const chunkRunId = activeChunkRun.id;
+        const embeddingConfigId = activeEmbeddingConfig.id;
+        
+        const response = await fetchWithAuth(`/api/index-files/${kbName}/${chunkRunId}/${embeddingConfigId}`, {
+          method: 'POST'
         });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+        
+        // Process the streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        let result = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          result += chunk;
+          
+          // Process each line as a JSON object
+          const lines = result.split('\n');
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const data = JSON.parse(line);
+                // Handle the data as needed
+                console.log('Indexing progress:', data);
+                // Check if data has an error key
+                if (data.error) {
+                  // Set the error and break out of the loop
+                  set({ 
+                    error: data.error, 
+                    isIndexing: false 
+                  });
+                  // Close the reader and break
+                  reader.cancel();
+                  return;
+                }
+              } catch (e) {
+                console.error('Error parsing JSON:', e);
+              }
+            }
+          }
+          result = lines[lines.length - 1];
+        }
+        
+        try {
+          // Fetch the updated index runs from the API
+          await get().fetchIndexRuns(activeKnowledgebase?.id);
+          
+          set({ 
+            isIndexing: false 
+          });
+        } catch (fetchError) {
+          console.error('Error fetching updated index runs:', fetchError);
+          set({ 
+            error: 'Failed to fetch updated index runs: ' + fetchError.message, 
+            isIndexing: false 
+          });
+        }
       } catch (error) {
         console.error('Error running indexing:', error);
-        set({ 
-          error: 'Failed to run indexing: ' + error.message, 
-          isIndexing: false 
-        });
+        // Don't overwrite the error if we already set it from the API response
+        if (error.name === 'AbortError') {
+          // This error is expected when we cancel the reader
+          // Just ensure isIndexing is set to false
+          set({ isIndexing: false });
+        } else {
+          // Set the error only if we haven't already set it
+          set({ 
+            error: 'Failed to run indexing: ' + error.message, 
+            isIndexing: false 
+          });
+        }
       }
     },
     
@@ -104,12 +130,12 @@ const useRetrievalStore = create((set, get) => {
       try {
         set({ isLoading: true, error: null });
         
-        // Simulate API call with delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // TODO: Implement actual API call for querying documents
+        // For now, return empty results
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Use mock data for results
         set({ 
-          retrievalResults: mockRetrievalResults,
+          retrievalResults: [],
           currentQuery: query,
           isLoading: false 
         });
@@ -122,18 +148,31 @@ const useRetrievalStore = create((set, get) => {
       }
     },
     
-    fetchIndexRuns: async () => {
+    fetchIndexRuns: async (kbId = null) => {
       try {
         set({ isLoading: true, error: null });
         
-        // Simulate API call with delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const { activeKnowledgebase } = get();
+        const knowledgebaseId = kbId || activeKnowledgebase?.id || 1; // Use provided ID, then knowledgebase ID, then default to 1
         
-        // Use mock data for index runs
-        set({ 
-          indexRuns: mockIndexRuns,
-          isLoading: false 
-        });
+        // Call the API endpoint
+        const response = await fetchWithAuth(`/api/index-runs/${knowledgebaseId}`);
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // Use the actual index runs from the API
+          set({ 
+            indexRuns: data.index_runs || [],
+            isLoading: false 
+          });
+        } else {
+          throw new Error(data.message || 'Failed to fetch index runs');
+        }
       } catch (error) {
         console.error('Error fetching index runs:', error);
         set({ 
@@ -145,6 +184,50 @@ const useRetrievalStore = create((set, get) => {
     
     clearRetrievalResults: () => {
       set({ retrievalResults: [], currentQuery: '' });
+    },
+    
+    clearError: () => {
+      set({ error: null });
+    },
+    
+    fetchActiveChunkRun: async (knowledgebaseId = 1) => {
+      try {
+        const response = await fetchWithAuth(`/api/chunk-runs/${knowledgebaseId}`);
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.chunk_runs && data.chunk_runs.length > 0) {
+          // Find the active chunk run
+          const activeRun = data.chunk_runs.find(run => run.is_active === 1);
+          if (activeRun) {
+            set({ activeChunkRun: activeRun });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching active chunk run:', error);
+      }
+    },
+    
+    fetchActiveEmbeddingConfig: async () => {
+      try {
+        const response = await fetchWithAuth('/api/embedding_config');
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.active_config) {
+          set({ activeEmbeddingConfig: data.active_config });
+        }
+      } catch (error) {
+        console.error('Error fetching active embedding config:', error);
+      }
     }
   };
 });

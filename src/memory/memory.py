@@ -11,6 +11,7 @@ from .knowledgebase import KnowledgebaseManager
 from .parse import ParserManager
 from .chunks import ChunkingManager
 from .embedding import EmbeddingManager
+from .index import IndexManager
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -57,6 +58,9 @@ class MemoryManager:
         
         # Initialize embedding manager
         self.embedding_manager = EmbeddingManager(self.conn)
+        
+        # Initialize index manager
+        self.index_manager = IndexManager(self.conn)
         
         # Mark as initialized
         self._initialized = True    

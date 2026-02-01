@@ -6,7 +6,10 @@ import './RetrievalBrowser.css';
 
 const RetrievalBrowser = () => {
   // Knowledgebase store
-  const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser } = useKnowledgebaseStore();
+  const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser, activeEmbeddingConfig } = useKnowledgebaseStore();
+  
+  // Get active knowledgebase from knowledgebases array
+  const activeKnowledgebase = knowledgebases.find(kb => kb.is_active === 1) || knowledgebases[0];
   
   // Retrieval store
   const { 
@@ -18,14 +21,63 @@ const RetrievalBrowser = () => {
     retrievalResults, 
     indexRuns, 
     fetchIndexRuns,
-    clearRetrievalResults
+    clearRetrievalResults,
+    activeChunkRun,
+    fetchActiveChunkRun,
+    fetchActiveEmbeddingConfig,
+    error,
+    clearError
   } = useRetrievalStore();
   
+  // State for selected index runs
+  const [selectedRuns, setSelectedRuns] = useState(new Set());
+  
+  // Handle checkbox change
+  const handleCheckboxChange = (runId) => {
+    setSelectedRuns(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(runId)) {
+        newSet.delete(runId);
+      } else {
+        newSet.add(runId);
+      }
+      return newSet;
+    });
+  };
+  
+  // Handle delete selected runs
+  const handleDeleteSelected = async () => {
+    if (selectedRuns.size === 0) return;
+    
+    try {
+      // Delete each selected run
+      for (const runId of selectedRuns) {
+        await fetchWithAuth(`/api/index-runs/${activeKnowledgebase?.name || 'default'}/${runId}`, {
+          method: 'DELETE'
+        });
+      }
+      
+      // Refresh index runs
+      await fetchIndexRuns(activeKnowledgebase?.id);
+      
+      // Clear selection
+      setSelectedRuns(new Set());
+    } catch (error) {
+      console.error('Error deleting index runs:', error);
+    }
+  };
+  
 
-  // Fetch index runs on mount
+  // Fetch index runs and active configs on mount and when knowledgebase changes
   useEffect(() => {
-    fetchIndexRuns();
-  }, []);
+    fetchIndexRuns(activeKnowledgebase?.id);
+    // Fetch active chunk run and embedding config
+    const fetchConfigs = async () => {
+      await fetchActiveChunkRun(activeKnowledgebase?.id);
+      await fetchActiveEmbeddingConfig();
+    };
+    fetchConfigs();
+  }, [fetchIndexRuns, fetchActiveChunkRun, fetchActiveEmbeddingConfig, knowledgebases, activeKnowledgebase]);
   
   // Handle query submission
   const handleQuerySubmit = (e) => {
@@ -51,44 +103,71 @@ const RetrievalBrowser = () => {
       <div className="retrieval-browser-content">
         {/* Sidebar */}
         <div className="retrieval-browser-sidebar">
+          {/* Active Configuration Info */}
+          <div className="retrieval-sidebar-section">
+            <div className="active-config-info">
+              <h4>Active Configuration</h4>
+              <div className="config-item">
+                <span className="config-label">Knowledgebase:</span>
+                <span className="config-value">{activeKnowledgebase?.name || 'No active KB'}</span>
+              </div>
+              <div className="config-item">
+                <span className="config-label">Chunk Run:</span>
+                <span className="config-value">{activeChunkRun?.id ? `ID: ${activeChunkRun.id}` : 'No active chunk run'}</span>
+              </div>
+              <div className="config-item">
+                <span className="config-label">Embedding:</span>
+                <span className="config-value">{activeEmbeddingConfig?.id || 'No active embedding'}</span>
+              </div>
+            </div>
+          </div>
+          
           {/* Run Indexing Button */}
           <div className="retrieval-sidebar-section">
             <button 
               className="indexing-btn"
               onClick={handleRunIndexing}
-              disabled={isIndexing}
+              disabled={isIndexing || !activeChunkRun?.id || !activeEmbeddingConfig?.id}
               style={{ width: '100%' }}
             >
               {isIndexing ? 'Indexing...' : 'Run Indexing'}
             </button>
           </div>
           
-          {/* Index Run History */}
+          {/* Index List */}
           <div className="retrieval-sidebar-section">
-            <h3>Index Run History</h3>
+            <div className="index-list-header">
+              <h3>Index List</h3>
+              {selectedRuns.size > 0 && (
+                <button 
+                  className="delete-btn"
+                  onClick={handleDeleteSelected}
+                >
+                  Delete ({selectedRuns.size})
+                </button>
+              )}
+            </div>
             <div className="index-runs-list">
               {indexRuns.length === 0 ? (
                 <div className="no-runs">No index runs found</div>
               ) : (
                 indexRuns.map(run => (
-                  <div key={run.id} className="index-run-item">
+                  <div key={run.id} className={`index-run-item ${selectedRuns.has(run.id) ? 'selected' : ''}`}>
                     <div className="index-run-header">
-                      <span className={`run-status ${run.status}`}>
-                        {run.status === 'completed' ? '✓' : run.status === 'failed' ? '✗' : '⏳'}
-                      </span>
+                      <input
+                        type="checkbox"
+                        className="run-checkbox"
+                        checked={selectedRuns.has(run.id)}
+                        onChange={() => handleCheckboxChange(run.id)}
+                      />
                       <span className="run-time">
-                        {new Date(run.time).toLocaleString()}
+                        {new Date(run.run_time).toLocaleString()}
                       </span>
                     </div>
                     <div className="index-run-details">
-                      <span>Files: {run.files_indexed}</span>
-                      <span>Duration: {run.duration}</span>
+                      <span className="embedding-id">{run.embedding_configure_id}</span>
+                      <span>{run.framework || 'N/A'}</span>
                     </div>
-                    {run.error && (
-                      <div className="index-run-error">
-                        {run.error}
-                      </div>
-                    )}
                   </div>
                 ))
               )}
@@ -168,6 +247,29 @@ const RetrievalBrowser = () => {
           </div>
         </div>
       </div>
+      
+      {/* Error Modal */}
+      {error && (
+        <div className="error-modal-overlay">
+          <div className="error-modal">
+            <div className="error-modal-header">
+              <div className="error-modal-icon">⚠️</div>
+              <h3>Warning</h3>
+              <button className="error-modal-close" onClick={clearError}>
+                ×
+              </button>
+            </div>
+            <div className="error-modal-body">
+              <p>{error}</p>
+            </div>
+            <div className="error-modal-footer">
+              <button className="error-modal-button" onClick={clearError}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

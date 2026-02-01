@@ -31,9 +31,9 @@ class EmbeddingRunner:
 
         # Get user configuration from memory manager
         if config_id:
-            self.config = self.memory_manager.get_embedding_configuration(config_id)
+            self.config = self.memory_manager.embedding_manager.get_embedding_configuration(config_id)
         else:
-            self.config = self.memory_manager.get_active_embedding_configuration()
+            self.config = self.memory_manager.embedding_manager.get_active_embedding_configuration()
         
         if not self.config:
             raise Exception("No embedding configuration found.")

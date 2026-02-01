@@ -2,6 +2,7 @@ import os
 import asyncio
 from typing import List, Dict, Any, AsyncGenerator
 from fastapi import UploadFile
+from langchain_core.documents import Document
 from src.file_process.utils import SUPPORTED_FORMATS
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
@@ -16,12 +17,12 @@ logger = get_logger(__name__)
 class ParallelFileProcessingPipeline:
     """Pipeline that processes files in parallel and yields results as they complete."""
     
-    def __init__(self, indexer: Indexer = None, memory_manager: MemoryManager = None):
+    def __init__(self, memory_manager: MemoryManager = None):
         self.file_uploader = None
         self.file_parser = None
         self.file_splitter = None
-        self.memory_manager = memory_manager or MemoryManager()
-        self.indexer = indexer
+        self.indexer = None
+        self.memory_manager = memory_manager or MemoryManager()     
     
     async def process_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> AsyncGenerator[Dict[str, Any], None]:
         """Process files in parallel and yield results as each file completes.
@@ -554,3 +555,74 @@ class ParallelFileProcessingPipeline:
             logger.error(f"Unexpected error uploading file {filename}: {e}")
         
         return file_result
+
+    async def index_all_chunks(self, indexer: Indexer, chunk_run_id: int, embedding_config_id: str, batch_size: int = 20) -> AsyncGenerator[Dict[str, Any], None]:
+        """Index all chunks in a knowledgebase in parallel.
+        
+        Args:
+            indexer: Indexer object to use for indexing
+            chunk_run_id: ID of the chunk_run record
+            embedding_config_id: ID of the embedding configure record
+            batch_size: Batch size for indexing
+            
+        Yields:
+            Dict containing indexing results for each chunk
+        """
+        success, fail_reason = self.memory_manager.index_manager.create_index_run(
+            chunk_run_id=chunk_run_id,
+            embedding_configure_id=embedding_config_id
+        )
+        if not success:
+            yield {"status": "failed", "error": fail_reason}
+            return
+
+        
+        self.indexer = indexer  
+        self.indexer.delete_file_chunks()
+        chunks = self.memory_manager.chunking_manager.get_chunks_by_chunk_run_id(chunk_run_id)
+        if not chunks:
+            logger.warning(f"No chunks found for chunk_run_id {chunk_run_id}")
+            yield {"status": "failed", "error": "No chunks found"}
+
+        # Create tasks for parallel indexing of each chunk batch
+        tasks = []
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            task = self._index_single_batch(
+                batch,
+            )
+            tasks.append(task)
+        
+        # Process chunks in parallel and yield results as they complete
+        for task in asyncio.as_completed(tasks):
+            try:
+                result = await task
+                yield result
+            except Exception as e:
+                logger.error(f"Unexpected error in parallel indexing: {e}")
+                yield {"status": "failed", "error": f"Unexpected error: {str(e)}"}
+
+        self.indexer.save_index()
+
+    async def _index_single_batch(self, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Index a batch of chunks.
+        
+        Args:
+            batch: List of chunk dictionaries
+            
+        Returns:
+            Dict containing indexing results for the batch
+        """
+        try:
+            docs = [Document(page_content=chunk["content"], id=chunk["chunk_id"], metadata=chunk["metadata"]) for chunk in batch]
+            # Index the batch of chunks
+            self.indexer.index_chunks(docs)
+            
+            return {
+                "status": "success",
+                "message": "Chunks indexed successfully"
+            }
+        except Exception as e:
+            logger.exception(f"Unexpected error indexing batch: {e}", stack_info=True)
+            return {"status": "failed", "error": f"Unexpected error: {str(e)}"}
+        

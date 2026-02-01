@@ -32,28 +32,36 @@ class Indexer:
                     index_to_docstore_id={})   
                 self.all_docs = []
     
-    def index_chunks(self, chunks: Dict[int, List[Document]], save: bool = False) -> FAISS:
+    def index_chunks(self, chunks: Dict[int, List[Document]] | List[Document], save: bool = False) -> FAISS:
         """Index file chunks into faiss index.
         
         Args:
-            chunks: Dict of file chunks to index, keyed by file_id
+            chunks: Dict of file chunks to index, keyed by file_id or list of documents
             save: Whether to save the index after indexing (default: False)
         """
-        file_ids = list(chunks.keys())
-        with self._lock:           
-            self.delete_file_chunks(file_ids)
+        if isinstance(chunks, dict):
+            file_ids = list(chunks.keys())
+            with self._lock:           
+                self.delete_file_chunks(file_ids)
 
-        all_chunks = [chunk for chunk_list in chunks.values() for chunk in chunk_list]           
+            all_chunks = [chunk for chunk_list in chunks.values() for chunk in chunk_list]   
+        else:
+            file_ids = None
+            all_chunks = chunks
+        
         # Only add documents if there are chunks to index
         if all_chunks:
-            chunk_ids = [chunk.metadata['chunk_id'] for chunk in all_chunks]
+            chunk_ids = [chunk.metadata['chunk_id'] for chunk in all_chunks]          
             texts = [chunk.page_content for chunk in all_chunks]
             metadatas = [chunk.metadata for chunk in all_chunks]
             embeddings = self._embeddings.embed_documents(texts)            
             with self._lock:  
                 self.vectorstore.add_embeddings(zip(texts, embeddings), metadatas=metadatas, ids=chunk_ids)          
                 self.all_docs.extend(all_chunks)     
-                logger.info(f"Index {len(all_chunks)} chunks for {len(file_ids)} files")      
+                if file_ids:
+                    logger.info(f"Index {len(all_chunks)} chunks for {len(file_ids)} files")  
+                else:
+                    logger.info(f"Index {len(all_chunks)} chunks")  
                 logger.info(f"Total {len(self.all_docs)} chunks in vectorstore")
                 if save:
                     self.vectorstore.save_local(self.index_path)
@@ -62,18 +70,25 @@ class Indexer:
                   
         return self.vectorstore
 
-    def delete_file_chunks(self, file_ids: List[int], save: bool = False) -> None:
+    def delete_file_chunks(self, file_ids: List[int] = None, save: bool = False) -> None:
         """Delete all chunks for a file from the index.
         
         Args:
             file_ids: List of file IDs to delete chunks for
         """
         if self.all_docs:
-            existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs if doc.metadata.get("file_id") in file_ids]
+            if file_ids is None:
+                existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs]
+            else:
+                existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs if doc.metadata.get("file_id") in file_ids]
+                      
             if existing_chunks_ids:
-                self.vectorstore.delete(ids=existing_chunks_ids)
-                logger.info(f"Delete {len(existing_chunks_ids)} chunks for file_ids: {file_ids}")
-                self.all_docs = [doc for doc in self.all_docs if doc.metadata.get("file_id") not in file_ids]
+                self.vectorstore.delete(ids=existing_chunks_ids)          
+                if file_ids is not None:
+                    logger.info(f"Delete {len(existing_chunks_ids)} chunks for file_ids: {file_ids}")
+                    self.all_docs = [doc for doc in self.all_docs if doc.metadata.get("file_id") not in file_ids]
+                else:
+                    self.all_docs = []
                 logger.info(f"{len(self.all_docs)} chunks left in vectorstore")
                 if save:
                     self.vectorstore.save_local(self.index_path)
@@ -82,6 +97,7 @@ class Indexer:
         """Save the current index to disk."""
         with self._lock:
             self.vectorstore.save_local(self.index_path)
+        logger.info(f"Save index to {self.index_path}")
 
     def get_all_docs(self) -> List[Document]:
         """Get all documents in the index.
