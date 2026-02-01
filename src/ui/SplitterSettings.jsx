@@ -232,11 +232,6 @@ const SplitterSettings = () => {
         {/* Chonkie Tab Content */}
         {activeFramework === 'chonkie' && (
           <div className="splitter-section">
-            <div className="splitter-section-header">
-              <div className="splitter-section-title">
-                <h4>Chonkie Splitter Settings</h4>
-              </div>
-            </div>
             
             <div className="splitter-section-content">
               {/* Chunker Selection */}
