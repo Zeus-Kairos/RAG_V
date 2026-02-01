@@ -156,7 +156,7 @@ class IndexManager:
             # Create dynamic placeholders for the IN clause
             placeholders = ','.join(['?' for _ in chunk_run_ids])
             cur.execute(
-                f"SELECT index_run.id, index_run.chunk_run_id, index_run.embedding_configure_id, index_run.run_time, chunk_run.framework FROM index_run JOIN chunk_run ON index_run.chunk_run_id = chunk_run.id WHERE index_run.chunk_run_id IN ({placeholders}) ORDER BY index_run.run_time DESC",
+                f"SELECT index_run.id, index_run.chunk_run_id, index_run.embedding_configure_id, index_run.run_time, chunk_run.framework, chunk_run.parameters FROM index_run JOIN chunk_run ON index_run.chunk_run_id = chunk_run.id WHERE index_run.chunk_run_id IN ({placeholders}) ORDER BY index_run.run_time DESC",
                 chunk_run_ids
             )
             runs = []
@@ -166,7 +166,8 @@ class IndexManager:
                     "chunk_run_id": row[1],
                     "embedding_configure_id": row[2],
                     "run_time": row[3],
-                    "framework": row[4]
+                    "framework": row[4],
+                    "parameters": json.loads(row[5]) if row[5] else {}
                 })
             return runs
         except Exception as e:
@@ -186,7 +187,7 @@ class IndexManager:
         """
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT index_run.id, index_run.chunk_run_id, index_run.embedding_configure_id, index_run.run_time, chunk_run.framework FROM index_run JOIN chunk_run ON index_run.chunk_run_id = chunk_run.id WHERE index_run.chunk_run_id = ? ORDER BY index_run.run_time DESC", (chunk_run_id,))
+            cur.execute("SELECT index_run.id, index_run.chunk_run_id, index_run.embedding_configure_id, index_run.run_time, chunk_run.framework, chunk_run.parameters FROM index_run JOIN chunk_run ON index_run.chunk_run_id = chunk_run.id WHERE index_run.chunk_run_id = ? ORDER BY index_run.run_time DESC", (chunk_run_id,))
             runs = cur.fetchall()
             return [
                 {
@@ -194,7 +195,8 @@ class IndexManager:
                     "chunk_run_id": run[1],
                     "embedding_configure_id": run[2],
                     "run_time": run[3],
-                    "framework": run[4]
+                    "framework": run[4],
+                    "parameters": run[5]
                 }
                 for run in runs
             ]

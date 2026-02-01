@@ -168,6 +168,66 @@ const RetrievalBrowser = () => {
                       <span className="embedding-id">{run.embedding_configure_id}</span>
                       <span>{run.framework || 'N/A'}</span>
                     </div>
+                    {run.parameters && Object.keys(run.parameters).length > 0 && (
+                      <div className="index-run-tooltip">
+                        <div className="tooltip-content">
+                          <h4>Chunk Parameters</h4>
+                          <div className="tooltip-params">
+                            {(() => {
+                              const paramElements = [];
+                              let index = 0;
+                              
+                              Object.entries(run.parameters).forEach(([key, value]) => {
+                                // Handle chunkers array specially
+                                if (key === 'chunkers' && Array.isArray(value)) {
+                                  value.forEach((chunker) => {
+                                    const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
+                                    paramElements.push(
+                                      <span key={`${index++}`}>{`${chunkerType}: Enabled`}</span>
+                                    );
+                                    
+                                    // Display parameters for this chunker
+                                    if (chunker.params) {
+                                      Object.entries(chunker.params).forEach(([paramName, paramValue]) => {
+                                        const displayName = paramName
+                                          .replace(/_/g, ' ')
+                                          .replace(/\b\w/g, l => l.toUpperCase());
+                                        let displayValue = paramValue;
+                                        if (typeof paramValue === 'boolean') {
+                                          displayValue = paramValue ? 'Enabled' : 'Disabled';
+                                        }
+                                        paramElements.push(
+                                          <span key={`${index++}`}>{`${displayName}: ${displayValue}`}</span>
+                                        );
+                                      });
+                                    }
+                                  });
+                                } else {
+                                  // Format regular key to be more readable
+                                  const displayKey = key
+                                    .replace(/_/g, ' ')
+                                    .replace(/\b\w/g, l => l.toUpperCase());
+                                   
+                                  // Format value based on type
+                                  let displayValue = value;
+                                  if (typeof value === 'boolean') {
+                                    displayValue = value ? 'Enabled' : 'Disabled';
+                                  } else if (typeof value === 'object') {
+                                    displayValue = JSON.stringify(value);
+                                  }
+                                   
+                                  paramElements.push(
+                                    <span key={`${index++}`}>{`${displayKey}: ${displayValue}`}</span>
+                                  );
+                                }
+                              });
+                              
+                              return paramElements;
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
