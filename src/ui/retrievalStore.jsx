@@ -11,10 +11,21 @@ const useRetrievalStore = create((set, get) => {
     activeKnowledgebase: { name: 'default' }, // Default knowledgebase
     activeChunkRun: null,
     activeEmbeddingConfig: null,
+    // Retriever settings
+    retrieverType: 'vector',
+    k: 5,
     
     // Action functions
     setCurrentQuery: (query) => {
       set({ currentQuery: query });
+    },
+    
+    setRetrieverType: (type) => {
+      set({ retrieverType: type });
+    },
+    
+    setK: (value) => {
+      set({ k: value });
     },
     
     runIndexing: async () => {
@@ -130,15 +141,52 @@ const useRetrievalStore = create((set, get) => {
       try {
         set({ isLoading: true, error: null });
         
-        // TODO: Implement actual API call for querying documents
-        // For now, return empty results
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const { activeKnowledgebase, indexRuns, retrieverType, k } = get();
         
-        set({ 
-          retrievalResults: [],
-          currentQuery: query,
-          isLoading: false 
-        });
+        // Ensure we have all required parameters
+        if (!activeKnowledgebase || !activeKnowledgebase.name) {
+          throw new Error('No active knowledgebase selected');
+        }
+        
+        // Get the latest index run if none is selected
+        if (indexRuns.length === 0) {
+          throw new Error('No index runs found');
+        }
+        
+        // Use the first index run for now (in UI we'll let user select)
+        const selectedIndexRun = indexRuns[0];
+        
+        // Call the API endpoint
+        const response = await fetchWithAuth(
+          `/api/retrieve/${activeKnowledgebase.name}/${selectedIndexRun.id}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              query,
+              retriever_type: retrieverType,
+              k
+            })
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          set({ 
+            retrievalResults: data.results || [],
+            currentQuery: query,
+            isLoading: false 
+          });
+        } else {
+          throw new Error(data.message || 'Failed to retrieve documents');
+        }
       } catch (error) {
         console.error('Error querying documents:', error);
         set({ 

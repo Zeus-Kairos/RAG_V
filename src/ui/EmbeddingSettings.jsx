@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useKnowledgebaseStore from './store';
+import useRetrievalStore from './retrievalStore';
 import './EmbeddingSettings.css';
 
 const EmbeddingSettings = () => {
@@ -12,6 +13,14 @@ const EmbeddingSettings = () => {
     deleteEmbeddingConfig, 
     setActiveEmbeddingConfig 
   } = useKnowledgebaseStore();
+  
+  // Retriever settings
+  const { 
+    retrieverType, 
+    setRetrieverType, 
+    k, 
+    setK 
+  } = useRetrievalStore();
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -108,59 +117,108 @@ const EmbeddingSettings = () => {
   };
   
   return (
-    <div className="embedding-settings">
-      <div className="embedding-settings-header">
-        <h3>Embedding Settings</h3>
-        <button 
-          className="embedding-icon-btn add"
-          onClick={handleAddConfig}
-          title="Add Embedding Configuration"
-        >
-          +
-        </button>
-      </div>
-      
-      <div className="embedding-configs-list">
-        {embeddingConfigs.length === 0 ? (
-          <div className="embedding-empty">No embedding configurations found</div>
-        ) : (
-          embeddingConfigs.map(config => (
-            <div 
-              key={config.id} 
-              className={`embedding-config-item ${activeEmbeddingConfig?.id === config.id ? 'active' : ''}`}
-              onClick={() => handleSetActive(config.id)}
-            >
-              <div className="embedding-config-header">
-                <div className="embedding-config-info">
-                  <div className="embedding-config-name">{config.embedding_model}</div>
-                  <div className="embedding-config-provider">{config.embedding_provider}</div>
-                </div>
-                <div className="embedding-config-actions">
-                  <button 
-                    className="embedding-icon-btn edit"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditConfig(config);
-                    }}
-                    title="Edit"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    className="embedding-icon-btn delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteConfig(config.id);
-                    }}
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
+    <>
+      {/* Embedding Settings */}
+      <div className="embedding-settings">
+        <div className="embedding-settings-header">
+          <h3>Embedding Settings</h3>
+          <button 
+            className="embedding-icon-btn add"
+            onClick={handleAddConfig}
+            title="Add Embedding Configuration"
+          >
+            +
+          </button>
+        </div>
+        
+        <div className="embedding-configs-list">
+          {embeddingConfigs.length === 0 ? (
+            <div className="embedding-empty">No embedding configurations found</div>
+          ) : (
+            embeddingConfigs.map(config => (
+              <div 
+                key={config.id} 
+                className={`embedding-config-item ${activeEmbeddingConfig?.id === config.id ? 'active' : ''}`}
+                onClick={() => handleSetActive(config.id)}
+              >
+                <div className="embedding-config-header">
+                  <div className="embedding-config-info">
+                    <div className="embedding-config-name">{config.embedding_model}</div>
+                    <div className="embedding-config-provider">{config.embedding_provider}</div>
+                  </div>
+                  <div className="embedding-config-actions">
+                    <button 
+                      className="embedding-icon-btn edit"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditConfig(config);
+                      }}
+                      title="Edit"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      className="embedding-icon-btn delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConfig(config.id);
+                      }}
+                      title="Delete"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               </div>
+            ))
+          )}
+        </div>
+      </div>
+      
+      {/* Retriever Settings */}
+      <div className="retriever-section">
+        <div className="retriever-section-header">
+          <h3>Retriever Settings</h3>
+        </div>
+        <div className="retriever-section-content">
+          <div className="retriever-setting-item">
+            <span className="retriever-setting-label">Retriever Type:</span>
+            <div className="retriever-setting-control">
+              <select
+                className="retriever-type-select"
+                value={retrieverType}
+                onChange={(e) => setRetrieverType(e.target.value)}
+              >
+                <option value="vector">Vector</option>
+                <option value="bm25">BM25</option>
+                <option value="fusion">Fusion</option>
+              </select>
             </div>
-          ))
-        )}
+          </div>
+          <div className="retriever-setting-item">
+            <span className="retriever-setting-label">k:</span>
+            <div className="retriever-setting-control">
+              <div className="k-control">
+                <input
+                  type="range"
+                  className="k-slider"
+                  min="1"
+                  max="50"
+                  value={k}
+                  onChange={(e) => setK(parseInt(e.target.value))}
+                />
+                <input
+                  type="number"
+                  className="k-input"
+                  min="1"
+                  max="50"
+                  value={k}
+                  onChange={(e) => setK(parseInt(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* Add/Edit Modal */}
@@ -303,7 +361,7 @@ const EmbeddingSettings = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
