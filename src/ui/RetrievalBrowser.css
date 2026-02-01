@@ -83,8 +83,8 @@
 }
 
 .retrieval-sidebar-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 13px;
+  margin: 0 0 6px 0;
+  font-size: 12px;
   font-weight: 600;
   color: #333;
   text-transform: uppercase;
@@ -95,8 +95,19 @@
 .index-list-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
+}
+
+.index-list-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-all-checkbox {
+  cursor: pointer;
+  margin-top: 2px;
 }
 
 .delete-btn {
@@ -119,34 +130,41 @@
 .active-config-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .config-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 4px 0;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .config-item:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .config-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #666;
 }
 
 .config-value {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #333;
   text-align: right;
   flex: 1;
-  margin-left: 8px;
+  margin-left: 6px;
+}
+
+.indexing-btn-container {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
 }
 
 /* Index Run History */
@@ -184,9 +202,20 @@
   border-bottom: 1px solid #f0f0f0;
 }
 
+.run-checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .run-checkbox {
-  margin-right: 8px;
   cursor: pointer;
+}
+
+.run-id {
+  font-size: 10px;
+  color: #666;
+  font-weight: 500;
 }
 
 .run-time {

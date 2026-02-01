@@ -67,6 +67,17 @@ const RetrievalBrowser = () => {
     }
   };
   
+  // Handle select all
+  const handleSelectAll = () => {
+    if (selectedRuns.size === indexRuns.length) {
+      // Deselect all
+      setSelectedRuns(new Set());
+    } else {
+      // Select all
+      setSelectedRuns(new Set(indexRuns.map(run => run.id)));
+    }
+  };
+  
 
   // Fetch index runs and active configs on mount and when knowledgebase changes
   useEffect(() => {
@@ -103,41 +114,49 @@ const RetrievalBrowser = () => {
       <div className="retrieval-browser-content">
         {/* Sidebar */}
         <div className="retrieval-browser-sidebar">
-          {/* Active Configuration Info */}
+          {/* Active Configuration and Indexing */}
           <div className="retrieval-sidebar-section">
             <div className="active-config-info">
-              <h4>Active Configuration</h4>
+              <h4>Index Configuration</h4>
               <div className="config-item">
                 <span className="config-label">Knowledgebase:</span>
                 <span className="config-value">{activeKnowledgebase?.name || 'No active KB'}</span>
               </div>
               <div className="config-item">
-                <span className="config-label">Chunk Run:</span>
-                <span className="config-value">{activeChunkRun?.id ? `ID: ${activeChunkRun.id}` : 'No active chunk run'}</span>
+                <span className="config-label">Chunker:</span>
+                <span className="config-value">{activeChunkRun?.framework ? activeChunkRun.framework : 'No active chunk run'}</span>
               </div>
               <div className="config-item">
                 <span className="config-label">Embedding:</span>
                 <span className="config-value">{activeEmbeddingConfig?.id || 'No active embedding'}</span>
               </div>
+              <div className="indexing-btn-container">
+                <button 
+                  className="indexing-btn"
+                  onClick={handleRunIndexing}
+                  disabled={isIndexing || !activeChunkRun?.id || !activeEmbeddingConfig?.id}
+                  style={{ width: '100%' }}
+                >
+                  {isIndexing ? 'Indexing...' : 'Run Indexing'}
+                </button>
+              </div>
             </div>
-          </div>
-          
-          {/* Run Indexing Button */}
-          <div className="retrieval-sidebar-section">
-            <button 
-              className="indexing-btn"
-              onClick={handleRunIndexing}
-              disabled={isIndexing || !activeChunkRun?.id || !activeEmbeddingConfig?.id}
-              style={{ width: '100%' }}
-            >
-              {isIndexing ? 'Indexing...' : 'Run Indexing'}
-            </button>
           </div>
           
           {/* Index List */}
           <div className="retrieval-sidebar-section">
             <div className="index-list-header">
-              <h3>Index List</h3>
+              <div className="index-list-header-left">
+                {indexRuns.length > 0 && (
+                  <input
+                    type="checkbox"
+                    className="select-all-checkbox"
+                    checked={indexRuns.length > 0 && selectedRuns.size === indexRuns.length}
+                    onChange={handleSelectAll}
+                  />
+                )}
+                <h3>Index List</h3>
+              </div>
               {selectedRuns.size > 0 && (
                 <button 
                   className="delete-btn"
@@ -154,14 +173,32 @@ const RetrievalBrowser = () => {
                 indexRuns.map(run => (
                   <div key={run.id} className={`index-run-item ${selectedRuns.has(run.id) ? 'selected' : ''}`}>
                     <div className="index-run-header">
-                      <input
-                        type="checkbox"
-                        className="run-checkbox"
-                        checked={selectedRuns.has(run.id)}
-                        onChange={() => handleCheckboxChange(run.id)}
-                      />
+                      <div className="run-checkbox-container">
+                        <input
+                          type="checkbox"
+                          className="run-checkbox"
+                          checked={selectedRuns.has(run.id)}
+                          onChange={() => handleCheckboxChange(run.id)}
+                        />
+                        <span className="run-id">ID: {run.id}</span>
+                      </div>
                       <span className="run-time">
-                        {new Date(run.run_time).toLocaleString()}
+                        {(() => {
+                          // Parse the UTC time string correctly
+                          const timeStr = run.run_time;
+                          // If time string doesn't have timezone info, assume it's UTC
+                          let date;
+                          if (timeStr.includes('T') || timeStr.includes('Z')) {
+                            // ISO format with timezone
+                            date = new Date(timeStr);
+                          } else {
+                            // SQLite format without timezone - treat as UTC
+                            const utcTimeStr = timeStr.replace(' ', 'T') + 'Z';
+                            date = new Date(utcTimeStr);
+                          }
+                          // Convert to local time display
+                          return date.toLocaleString();
+                        })()}
                       </span>
                     </div>
                     <div className="index-run-details">
