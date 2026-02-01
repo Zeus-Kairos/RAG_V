@@ -40,7 +40,6 @@
 .embedding-btn-primary {
   background-color: #4a6cf7;
   color: white;
-  flex: 1;
 }
 
 .embedding-btn-primary:hover:not(:disabled) {
