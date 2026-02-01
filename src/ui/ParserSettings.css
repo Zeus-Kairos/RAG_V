@@ -16,25 +16,32 @@
   color: #333;
 }
 
-/* Parser Section Styles - match SplitterSettings */
+/* Parser Section Styles */
 .parser-section {
   background-color: white;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
   margin-bottom: 12px;
+  overflow: hidden;
 }
-
-
 
 .parser-section:last-child {
   margin-bottom: 0;
 }
 
-/* Section header with light background like SplitterSettings */
 .parser-section-header {
   background-color: #f9f9f9;
   padding: 12px 16px;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.parser-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  color: #333;
 }
 
 .parser-section-header h4 {
@@ -44,7 +51,6 @@
   color: #333;
 }
 
-/* Section content with consistent padding */
 .parser-section-content {
   padding: 16px;
   display: flex;
@@ -52,7 +58,7 @@
   gap: 12px;
 }
 
-/* Parameter Group Styles - match SplitterSettings */
+/* Parameter group styles */
 .param-group {
   margin-bottom: 16px;
 }
@@ -63,15 +69,87 @@
 
 .param-group label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: 6px;
+  font-size: 13px;
   font-weight: 500;
   color: #666;
 }
 
+/* Inline parameter label with input */
+.param-label-with-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
+/* Inline text input */
+.param-text-input-inline {
+  width: 70px;
+  padding: 3px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+  margin-left: 8px;
+  margin-right: 4px;
+}
 
-/* Checkbox Parameter Styles - match SplitterSettings */
+.param-text-input-inline:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2);
+}
+
+/* Max value indicator */
+.param-max-value {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Slider styles */
+.param-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #ddd;
+  outline: none;
+  border-radius: 3px;
+}
+
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #4a6cf7;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.param-slider::-webkit-slider-thumb:hover {
+  background: #3a5bdb;
+  transform: scale(1.1);
+}
+
+.param-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #4a6cf7;
+  cursor: pointer;
+  border-radius: 50%;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.param-slider::-moz-range-thumb:hover {
+  background: #3a5bdb;
+  transform: scale(1.1);
+}
+
+/* Checkbox parameter group */
 .param-group.checkbox {
   display: flex;
   align-items: center;
@@ -82,7 +160,7 @@
 .param-group.checkbox label {
   margin: 0;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   color: #333;
   font-weight: normal;
 }
@@ -102,7 +180,6 @@
   font-size: 13px;
 }
 
-/* Selected Option */
 .custom-select-selected {
   padding: 6px 10px;
   border: 1px solid #ddd;
@@ -125,7 +202,6 @@
   box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.1);
 }
 
-/* Select Arrow */
 .custom-select-arrow {
   font-size: 10px;
   color: #666;
@@ -137,7 +213,6 @@
   transform: rotate(180deg);
 }
 
-/* Dropdown */
 .custom-select-dropdown {
   position: absolute;
   top: 100%;
@@ -153,7 +228,6 @@
   overflow-y: auto;
 }
 
-/* Dropdown Options */
 .custom-select-option {
   padding: 8px 12px;
   cursor: pointer;
@@ -172,7 +246,6 @@
   color: #1976d2;
 }
 
-/* Framework Color Indicator */
 .framework-color-indicator {
   display: inline-block;
   width: 12px;

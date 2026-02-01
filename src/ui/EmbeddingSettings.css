@@ -2,7 +2,7 @@
   background-color: #f5f5f5;
   border-radius: 8px;
   padding: 16px;
-  height: 100%;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
 }
@@ -21,11 +21,12 @@
   color: #333;
 }
 
+/* Button styles */
 .embedding-btn {
   border: none;
   border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 6px 10px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-weight: 500;
@@ -39,6 +40,7 @@
 .embedding-btn-primary {
   background-color: #4a6cf7;
   color: white;
+  flex: 1;
 }
 
 .embedding-btn-primary:hover:not(:disabled) {
@@ -74,8 +76,6 @@
 }
 
 .embedding-configs-list {
-  flex: 1;
-  overflow-y: auto;
   margin-bottom: 16px;
 }
 
@@ -243,6 +243,7 @@
   border-top: 1px solid #e0e0e0;
 }
 
+/* Form styles */
 .embedding-form-group {
   margin-bottom: 16px;
 }
