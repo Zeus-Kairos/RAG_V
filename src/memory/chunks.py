@@ -408,6 +408,34 @@ class ChunkingManager:
             logger.error(f"Error deleting chunk run: {e}")
             raise
     
+    def desync_chunk_runs(self, chunk_run_ids: Optional[List[int]] = None) -> int:
+        """
+        Set in_sync field of records in chunk_run table to 0.
+        
+        Args:
+            chunk_run_ids: Optional list of chunk run IDs to desync. If not provided, desync all records.
+            
+        Returns:
+            The number of records updated
+        """
+        try:
+            cur = self.conn.cursor()
+            
+            if chunk_run_ids:
+                placeholders = ','.join('?' * len(chunk_run_ids))
+                cur.execute(
+                    f"UPDATE chunk_run SET in_sync = 0 WHERE id IN ({placeholders})",
+                    chunk_run_ids
+                )
+            else:
+                cur.execute("UPDATE chunk_run SET in_sync = 0")
+            
+            self.conn.commit()
+            return cur.rowcount
+        except Exception as e:
+            logger.error(f"Error desyncing chunk runs: {e}")
+            raise
+    
     def get_chunk_runs_by_knowledgebase_id(self, knowledgebase_id: int) -> List[Dict[str, Any]]:
         """
         Get all chunk runs for a specific knowledgebase, ordered by run_time descending.
