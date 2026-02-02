@@ -182,20 +182,6 @@ const EmbeddingSettings = () => {
         </div>
         <div className="retriever-section-content">
           <div className="retriever-setting-item">
-            <span className="retriever-setting-label">Retriever Type:</span>
-            <div className="retriever-setting-control">
-              <select
-                className="retriever-type-select"
-                value={retrieverType}
-                onChange={(e) => setRetrieverType(e.target.value)}
-              >
-                <option value="vector">Vector</option>
-                <option value="bm25">BM25</option>
-                <option value="fusion">Fusion</option>
-              </select>
-            </div>
-          </div>
-          <div className="retriever-setting-item">
             <span className="retriever-setting-label">k:</span>
             <div className="retriever-setting-control">
               <div className="k-control">
@@ -216,6 +202,20 @@ const EmbeddingSettings = () => {
                   onChange={(e) => setK(parseInt(e.target.value))}
                 />
               </div>
+            </div>
+          </div>
+          <div className="retriever-setting-item">
+            <span className="retriever-setting-label">Retriever Type:</span>
+            <div className="retriever-setting-control">
+              <select
+                className="retriever-type-select"
+                value={retrieverType}
+                onChange={(e) => setRetrieverType(e.target.value)}
+              >
+                <option value="vector">Vector</option>
+                <option value="bm25">BM25</option>
+                <option value="fusion">Fusion</option>
+              </select>
             </div>
           </div>
         </div>
