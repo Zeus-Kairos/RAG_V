@@ -15,6 +15,7 @@ const RetrievalBrowser = () => {
   const { 
     runIndexing, 
     isIndexing, 
+    isLoading,
     queryDocuments, 
     currentQuery, 
     setCurrentQuery, 
@@ -28,11 +29,23 @@ const RetrievalBrowser = () => {
     error,
     clearError,
     setSelectedRuns,
-    retrieverType
+    retrieverType,
+    lastSearchQuery
   } = useRetrievalStore();
   
   // State for selected index runs
   const [localSelectedRuns, setLocalSelectedRuns] = useState(new Set());
+  
+  // State for expanded parameters per run
+  const [expandedParams, setExpandedParams] = useState({});
+  
+  // Toggle parameters expansion for a run
+  const toggleParams = (runId) => {
+    setExpandedParams(prev => ({
+      ...prev,
+      [runId]: !prev[runId]
+    }));
+  };
   
   // Handle checkbox change
   const handleCheckboxChange = (runId) => {
@@ -300,9 +313,9 @@ const RetrievalBrowser = () => {
                 <button 
                   type="submit" 
                   className="query-submit-btn"
-                  disabled={!currentQuery.trim()}
+                  disabled={!currentQuery.trim() || localSelectedRuns.size === 0 || isLoading}
                 >
-                  Search
+                  {isLoading ? 'Searching...' : 'Search'}
                 </button>
                 <button 
                   type="button" 
@@ -318,8 +331,8 @@ const RetrievalBrowser = () => {
             {/* Results */}
             <div className="retrieval-results">
               {Object.keys(retrievalResults).length === 0 ? (
-                currentQuery ? (
-                  <div className="no-results">No results found for "{currentQuery}"</div>
+                lastSearchQuery ? (
+                  <div className="no-results">No results found for "{lastSearchQuery}"</div>
                 ) : (
                   <div className="no-query">Enter a query to search for documents</div>
                 )
@@ -345,9 +358,75 @@ const RetrievalBrowser = () => {
                                     Retriever: <span className="highlight-value">{retrieverType.charAt(0).toUpperCase() + retrieverType.slice(1)}</span>
                                   </span>
                                 </div>
-                                {indexRun.framework && (
-                                  <span className="run-framework">{indexRun.framework}</span>
-                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                                  {indexRun.framework && (
+                                    <span className="run-framework">{indexRun.framework}</span>
+                                  )}
+                                  {indexRun.parameters && Object.keys(indexRun.parameters).length > 0 && (
+                                    <>
+                                      <button 
+                                        onClick={() => toggleParams(runId)}
+                                        className="params-toggle-btn"
+                                        title={expandedParams[runId] ? 'Hide parameters' : 'Show parameters'}
+                                      >
+                                        {expandedParams[runId] ? '▼' : '▶'}
+                                      </button>
+                                      {expandedParams[runId] && (
+                                        <div className="result-chunk-params">
+                                          {(() => {
+                                            const paramElements = [];
+                                            let index = 0;
+                                             
+                                            Object.entries(indexRun.parameters).forEach(([key, value]) => {
+                                              // Handle chunkers array specially
+                                              if (key === 'chunkers' && Array.isArray(value)) {
+                                                value.forEach((chunker) => {
+                                                  const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
+                                                  paramElements.push(
+                                                    <span key={`${index++}`}>{`${chunkerType}: Enabled`}</span>
+                                                  );
+                                                   
+                                                  // Display parameters for this chunker
+                                                  if (chunker.params) {
+                                                    Object.entries(chunker.params).forEach(([paramName, paramValue]) => {
+                                                      const displayName = paramName
+                                                        .replace(/_/g, ' ')
+                                                        .replace(/\b\w/g, l => l.toUpperCase());
+                                                      let displayValue = paramValue;
+                                                      if (typeof paramValue === 'boolean') {
+                                                        displayValue = paramValue ? 'Enabled' : 'Disabled';
+                                                      }
+                                                      paramElements.push(
+                                                        <span key={`${index++}`}>{`${displayName}: ${displayValue}`}</span>
+                                                      );
+                                                    });
+                                                  }
+                                                });
+                                              } else {
+                                                // Format regular key to be more readable
+                                                const displayKey = key
+                                                  .replace(/_/g, ' ')
+                                                  .replace(/\b\w/g, l => l.toUpperCase());
+                                                   
+                                                // Format value based on type
+                                                let displayValue = value;
+                                                if (typeof value === 'boolean') {
+                                                  displayValue = value ? 'Enabled' : 'Disabled';
+                                                }
+                                                 
+                                                paramElements.push(
+                                                  <span key={`${index++}`}>{`${displayKey}: ${displayValue}`}</span>
+                                                );
+                                              }
+                                            });
+                                             
+                                            return paramElements;
+                                          })()}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -356,22 +435,20 @@ const RetrievalBrowser = () => {
                         {/* Results for this run */}
                         <div className="result-panel-content">
                           <div className="panel-results-header">
-                            Found {results.length} results for "{currentQuery}"
+                            Found {results.length} results for "{lastSearchQuery}"
                           </div>
                           <div className="panel-results-list">
                             {results.map(result => (
                               <div key={result.id} className="result-item">
-                                <div className="result-header">
-                                  <span className="result-title">{result.document_name}</span>
+                                <div className="result-meta">
+                                  <span className="result-id">ID: {result.id}</span>
                                   <span className="result-score">
-                                    {Math.round(result.relevance_score * 100)}%
+                                    {result.relevance_score.toFixed(2)}
                                   </span>
+                                  <span className="result-title">{result.document_name}</span>
                                 </div>
                                 <div className="result-snippet">
                                   {result.snippet}
-                                </div>
-                                <div className="result-meta">
-                                  <span className="result-id">ID: {result.id}</span>
                                 </div>
                               </div>
                             ))}

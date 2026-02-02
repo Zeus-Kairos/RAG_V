@@ -9,6 +9,7 @@ const useRetrievalStore = create((set, get) => {
     selectedRuns: new Set(), // Currently selected index runs
     isIndexing: false,
     currentQuery: '',
+    lastSearchQuery: '', // Query used for the last search
     activeKnowledgebase: { name: 'default' }, // Default knowledgebase
     activeChunkRun: null,
     activeEmbeddingConfig: null,
@@ -218,6 +219,7 @@ const useRetrievalStore = create((set, get) => {
         set({ 
           retrievalResults: resultsByRun,
           currentQuery: query,
+          lastSearchQuery: query, // Update lastSearchQuery when results are fetched
           isLoading: false 
         });
       } catch (error) {
@@ -264,7 +266,7 @@ const useRetrievalStore = create((set, get) => {
     },
     
     clearRetrievalResults: () => {
-      set({ retrievalResults: {}, currentQuery: '' });
+      set({ retrievalResults: {}, currentQuery: '', lastSearchQuery: '' });
     },
     
     clearError: () => {

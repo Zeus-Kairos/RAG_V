@@ -125,11 +125,10 @@ class BM25BasedRetriever(BaseRetriever):
         """
         if not self._bm25_retriever:
             # Initialize BM25 retriever if not already initialized
-            texts = [doc.page_content for doc in self.indexer.all_docs]
-            self._bm25_retriever = BM25Retriever.from_texts(texts)
+            bm25_retriever = BM25Retriever.from_documents(self.indexer.all_docs)
         
         # BM25Retriever returns just documents, not scores
-        documents = self._bm25_retriever.invoke(query, k=k)
+        documents = bm25_retriever.invoke(query, k=k)
         
         # Create dummy scores (BM25 doesn't provide relevance scores directly)
         # In a real implementation, you might want to calculate proper scores
