@@ -789,6 +789,11 @@ async def set_active_parse_run(file_id: int, parse_run_id: int):
     try:
         success = memory_manager.parser_manager.set_active_parse_run(file_id, parse_run_id)
         if success:
+            # Desync chunk runs for parsed files have been changed
+            knowledgebase_id = memory_manager.knowledgebase_manager.get_file_by_id(file_id)[4]
+            if not knowledgebase_id:
+                raise HTTPException(status_code=404, detail=f"File {file_id} not found in any knowledgebase")
+            memory_manager.chunking_manager.desync_chunk_runs(knowledgebase_id)
             return {
                 "success": True,
                 "message": f"Successfully set parse run {parse_run_id} as active for file {file_id}"

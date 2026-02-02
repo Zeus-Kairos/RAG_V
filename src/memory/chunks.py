@@ -408,11 +408,12 @@ class ChunkingManager:
             logger.error(f"Error deleting chunk run: {e}")
             raise
     
-    def desync_chunk_runs(self, chunk_run_ids: Optional[List[int]] = None) -> int:
+    def desync_chunk_runs(self, knowledgebase_id: int, chunk_run_ids: Optional[List[int]] = None) -> int:
         """
         Set in_sync field of records in chunk_run table to 0.
         
         Args:
+            knowledgebase_id: ID of the knowledgebase
             chunk_run_ids: Optional list of chunk run IDs to desync. If not provided, desync all records.
             
         Returns:
@@ -424,11 +425,14 @@ class ChunkingManager:
             if chunk_run_ids:
                 placeholders = ','.join('?' * len(chunk_run_ids))
                 cur.execute(
-                    f"UPDATE chunk_run SET in_sync = 0 WHERE id IN ({placeholders})",
-                    chunk_run_ids
+                    f"UPDATE chunk_run SET in_sync = 0 WHERE knowledgebase_id = ? AND id IN ({placeholders})",
+                    (knowledgebase_id, *chunk_run_ids)
                 )
             else:
-                cur.execute("UPDATE chunk_run SET in_sync = 0")
+                cur.execute(
+                    f"UPDATE chunk_run SET in_sync = 0 WHERE knowledgebase_id = ?",
+                    (knowledgebase_id,)
+                )
             
             self.conn.commit()
             return cur.rowcount

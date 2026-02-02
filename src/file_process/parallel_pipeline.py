@@ -217,6 +217,10 @@ class ParallelFileProcessingPipeline:
                 yield result
             except Exception as e:
                 logger.error(f"Unexpected error in parallel parsing: {e}")
+
+        # Desync chunk runs for parsed files have been changed
+        self.memory_manager.chunking_manager.desync_chunk_runs(file_dict['knowledgebase_id'])
+        
     
     async def _parse_single_file(self, file_id: int, parameters: Dict[str, Any], parse_run_id: int, parse_run_time: str) -> Dict[str, Any]:
         """Parse a single file.

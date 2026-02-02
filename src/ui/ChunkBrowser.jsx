@@ -308,7 +308,7 @@ const ChunkBrowser = () => {
                       <span className="chunk-run-framework">{run.framework}</span>
                       <span className="chunk-run-time">
                         {formatDateTime(run.run_time)}
-                        {!run.in_sync && <span className="chunk-run-out-of-sync" title="out of sync - text to chunk from has been changed">⛓️</span>}
+                        {!run.in_sync && <span className="chunk-run-out-of-sync" title="out of sync - text to chunk has been changed">⛓️</span>}
                       </span>
                     </div>
                     <div className="chunk-run-header-actions">

@@ -371,7 +371,7 @@ class ParserManager:
             
             # Get file type and path
             cur.execute(
-                "SELECT file_id, type FROM files WHERE filepath = ?",
+                "SELECT file_id, type, knowledgebase_id FROM files WHERE filepath = ?",
                 (filepath,)
             )
             file_info = cur.fetchone()
@@ -379,7 +379,7 @@ class ParserManager:
             if not file_info:
                 raise ValueError(f"File with filepath {filepath} not found")
             
-            file_id, file_type = file_info[0], file_info[1]
+            file_id, file_type, knowledgebase_id = file_info[0], file_info[1], file_info[2]
                                  
             if file_type == 'file':
                 # Check if the parsed record being deleted is the active one
@@ -465,8 +465,15 @@ class ParserManager:
                                 (latest_parsed[0], file_id_in_folder)
                             )
                             logger.info(f"Set latest parsed record {latest_parsed[0]} to active for file with id {file_id_in_folder}")
-            
+                 
+            # Desync chunk runs for parsed files have been changed
+            cur.execute(
+                f"UPDATE chunk_run SET in_sync = 0 WHERE knowledgebase_id = ?",
+                (knowledgebase_id,)
+            )
+
             self.conn.commit()
+            
             return True
         except Exception as e:
             logger.error(f"Error deleting parse run: {e}")
