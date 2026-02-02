@@ -26,32 +26,36 @@ const RetrievalBrowser = () => {
     fetchActiveChunkRun,
     fetchActiveEmbeddingConfig,
     error,
-    clearError
+    clearError,
+    setSelectedRuns,
+    retrieverType
   } = useRetrievalStore();
   
   // State for selected index runs
-  const [selectedRuns, setSelectedRuns] = useState(new Set());
+  const [localSelectedRuns, setLocalSelectedRuns] = useState(new Set());
   
   // Handle checkbox change
   const handleCheckboxChange = (runId) => {
-    setSelectedRuns(prev => {
+    setLocalSelectedRuns(prev => {
       const newSet = new Set(prev);
       if (newSet.has(runId)) {
         newSet.delete(runId);
       } else {
         newSet.add(runId);
       }
+      // Also update the store's selectedRuns
+      setSelectedRuns(newSet);
       return newSet;
     });
   };
   
   // Handle delete selected runs
   const handleDeleteSelected = async () => {
-    if (selectedRuns.size === 0) return;
+    if (localSelectedRuns.size === 0) return;
     
     try {
       // Delete each selected run
-      for (const runId of selectedRuns) {
+      for (const runId of localSelectedRuns) {
         await fetchWithAuth(`/api/index-runs/${activeKnowledgebase?.name || 'default'}/${runId}`, {
           method: 'DELETE'
         });
@@ -61,6 +65,7 @@ const RetrievalBrowser = () => {
       await fetchIndexRuns(activeKnowledgebase?.id);
       
       // Clear selection
+      setLocalSelectedRuns(new Set());
       setSelectedRuns(new Set());
     } catch (error) {
       console.error('Error deleting index runs:', error);
@@ -69,13 +74,16 @@ const RetrievalBrowser = () => {
   
   // Handle select all
   const handleSelectAll = () => {
-    if (selectedRuns.size === indexRuns.length) {
+    let newSet;
+    if (localSelectedRuns.size === indexRuns.length) {
       // Deselect all
-      setSelectedRuns(new Set());
+      newSet = new Set();
     } else {
       // Select all
-      setSelectedRuns(new Set(indexRuns.map(run => run.id)));
+      newSet = new Set(indexRuns.map(run => run.id));
     }
+    setLocalSelectedRuns(newSet);
+    setSelectedRuns(newSet);
   };
   
 
@@ -94,7 +102,7 @@ const RetrievalBrowser = () => {
   const handleQuerySubmit = (e) => {
     e.preventDefault();
     if (currentQuery.trim()) {
-      queryDocuments(currentQuery);
+      queryDocuments(currentQuery, localSelectedRuns);
     }
   };
   
@@ -151,18 +159,18 @@ const RetrievalBrowser = () => {
                   <input
                     type="checkbox"
                     className="select-all-checkbox"
-                    checked={indexRuns.length > 0 && selectedRuns.size === indexRuns.length}
+                    checked={indexRuns.length > 0 && localSelectedRuns.size === indexRuns.length}
                     onChange={handleSelectAll}
                   />
                 )}
                 <h3>Index List</h3>
               </div>
-              {selectedRuns.size > 0 && (
+              {localSelectedRuns.size > 0 && (
                 <button 
                   className="delete-btn"
                   onClick={handleDeleteSelected}
                 >
-                  Delete ({selectedRuns.size})
+                  Delete ({localSelectedRuns.size})
                 </button>
               )}
             </div>
@@ -171,13 +179,13 @@ const RetrievalBrowser = () => {
                 <div className="no-runs">No index runs found</div>
               ) : (
                 indexRuns.map(run => (
-                  <div key={run.id} className={`index-run-item ${selectedRuns.has(run.id) ? 'selected' : ''}`}>
+                  <div key={run.id} className={`index-run-item ${localSelectedRuns.has(run.id) ? 'selected' : ''}`}>
                     <div className="index-run-header">
                       <div className="run-checkbox-container">
                         <input
                           type="checkbox"
                           className="run-checkbox"
-                          checked={selectedRuns.has(run.id)}
+                          checked={localSelectedRuns.has(run.id)}
                           onChange={() => handleCheckboxChange(run.id)}
                         />
                         <span className="run-id">ID: {run.id}</span>
@@ -309,36 +317,70 @@ const RetrievalBrowser = () => {
             
             {/* Results */}
             <div className="retrieval-results">
-              {retrievalResults.length === 0 ? (
+              {Object.keys(retrievalResults).length === 0 ? (
                 currentQuery ? (
                   <div className="no-results">No results found for "{currentQuery}"</div>
                 ) : (
                   <div className="no-query">Enter a query to search for documents</div>
                 )
               ) : (
-                <>
-                  <div className="results-header">
-                    Found {retrievalResults.length} results for "{currentQuery}"
-                  </div>
-                  <div className="results-list">
-                    {retrievalResults.map(result => (
-                      <div key={result.id} className="result-item">
-                        <div className="result-header">
-                          <span className="result-title">{result.document_name}</span>
-                          <span className="result-score">
-                            {Math.round(result.relevance_score * 100)}%
-                          </span>
+                <div className="results-container">
+                  {Object.entries(retrievalResults).map(([runId, runData]) => {
+                    // Find the index run info for this runId
+                    const indexRun = indexRuns.find(run => run.id.toString() === runId);
+                    const { results, retrieverType } = runData;
+                    return (
+                      <div key={runId} className="result-panel">
+                        {/* Index run info header */}
+                        <div className="result-panel-header">
+                          <div className="run-info">
+                            <h4>Index ID: {runId}</h4>
+                            {indexRun && (
+                              <div className="run-details">
+                                <div className="run-meta-row">
+                                  <span className="run-embedding-id">
+                                    Embedding: <span className="highlight-value">{indexRun.embedding_configure_id}</span>
+                                  </span>
+                                  <span className="run-retriever-type">
+                                    Retriever: <span className="highlight-value">{retrieverType.charAt(0).toUpperCase() + retrieverType.slice(1)}</span>
+                                  </span>
+                                </div>
+                                {indexRun.framework && (
+                                  <span className="run-framework">{indexRun.framework}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="result-snippet">
-                          {result.snippet}
-                        </div>
-                        <div className="result-meta">
-                          <span className="result-path">{result.file_path}</span>
+                        
+                        {/* Results for this run */}
+                        <div className="result-panel-content">
+                          <div className="panel-results-header">
+                            Found {results.length} results for "{currentQuery}"
+                          </div>
+                          <div className="panel-results-list">
+                            {results.map(result => (
+                              <div key={result.id} className="result-item">
+                                <div className="result-header">
+                                  <span className="result-title">{result.document_name}</span>
+                                  <span className="result-score">
+                                    {Math.round(result.relevance_score * 100)}%
+                                  </span>
+                                </div>
+                                <div className="result-snippet">
+                                  {result.snippet}
+                                </div>
+                                <div className="result-meta">
+                                  <span className="result-id">ID: {result.id}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>

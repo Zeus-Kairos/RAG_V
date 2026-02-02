@@ -4,8 +4,9 @@ import { fetchWithAuth } from './store';
 const useRetrievalStore = create((set, get) => {
   return {
     // Initial state
-    retrievalResults: [],
+    retrievalResults: {}, // Map of index run ID to results
     indexRuns: [],
+    selectedRuns: new Set(), // Currently selected index runs
     isIndexing: false,
     currentQuery: '',
     activeKnowledgebase: { name: 'default' }, // Default knowledgebase
@@ -26,6 +27,10 @@ const useRetrievalStore = create((set, get) => {
     
     setK: (value) => {
       set({ k: value });
+    },
+    
+    setSelectedRuns: (selectedRuns) => {
+      set({ selectedRuns });
     },
     
     runIndexing: async () => {
@@ -137,11 +142,11 @@ const useRetrievalStore = create((set, get) => {
       }
     },
     
-    queryDocuments: async (query) => {
+    queryDocuments: async (query, selectedRunIds = null) => {
       try {
         set({ isLoading: true, error: null });
         
-        const { activeKnowledgebase, indexRuns, retrieverType, k } = get();
+        const { activeKnowledgebase, indexRuns, selectedRuns, retrieverType, k } = get();
         
         // Ensure we have all required parameters
         if (!activeKnowledgebase || !activeKnowledgebase.name) {
@@ -153,40 +158,68 @@ const useRetrievalStore = create((set, get) => {
           throw new Error('No index runs found');
         }
         
-        // Use the first index run for now (in UI we'll let user select)
-        const selectedIndexRun = indexRuns[0];
+        // Determine which runs to use
+        const runsToQuery = selectedRunIds ? 
+          indexRuns.filter(run => selectedRunIds.has(run.id)) : 
+          selectedRuns.size > 0 ? 
+            indexRuns.filter(run => selectedRuns.has(run.id)) : 
+            [indexRuns[0]];
         
-        // Call the API endpoint
-        const response = await fetchWithAuth(
-          `/api/retrieve/${activeKnowledgebase.name}/${selectedIndexRun.id}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              query,
-              retriever_type: retrieverType,
-              k
-            })
+        if (runsToQuery.length === 0) {
+          throw new Error('No index runs selected');
+        }
+        
+        // Fetch results for each run in parallel
+        const fetchPromises = runsToQuery.map(async (run) => {
+          const response = await fetchWithAuth(
+            `/api/retrieve/${activeKnowledgebase.name}/${run.id}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                query,
+                retriever_type: retrieverType,
+                k
+              })
+            }
+          );
+          
+          if (!response.ok) {
+            throw new Error(`API error for run ${run.id}: ${response.statusText}`);
           }
-        );
+          
+          const data = await response.json();
+          
+          if (!data.success) {
+            throw new Error(`Failed to retrieve documents for run ${run.id}: ${data.message || 'Unknown error'}`);
+          }
+          
+          return { 
+            runId: run.id, 
+            results: data.results || [],
+            retrieverType: data.retriever_type || retrieverType
+          };
+        });
         
-        if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`);
-        }
+        // Wait for all fetch operations to complete
+        const fetchResults = await Promise.all(fetchPromises);
         
-        const data = await response.json();
+        // Build results object mapping run IDs to results and metadata
+        const resultsByRun = {};
+        fetchResults.forEach(({ runId, results, retrieverType }) => {
+          resultsByRun[runId] = {
+            results: results,
+            retrieverType: retrieverType
+          };
+        });
         
-        if (data.success) {
-          set({ 
-            retrievalResults: data.results || [],
-            currentQuery: query,
-            isLoading: false 
-          });
-        } else {
-          throw new Error(data.message || 'Failed to retrieve documents');
-        }
+        set({ 
+          retrievalResults: resultsByRun,
+          currentQuery: query,
+          isLoading: false 
+        });
       } catch (error) {
         console.error('Error querying documents:', error);
         set({ 
@@ -231,7 +264,7 @@ const useRetrievalStore = create((set, get) => {
     },
     
     clearRetrievalResults: () => {
-      set({ retrievalResults: [], currentQuery: '' });
+      set({ retrievalResults: {}, currentQuery: '' });
     },
     
     clearError: () => {

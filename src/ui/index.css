@@ -245,10 +245,13 @@ body {
 /* Main content area */
 .main-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 16px;
   box-sizing: border-box;
   background-color: white;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Main tabs */
@@ -282,8 +285,11 @@ body {
   border-bottom: 2px solid #4caf50;
 }
 
-.tab-content {
-  min-height: calc(100vh - 200px);
+.main-content .tab-content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Responsive Design */

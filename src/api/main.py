@@ -15,6 +15,7 @@ from src.file_process.indexer import Indexer
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
+from src.retriever.retrievers import BaseRetriever
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -827,6 +828,62 @@ async def delete_parse_run(kb_name: str, parse_run_id: int, path: str):
 async def delete_parse_run_root(kb_name: str, parse_run_id: int):
     """Delete a parse run and all associated records for the root folder of a knowledgebase."""
     return await delete_parse_run(kb_name, parse_run_id, "")
+
+# API endpoint for retrieving documents
+@app.post("/api/retrieve/{kb_name}/{index_run_id}")
+async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
+    """Retrieve relevant documents from the vectorstore based on a query."""
+    try:
+        # Get request body
+        request_data = await request.json()
+        query = request_data.get('query')
+        retriever_type = request_data.get('retriever_type', 'vector')
+        k = request_data.get('k', 5)
+        
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        
+        # Get index run details
+        index_run = memory_manager.index_manager.get_index_run_by_id(index_run_id)
+        if not index_run:
+            raise HTTPException(status_code=404, detail="Index run not found")
+        
+        chunk_run_id = index_run["chunk_run_id"]
+        embedding_config_id = index_run["embedding_configure_id"]
+        
+        # Initialize Indexer
+        indexer = get_indexer(kb_name, chunk_run_id, embedding_config_id)
+        if not indexer:
+            raise HTTPException(status_code=400, detail="Failed to initialize indexer")
+        
+        # Create Retriever
+
+        retriever = BaseRetriever.create(retriever_type, indexer)
+        
+        # Perform retrieval
+        results = retriever.retrieve(query, k=k)
+        
+        # Format results
+        formatted_results = []
+        for doc, score in results:
+            formatted_results.append({
+                "id": doc.metadata.get('chunk_id'),
+                "document_name": doc.metadata.get('filename', 'Unknown'),
+                "file_path": doc.metadata.get('filepath', 'Unknown'),
+                "snippet": doc.page_content[:200] + ("..." if len(doc.page_content) > 200 else ""),
+                "relevance_score": float(score)
+            })
+        
+        return {
+            "success": True,
+            "results": formatted_results,
+            "retriever_type": retriever_type
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving documents: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
 @app.get("/health")

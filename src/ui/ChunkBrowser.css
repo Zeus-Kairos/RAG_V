@@ -1,7 +1,7 @@
 .chunk-browser {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
   background-color: #f5f5f5;
   border-radius: 8px;
   overflow: hidden;
