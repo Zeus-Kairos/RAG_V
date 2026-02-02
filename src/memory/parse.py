@@ -412,6 +412,12 @@ class ParserManager:
                             (latest_parsed[0],)
                         )
                         logger.info(f"Set latest parsed record {latest_parsed[0]} to active for file {filepath}")
+
+                    # Desync chunk runs for parsed files have been changed
+                    cur.execute(
+                        f"UPDATE chunk_run SET in_sync = 0 WHERE knowledgebase_id = ?",
+                        (knowledgebase_id,)
+                    )
             else:  # folder
                 # If it's a folder, delete all records with filepath under the folder with the parse_run_id
                 # Get all file_ids for files under this folder
@@ -427,20 +433,24 @@ class ParserManager:
                     (filepath, unix_pattern, windows_pattern)
                 )
                 folder_file_ids = [row[0] for row in cur.fetchall()]
-                
+                               
                 if folder_file_ids:
+                    out_of_sync = False
                     # First, identify which files have the active parsed record being deleted
                     files_with_active_deletion = []
                     for file_id_in_folder in folder_file_ids:
                         # Check if the parsed record being deleted is the active one
                         cur.execute(
-                            "SELECT is_active FROM parsed WHERE parse_run_id = ? AND file_id = ?",
+                            "SELECT is_active, parsed_text FROM parsed WHERE parse_run_id = ? AND file_id = ?",
                             (parse_run_id, file_id_in_folder)
                         )
                         parsed_record = cur.fetchone()
                         was_active = parsed_record and parsed_record[0]
+                        parsed_text = parsed_record and parsed_record[1]                       
                         if was_active:
                             files_with_active_deletion.append(file_id_in_folder)
+                            if parsed_text:
+                                out_of_sync = True
                     
                     # Delete all parsed records for these files with the given parse_run_id
                     placeholders = ','.join('?' * len(folder_file_ids))
@@ -464,14 +474,14 @@ class ParserManager:
                                 "UPDATE parsed SET is_active = 1 WHERE parse_run_id = ? AND file_id = ?",
                                 (latest_parsed[0], file_id_in_folder)
                             )
-                            logger.info(f"Set latest parsed record {latest_parsed[0]} to active for file with id {file_id_in_folder}")
-                 
-            # Desync chunk runs for parsed files have been changed
-            cur.execute(
-                f"UPDATE chunk_run SET in_sync = 0 WHERE knowledgebase_id = ?",
-                (knowledgebase_id,)
-            )
-
+                            logger.info(f"Set latest parsed record {latest_parsed[0]} to active for file with id {file_id_in_folder}")                            
+                    
+                    # Desync chunk runs for parsed files have been changed
+                    if out_of_sync:
+                        cur.execute(
+                            f"UPDATE chunk_run SET in_sync = 0 WHERE knowledgebase_id = ?",
+                            (knowledgebase_id,)
+                        )
             self.conn.commit()
             
             return True
