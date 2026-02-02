@@ -37,8 +37,13 @@ const EmbeddingSettings = () => {
   
   const handleAddConfig = () => {
     const defaultModel = 'text-embedding-ada-002';
+    // Extract config_id from model name - use part after '/' if present
+    let configId = defaultModel;
+    if (defaultModel.includes('/')) {
+      configId = defaultModel.split('/').pop();
+    }
     setConfigForm({
-      config_id: defaultModel,
+      config_id: configId,
       embedding_provider: 'openai',
       embedding_model: defaultModel,
       embedding_api_key: '',
@@ -50,7 +55,7 @@ const EmbeddingSettings = () => {
   const handleEditConfig = (config) => {
     setEditingConfig(config);
     setConfigForm({
-      config_id: config.config_id || config.embedding_model,
+      config_id: config.id || config.config_id || config.embedding_model,
       embedding_provider: config.embedding_provider,
       embedding_model: config.embedding_model,
       embedding_api_key: config.embedding_api_key,
@@ -106,13 +111,18 @@ const EmbeddingSettings = () => {
     const defaultModel = provider === 'openai' ? 'text-embedding-ada-002' :
                       provider === 'huggingface' ? 'sentence-transformers/all-MiniLM-L6-v2' :
                       provider === 'ollama' ? 'nomic-embed-text' : '';
+    // Extract config_id from model name - use part after '/' if present
+    let configId = defaultModel;
+    if (defaultModel.includes('/')) {
+      configId = defaultModel.split('/').pop();
+    }
     setConfigForm(prev => ({
       ...prev,
       embedding_provider: provider,
       // Set default model based on provider
       embedding_model: defaultModel,
       // Update config_id to match new default model
-      config_id: defaultModel
+      config_id: configId
     }));
   };
   
@@ -276,7 +286,20 @@ const EmbeddingSettings = () => {
                   type="text" 
                   className="embedding-form-input"
                   value={configForm.embedding_model}
-                  onChange={(e) => setConfigForm(prev => ({ ...prev, embedding_model: e.target.value }))}
+                  onChange={(e) => {
+                    const newModelName = e.target.value;
+                    // Extract config_id from model name - use part after '/' if present
+                    let newConfigId = newModelName;
+                    if (newModelName.includes('/')) {
+                      newConfigId = newModelName.split('/').pop();
+                    }
+                    setConfigForm(prev => ({
+                      ...prev, 
+                      embedding_model: newModelName,
+                      // Update config_id to match new model name
+                      config_id: newConfigId
+                    }));
+                  }}
                   placeholder="Enter model name"
                 />
               </div>

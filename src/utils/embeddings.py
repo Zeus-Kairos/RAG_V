@@ -60,7 +60,7 @@ class EmbeddingRunner:
                 base_url=self.embedding_base_url if self.embedding_base_url else None
             )
             logger.info(f"Initialized OpenAIEmbeddings model: {self.embedding_model_name}")
-        elif self.embedding_provider == "hf":
+        elif self.embedding_provider == "huggingface":
             self._embedding_model = HuggingFaceEmbeddings(
                 model_name=self.embedding_model_name
             )
