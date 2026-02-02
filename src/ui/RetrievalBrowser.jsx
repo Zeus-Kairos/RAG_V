@@ -130,6 +130,42 @@ const RetrievalBrowser = () => {
     runIndexing();
   };
   
+  // Sync result panel header heights
+  const resultsContainerRef = useRef(null);
+  
+  useEffect(() => {
+    const syncHeaderHeights = () => {
+      if (resultsContainerRef.current) {
+        const headers = resultsContainerRef.current.querySelectorAll('.result-panel-header');
+        if (headers.length > 0) {
+          let maxHeight = 0;
+          headers.forEach(header => {
+            // Reset height to auto to get the actual content height
+            header.style.height = 'auto';
+            const height = header.offsetHeight;
+            if (height > maxHeight) {
+              maxHeight = height;
+            }
+          });
+          headers.forEach(header => {
+            header.style.height = `${maxHeight}px`;
+          });
+        }
+      }
+    };
+    
+    // Run initially
+    syncHeaderHeights();
+    
+    // Add resize event listener
+    window.addEventListener('resize', syncHeaderHeights);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('resize', syncHeaderHeights);
+    };
+  }, [expandedParams, retrievalResults]);
+  
   return (
     <div className="retrieval-browser">
       <div className="retrieval-browser-content">
@@ -337,7 +373,7 @@ const RetrievalBrowser = () => {
                   <div className="no-query">Enter a query to search for documents</div>
                 )
               ) : (
-                <div className="results-container">
+                <div className="results-container" ref={resultsContainerRef}>
                   {Object.entries(retrievalResults).map(([runId, runData]) => {
                     // Find the index run info for this runId
                     const indexRun = indexRuns.find(run => run.id.toString() === runId);
@@ -469,8 +505,8 @@ const RetrievalBrowser = () => {
         <div className="error-modal-overlay">
           <div className="error-modal">
             <div className="error-modal-header">
-              <div className="error-modal-icon">⚠️</div>
-              <h3>Warning</h3>
+              <div className="error-modal-icon">❌</div>
+              <h3>Error</h3>
               <button className="error-modal-close" onClick={clearError}>
                 ×
               </button>
