@@ -288,17 +288,26 @@ const EmbeddingSettings = () => {
                   value={configForm.embedding_model}
                   onChange={(e) => {
                     const newModelName = e.target.value;
-                    // Extract config_id from model name - use part after '/' if present
-                    let newConfigId = newModelName;
-                    if (newModelName.includes('/')) {
-                      newConfigId = newModelName.split('/').pop();
+                    // Only update config_id if creating a new config (not editing existing)
+                    if (!editingConfig) {
+                      // Extract config_id from model name - use part after '/' if present
+                      let newConfigId = newModelName;
+                      if (newModelName.includes('/')) {
+                        newConfigId = newModelName.split('/').pop();
+                      }
+                      setConfigForm(prev => ({
+                        ...prev, 
+                        embedding_model: newModelName,
+                        // Update config_id to match new model name
+                        config_id: newConfigId
+                      }));
+                    } else {
+                      // When editing existing config, only update the model name
+                      setConfigForm(prev => ({
+                        ...prev, 
+                        embedding_model: newModelName
+                      }));
                     }
-                    setConfigForm(prev => ({
-                      ...prev, 
-                      embedding_model: newModelName,
-                      // Update config_id to match new model name
-                      config_id: newConfigId
-                    }));
                   }}
                   placeholder="Enter model name"
                 />

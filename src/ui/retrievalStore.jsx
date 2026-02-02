@@ -71,7 +71,12 @@ const useRetrievalStore = create((set, get) => {
         });
         
         if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`);
+          const errorData = await response.json();
+          set({ 
+            error: errorData.detail || errorData.message || response.statusText, 
+            isIndexing: false 
+          });
+          return;
         }
         
         // Process the streaming response
