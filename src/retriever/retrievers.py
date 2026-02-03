@@ -1,8 +1,11 @@
+import numpy as np
 from typing import List, Tuple, Optional, Dict
 from langchain_core.documents import Document
-from langchain_community.retrievers import BM25Retriever
+from src.retriever.bm25_scores import BM25Scorer
 from src.file_process.indexer import Indexer
+from src.utils.logging_config import get_logger
 
+logger = get_logger(__name__)
 
 class BaseRetriever:
     """Base retriever class that uses an Indexer to retrieve documents.
@@ -110,7 +113,6 @@ class BM25BasedRetriever(BaseRetriever):
             indexer: An Indexer instance that contains the documents
         """
         super().__init__(indexer)
-        self._bm25_retriever = None
     
     def retrieve(self, query: str, k: int = 5, **kwargs) -> List[Tuple[Document, float]]:
         """Retrieve documents using BM25 search.
@@ -123,22 +125,13 @@ class BM25BasedRetriever(BaseRetriever):
         Returns:
             A list of tuples containing Document objects and their relevance scores
         """
-        if not self._bm25_retriever:
-            # Initialize BM25 retriever if not already initialized
-            bm25_retriever = BM25Retriever.from_documents(self.indexer.all_docs)
+        bm25_scorer = BM25Scorer.from_documents(self.indexer.all_docs)
+        bm25_scores = bm25_scorer.get_scores(query)
+        bm25_scores = [score for score in bm25_scores if score > 0]
+        sorted_indices = np.argsort(bm25_scores)[::-1][:k]
+        sorted_results = [(self.indexer.all_docs[i], float(bm25_scores[i])) for i in sorted_indices[:k]]
         
-        # BM25Retriever returns just documents, not scores
-        documents = bm25_retriever.invoke(query, k=k)
-        
-        # Create dummy scores (BM25 doesn't provide relevance scores directly)
-        # In a real implementation, you might want to calculate proper scores
-        results = []
-        for i, doc in enumerate(documents):
-            # Assign scores based on rank (higher rank = higher score)
-            score = 1.0 - (i / k)
-            results.append((doc, score))
-        
-        return results
+        return sorted_results
 
 
 @BaseRetriever.register_retriever("fusion")
@@ -158,46 +151,23 @@ class FusionRetriever(BaseRetriever):
         Returns:
             A list of tuples containing Document objects and their relevance scores
         """
-        # Create vector and BM25 retrievers
-        vector_retriever = BaseRetriever.create("vector", self.indexer)
-        bm25_retriever = BaseRetriever.create("bm25", self.indexer)
+        # Get vector scores and BM25 scores
+        all_docs_with_scores = self.indexer.vectorstore.similarity_search_with_relevance_scores("", k=self.indexer.vectorstore.index.ntotal)
+        vector_scores = [score for _, score in all_docs_with_scores]
+
+        bm25_scorer = BM25Scorer.from_documents(self.indexer.all_docs)
+        bm25_scores = bm25_scorer.get_scores(query)
+
+        # Nomalize scores
+        epsilon = 1e-6
+        alpha = 0.5
         
-        # Get results from different retrievers
-        vector_results = vector_retriever.retrieve(query, k=k*2)
-        bm25_results = bm25_retriever.retrieve(query, k=k*2)
-        
-        # Create a dictionary to store fused scores
-        fused_scores = {}
-        
-        # RRF parameters
-        k_rrf = 60
-        
-        # Process vector results
-        for rank, (doc, score) in enumerate(vector_results):
-            doc_id = doc.metadata.get('chunk_id', id(doc))
-            if doc_id not in fused_scores:
-                fused_scores[doc_id] = {
-                    'document': doc,
-                    'score': 0
-                }
-            fused_scores[doc_id]['score'] += 1 / (rank + k_rrf)
-        
-        # Process BM25 results
-        for rank, (doc, score) in enumerate(bm25_results):
-            doc_id = doc.metadata.get('chunk_id', id(doc))
-            if doc_id not in fused_scores:
-                fused_scores[doc_id] = {
-                    'document': doc,
-                    'score': 0
-                }
-            fused_scores[doc_id]['score'] += 1 / (rank + k_rrf)
-        
-        # Convert to list and sort by score
-        sorted_results = sorted(
-            [(v['document'], v['score']) for v in fused_scores.values()],
-            key=lambda x: x[1],
-            reverse=True
-        )
+        vector_scores = 1 - (vector_scores - np.min(vector_scores)) / (np.max(vector_scores) - np.min(vector_scores) + epsilon)
+        bm25_scores = (bm25_scores - np.min(bm25_scores)) / (np.max(bm25_scores) -  np.min(bm25_scores) + epsilon)
+        combined_scores = alpha * vector_scores + (1 - alpha) * bm25_scores  
+        sorted_indices = np.argsort(combined_scores)[::-1]
+
+        sorted_results = [(self.indexer.all_docs[i], float(combined_scores[i])) for i in sorted_indices[:k]]
         
         # Return top k results
-        return sorted_results[:k]
+        return sorted_results
