@@ -1,4 +1,4 @@
-# RAG_V: Advanced Retrieval-Augmented Generation System
+# RAG_V: Retrieval-Augmented Generation Visualization
 
 ## Project Overview
 
