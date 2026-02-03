@@ -124,21 +124,21 @@ You can configure the embedding model in the settings.
 The system implements multiple retrieval strategies:
 
 - **BM25**: Traditional lexical search
-- **Vector Search**: Semantic search using embeddings
-- **Fusion Search**: Combines BM25 and semantic search
-- **Reranking**: Improves search results using advanced reranker models
+- **Vector**: Semantic search using embeddings
+- **Fusion**: Combines BM25 and semantic search
+- **Rerank**: Improves search results using advanced reranker models
 
 ## How to Extend
 
 ### Add Your Own Parsers
-- Add your own parser class that inherits from ![BaseParser](src/file_process/parsers.py) with decorator `@register_parser`.
-- Add your parser parameters to JSON config file ![parserConfig.json](src/ui/parserConfig.json).
+- Add your own parser class that inherits from [BaseParser](src/file_process/parsers.py) with decorator `@register_parser`.
+- Add your parser parameters to JSON config file [parserConfig.json](src/ui/parserConfig.json).
 
 ### Add Your Local Embedding Models
 - Add your Hugging Face based local embedding model on Embedding Setting on ui. Click "Add" -> Select "Hugging Face" -> Input your model path in "Model" column.
 
 ### Add Your Own Retrievers
-- Add your own retriever class that inherits from ![BaseRetriever](src/retriever/retrievers.py).
+- Add your own retriever class that inherits from [BaseRetriever](src/retriever/retrievers.py).
 
 
 ## Contributing Guidelines
