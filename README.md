@@ -1,4 +1,4 @@
-# RAG_V: Retrieval-Augmented Generation Visualization
+# RAG_V: Retrieval-Augmented Generation Visualizer
 
 ## Project Overview
 
@@ -131,13 +131,14 @@ The system implements multiple retrieval strategies:
 ## How to Extend
 
 ### Add Your Own Parsers
-TBD
+- Add your own parser class that inherits from ![BaseParser](src/file_process/parsers.py) with decorator `@register_parser`.
+- Add your parser parameters to JSON config file ![parserConfig.json](src/ui/parserConfig.json).
 
-### Add Your Own Embedding Models
-TBD
+### Add Your Local Embedding Models
+- Add your Hugging Face based local embedding model on Embedding Setting on ui. Click "Add" -> Select "Hugging Face" -> Input your model path in "Model" column.
 
 ### Add Your Own Retrievers
-TBD
+- Add your own retriever class that inherits from ![BaseRetriever](src/retriever/retrievers.py).
 
 
 ## Contributing Guidelines
