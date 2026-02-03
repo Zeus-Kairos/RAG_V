@@ -6,21 +6,21 @@ RAG_V is a comprehensive Retrieval-Augmented Generation (RAG) visualization tool
 
 ## Key Features
 ### Document Parsing Visualization
-![Document Parsing](images/Parsed Results.png)
+![Document Parsing](/images/Parsed%20Results.png)
 
 - **Multi-Format Document Processing**: Supports PDF, DOCX, PPTX and other document formats
 - **Multiple Parser Options**: Support multiple parsers for different document types. Easy for extension.
 - **Document Parsing Visualization**: Visualize parsed results by different parsers directly.
 
 ### Chunk Visualization
-![Chunk History](images/Chunking History.png)
-![Chunk Comparison](images/Chunking Comparison.png)
+![Chunk History](/images/Chunking%20History.png)
+![Chunk Comparison](/images/Chunking%20Comparison.png)
 
 - **Visualize Document Chunks**: Displays parsed document chunks with annotations
 - **Chunk Comparison**: Compare chunks from different chunkers with different parameters side by side
 
 ### Retrieval Visualization
-![Retrieval Comparison](images/Retrieval Results.png)
+![Retrieval Comparison](/images/Retrieval%20Results.png)
 
 - **Customizable Embeddings**: Add embedding models from different providers.
 - **Retrieval Comparison**: Compare the results of different embedding models side by side.
