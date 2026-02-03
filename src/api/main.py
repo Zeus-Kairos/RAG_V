@@ -182,6 +182,20 @@ async def delete_embedding_configuration(config_id: str):
         logger.error(f"Error deleting embedding configuration: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to get all retriever names
+@app.get("/api/retrievers")
+async def get_retrievers():
+    """Get all available retriever names."""
+    try:
+        retriever_names = BaseRetriever.get_retriever_names()
+        return {
+            "success": True,
+            "retrievers": retriever_names
+        }
+    except Exception as e:
+        logger.error(f"Error getting retrievers: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint for creating a knowledge base
 @app.post("/api/knowledgebase")
 async def create_knowledgebase(

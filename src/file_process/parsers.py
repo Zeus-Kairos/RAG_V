@@ -1,10 +1,12 @@
 import os
 import shutil
 from typing import Any, Dict
-import pymupdf.layout
-import pymupdf4llm
 from markitdown import MarkItDown
 from unstructured.partition.auto import partition
+import pymupdf.layout
+import pymupdf4llm
+from pypdf import PdfReader
+import pdfplumber
 
 from src.utils.logging_config import get_logger
 
@@ -65,7 +67,7 @@ class PymuPdfParser(BaseParser):
             
         Returns:
             Parsed markdown content as string
-        """                
+        """                           
         # Extract directory from file path
         # file_dir = os.path.dirname(file_path)
         # file_name = os.path.basename(file_path)
@@ -89,6 +91,7 @@ class PymuPdfParser(BaseParser):
             table_strategy="lines_strict",  # Strategy for table detection.
             ignore_code=False,  # If True, avoids special formatting for mono-spaced text.
             extract_words=False,  # Adds word-level data to each page dictionary.
+            **self.parser_params
         )
 
         return md_text
@@ -135,4 +138,50 @@ class UnstructuredParser(BaseParser):
         """
         elements = partition(file_path)
         return "\n\n".join([str(el) for el in elements])
-       
+
+@BaseParser.register_parser("pypdf")
+class PyPdfParser(BaseParser):
+    """
+    PDF parsing module that converts PDF files to text using pypdf.  
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+    
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a file and return the text content.
+        
+        Args:
+            file_path: Path to the PDF file to parse
+            
+        Returns:
+            Parsed text content as string
+        """
+        reader = PdfReader(file_path)
+        if "keep_layout" in self.parser_params and self.parser_params["keep_layout"]:
+            extraction_mode = "layout"
+        else:
+            extraction_mode = "plain"
+        return "\n".join([page.extract_text(extraction_mode=extraction_mode) for page in reader.pages])
+
+@BaseParser.register_parser("pdfplumber")
+class PdfPlumberParser(BaseParser):
+    """
+    PDF parsing module that converts PDF files to text using pdfplumber.  
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+    
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a file and return the text content.
+        
+        Args:
+            file_path: Path to the PDF file to parse
+            
+        Returns:
+            Parsed text content as string
+        """
+        with pdfplumber.open(file_path) as pdf:
+                text = "\n".join([page.extract_text(**self.parser_params) for page in pdf.pages])
+        return text

@@ -22,6 +22,28 @@ const EmbeddingSettings = () => {
     setK 
   } = useRetrievalStore();
   
+  // Available retrievers
+  const [availableRetrievers, setAvailableRetrievers] = useState(['vector', 'bm25', 'fusion']);
+  
+  // Fetch available retrievers
+  useEffect(() => {
+    const fetchRetrievers = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/retrievers');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.retrievers) {
+            setAvailableRetrievers(data.retrievers);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching retrievers:', err);
+      }
+    };
+    
+    fetchRetrievers();
+  }, []);
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState(null);
@@ -222,9 +244,11 @@ const EmbeddingSettings = () => {
                 value={retrieverType}
                 onChange={(e) => setRetrieverType(e.target.value)}
               >
-                <option value="vector">Vector</option>
-                <option value="bm25">BM25</option>
-                <option value="fusion">Fusion</option>
+                {availableRetrievers.map(retriever => (
+                  <option key={retriever} value={retriever}>
+                    {retriever.charAt(0).toUpperCase() + retriever.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

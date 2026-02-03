@@ -95,6 +95,55 @@
   accent-color: #4a6cf7;
 }
 
+/* Number Input Styles */
+.param-group input[type="number"] {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: white;
+}
+
+.param-group input[type="number"]:hover {
+  border-color: #4a6cf7;
+}
+
+.param-group input[type="number"]:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.1);
+}
+
+/* Number input spin buttons (optional styling) */
+.param-group input[type="number"]::-webkit-inner-spin-button,
+.param-group input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  margin: 0 4px;
+}
+
+/* Text Input Styles for consistency */
+.param-group input[type="text"] {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: white;
+}
+
+.param-group input[type="text"]:hover {
+  border-color: #4a6cf7;
+}
+
+.param-group input[type="text"]:focus {
+  outline: none;
+  border-color: #4a6cf7;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.1);
+}
+
 /* Custom Select Container */
 .custom-select-container {
   position: relative;

@@ -1,6 +1,7 @@
 import numpy as np
 from typing import List, Tuple, Optional, Dict
 from langchain_core.documents import Document
+from src.retriever.reranker import JinaReRanker
 from src.retriever.bm25_scores import BM25Scorer
 from src.file_process.indexer import Indexer
 from src.utils.logging_config import get_logger
@@ -16,6 +17,16 @@ class BaseRetriever:
     
     # Retriever registry to store retriever classes with their names
     _retriever_registry = {}
+    
+    def __init_subclass__(cls, retriever_name: str, **kwargs):
+        """Automatically register subclasses when they are defined.
+        
+        Args:
+            retriever_name: Name of the retriever class
+            **kwargs: Additional keyword arguments
+        """
+        super().__init_subclass__(**kwargs)
+        BaseRetriever._retriever_registry[retriever_name] = cls
     
     def __init__(self, indexer: Indexer):
         """Initialize the retriever with an Indexer instance.
@@ -77,10 +88,19 @@ class BaseRetriever:
             return cls._retriever_registry[retriever_type](indexer)
         else:
             raise ValueError(f"Unknown retriever type: {retriever_type}")
+    
+    @classmethod
+    def get_retriever_names(cls) -> List[str]:
+        """
+        Get all discovered retriever names.
+        
+        Returns:
+            A list of retriever names
+        """
+        return list(cls._retriever_registry.keys())
 
 
-@BaseRetriever.register_retriever("vector")
-class VectorRetriever(BaseRetriever):
+class VectorRetriever(BaseRetriever, retriever_name="vector"):
     """Retriever that uses vector similarity search."""
     
     def retrieve(self, query: str, k: int = 5, **kwargs) -> List[Tuple[Document, float]]:
@@ -102,8 +122,7 @@ class VectorRetriever(BaseRetriever):
         )
 
 
-@BaseRetriever.register_retriever("bm25")
-class BM25BasedRetriever(BaseRetriever):
+class BM25BasedRetriever(BaseRetriever, retriever_name="bm25"):
     """Retriever that uses BM25 search."""
     
     def __init__(self, indexer: Indexer):
@@ -134,8 +153,7 @@ class BM25BasedRetriever(BaseRetriever):
         return sorted_results
 
 
-@BaseRetriever.register_retriever("fusion")
-class FusionRetriever(BaseRetriever):
+class FusionRetriever(BaseRetriever, retriever_name="fusion"):
     """Retriever that uses fusion of multiple retrieval methods."""
     
     def retrieve(self, query: str, k: int = 5, **kwargs) -> List[Tuple[Document, float]]:
@@ -171,3 +189,27 @@ class FusionRetriever(BaseRetriever):
         
         # Return top k results
         return sorted_results
+
+class RerankRetriever(BaseRetriever, retriever_name="rerank"):
+    """Retriever that uses reranking with Jina Reranker model to improve document relevance."""
+       
+    def retrieve(self, query: str, k: int = 5, **kwargs) -> List[Tuple[Document, float]]:
+        """Retrieve documents using reranking to improve document relevance.
+        
+        Args:
+            query: The query string to search for
+            k: The number of documents to retrieve
+            **kwargs: Additional keyword arguments
+        
+        Returns:
+            A list of tuples containing Document objects and their relevance scores
+        """
+        results = self.indexer.vectorstore.similarity_search(query, k=k*2)
+
+        reranker = JinaReRanker()
+        reranked_results = reranker.rerank(query, results)
+        reranked_results = reranked_results[:k]
+
+        return reranked_results
+        
+       

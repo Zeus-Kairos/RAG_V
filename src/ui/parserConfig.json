@@ -15,15 +15,40 @@
         {
           "name": "pymupdf4llm",
           "params": {
-            "detectLayout": {
-              "type": "boolean",
-              "default": true,
-              "label": "Detect Layout"
-            },
-            "useOcr": {
+            "use_ocr": {
               "type": "boolean",
               "default": false,
               "label": "Use OCR"
+            }
+          }
+        },
+        {
+          "name": "pypdf",
+          "params": {
+            "keep_layout": {
+              "type": "boolean",
+              "default": false,
+              "label": "Keep Layout"
+            }
+          }
+        },
+        {
+          "name": "pdfplumber",
+          "params": {
+            "x_tolerance": {
+              "type": "int",
+              "default": 3,
+              "label": "X Tolerance"
+            },
+            "y_tolerance": {
+              "type": "int",
+              "default": 3,
+              "label": "Y Tolerance"
+            },
+            "layout": {
+              "type": "boolean",
+              "default": false,
+              "label": "Layout"
             }
           }
         }

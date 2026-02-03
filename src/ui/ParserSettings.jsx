@@ -131,6 +131,7 @@ const ParserSettings = () => {
           </div>
         );
       case 'number':
+      case 'int':
         return (
           <div className="param-group">
             <label htmlFor={`${fileType}-${paramName}`}>{paramConfig.label}:</label>

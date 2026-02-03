@@ -2,25 +2,9 @@ from typing import List
 import os
 import requests
 import json
-from FlagEmbedding import FlagReranker
 from transformers import AutoModel
 from langchain_core.documents import Document
 
-class BgeReRanker:
-    def __init__(self, model_name='BAAI/bge-reranker-v2-m3', use_fp16=True):
-        # Initialize the reranker model; use_fp16=True speeds up computation with slight performance loss
-        self.reranker = FlagReranker(model_name, use_fp16=use_fp16)
-
-    def rerank(self, query:str, documents: List[Document], normalize=True):
-        pairs = [[query, doc.page_content] for doc in documents]
-        scores = self.compute_score(pairs, normalize)
-        unsorted_docs = [(doc, score) for doc, score in zip(documents, scores)]
-        sorted_docs = sorted(unsorted_docs, key=lambda x: x[1], reverse=True)
-        return sorted_docs
-
-    def compute_score(self, pairs: List[List[str]], normalize=True):
-        # Compute reranking scores; normalize=True maps scores to 0-1 (applies sigmoid)
-        return self.reranker.compute_score(pairs, normalize=normalize)
 
 class JinaReRanker:
     def __init__(self, model_name='jinaai/jina-reranker-v3'):
