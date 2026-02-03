@@ -4,7 +4,9 @@ import requests
 import json
 from transformers import AutoModel
 from langchain_core.documents import Document
+from src.utils.logging_config import get_logger
 
+logger = get_logger(__name__)
 
 class JinaReRanker:
     def __init__(self, model_name='jinaai/jina-reranker-v3'):
@@ -12,12 +14,12 @@ class JinaReRanker:
         self.reranker = AutoModel.from_pretrained(
             'jinaai/jina-reranker-v3',
             dtype="auto",
-            device_map="auto",
             trust_remote_code=True
         )
         self.reranker.eval()
 
     def rerank(self, query:str, documents: List[Document]):
+        logger.info(f"Reranking {len(documents)} documents for query: {query}")
         docs = [doc.page_content for doc in documents]
         results = self.reranker.rerank(query, docs)
         scores = [{result['index']: float(result['relevance_score'])} for result in results]

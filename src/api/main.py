@@ -901,7 +901,7 @@ async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving documents: {e}")
+        logger.exception(f"Error retrieving documents: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
