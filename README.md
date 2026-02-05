@@ -39,7 +39,7 @@ RAG_V is a comprehensive Retrieval-Augmented Generation (RAG) visualization tool
 
 ```bash
 cd rag_v
-git clone <repository-url>
+git clone https://github.com/Zeus-Kairos/RAG_V.git
 ```
 
 ### Step 2: Set Up Python Environment
