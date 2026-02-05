@@ -80,7 +80,7 @@ cd rag_v
 python main.py
 ```
 
-### Start the Frontend Development Server (Optional)
+### Start the Frontend Development Server
 
 ```bash
 npm run dev
@@ -150,7 +150,7 @@ The system implements multiple retrieval strategies:
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the [MIT License](LICENSE).
 
 
 ## Support
