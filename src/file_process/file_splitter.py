@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from chonkie import Pipeline
@@ -72,21 +73,39 @@ class LangchainFileSplitter:
 class ChonkieFileSplitter:
     def __init__(self, **kwargs):
         self.chunkers = kwargs.get("chunkers", None)
+        self.chef = kwargs.get("chef", "markdown")
+        # Validate chef parameter
+        if self.chef not in ["markdown", "text", "table"]:
+            raise ValueError(f"Invalid chef parameter: {self.chef}. Must be one of: markdown, text, table")
     
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:     
-        pipeline = Pipeline().process_with("markdown")
+        pipeline = Pipeline().process_with(self.chef)
         for chunker in self.chunkers:
             pipeline = pipeline.chunk_with(chunker["chunker"], **chunker["params"])     
         doc = pipeline.run(text)
-        chunks = doc.chunks
-
+        chunks = getattr(doc, 'chunks', [])
+        images = getattr(doc, 'images', [])
+        tables = getattr(doc, 'tables', [])
+        codes = getattr(doc, 'code', [])
+        chunk_tuples = [(chunk.start_index, "text", chunk.text, {k: v for k, v in chunk.to_dict().items() if k != "text"}) for chunk in chunks]
+        image_tuples = [(image.start_index, "image", image.content, {k: v for k, v in asdict(image).items() if k != "content"}) for image in images]
+        table_tuples = [(table.start_index, "table", table.content, {k: v for k, v in asdict(table).items() if k != "content"}) for table in tables]
+        code_tuples = [(code.start_index, "code", code.content, {k: v for k, v in asdict(code).items() if k != "content"}) for code in codes]
+        
+        # Merge all tuples
+        all_tuples = chunk_tuples + image_tuples + table_tuples + code_tuples
+        
+        # Sort by start index
+        all_tuples.sort(key=lambda x: x[0])
+        
         documents = []
         chunk_index = 0
         file_id = metadata.get("file_id", "")
-        for chunk in chunks:
-            document = Document(page_content=chunk.text, 
+        for _, chunk_type, content, chunk_meta in all_tuples:
+            document = Document(page_content=content, 
                         metadata={
-                            **{k: v for k, v in chunk.to_dict().items() if k != "text"},
+                            "chunk_type": chunk_type,
+                            **chunk_meta,
                             "chunk_id": f"{file_id}_{chunk_index}",
                             **metadata
                         })

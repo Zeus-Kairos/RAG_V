@@ -310,6 +310,34 @@
   color: #4a6cf7;
 }
 
+/* Radio group styles */
+.radio-group {
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: #333333;
+}
+
+.radio-item input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4a6cf7;
+  cursor: pointer;
+}
+
+.radio-item:hover {
+  color: #4a6cf7;
+}
+
 /* Vertical chunker pipeline styles */
 .selected-chunkers-container {
   margin-top: 16px;

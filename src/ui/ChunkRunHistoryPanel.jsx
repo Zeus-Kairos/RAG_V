@@ -765,6 +765,28 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           // Format parameters as readable strings
           const paramStrings = [];
           
+          // Handle top-level parameters first (like chef for Chonkie)
+          Object.entries(paramsObj)
+            .forEach(([key, value]) => {
+              // Skip chunkers array as we'll handle it separately
+              if (key === 'chunkers') return;
+              
+              if (typeof value !== 'object' || value === null) {
+                // Format key to be more readable
+                const displayKey = key
+                  .replace(/_/g, ' ')    
+                  .replace(/\b\w/g, l => l.toUpperCase());
+                
+                // Format value based on type
+                let displayValue = value;
+                if (typeof value === 'boolean') {
+                  displayValue = value ? 'Enabled' : 'Disabled';
+                }
+                
+                paramStrings.push(`${displayKey}: ${displayValue}`);
+              }
+            });
+          
           // Handle chunkers array (for both frameworks)
           if (paramsObj.chunkers && Array.isArray(paramsObj.chunkers)) {
             paramsObj.chunkers.forEach((chunker, index) => {
@@ -787,25 +809,6 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                 paramStrings.push(`${displayName}: ${displayValue}`);
               });
             });
-          } else {
-            // Handle other frameworks and regular parameters
-            Object.entries(paramsObj)
-              .forEach(([key, value]) => {
-                if (typeof value !== 'object' || value === null) {
-                  // Format key to be more readable
-                  const displayKey = key
-                    .replace(/_/g, ' ')    
-                    .replace(/\b\w/g, l => l.toUpperCase());
-                  
-                  // Format value based on type
-                  let displayValue = value;
-                  if (typeof value === 'boolean') {
-                    displayValue = value ? 'Enabled' : 'Disabled';
-                  }
-                  
-                  paramStrings.push(`${displayKey}: ${displayValue}`);
-                }
-              });
           }
           
           return paramStrings.join(', ');

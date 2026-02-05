@@ -100,6 +100,7 @@ const useKnowledgebaseStore = create((set, get) => {
       },
       // Chonkie splitter settings
       chonkieSettings: {
+        chef: "markdown", // Default chef parameter
         chunkers: [
           {
             type: "Sentence",
@@ -471,6 +472,11 @@ const useKnowledgebaseStore = create((set, get) => {
         const updatedChonkieSettings = {
           ...prev.splitterSettings.chonkieSettings
         };
+        
+        // Handle chef parameter change
+        if (settings.chef !== undefined) {
+          updatedChonkieSettings.chef = settings.chef;
+        }
         
         // Handle chunker toggle logic if provided
         if (settings.toggleChunker !== undefined) {

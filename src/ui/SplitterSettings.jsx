@@ -235,6 +235,49 @@ const SplitterSettings = () => {
           <div className="splitter-section">
             
             <div className="splitter-section-content">
+              {/* Chef Parameter */}
+              <div className="param-group">
+                <label>Chef:</label>
+                <div className="radio-group">
+                  <label className="radio-item">
+                    <input
+                      type="radio"
+                      name="chef"
+                      value="markdown"
+                      checked={chonkieSettings.chef === 'markdown'}
+                      onChange={(e) => {
+                        handleChonkieSettingChange('chef', e.target.value);
+                      }}
+                    />
+                    <span>Markdown</span>
+                  </label>
+                  <label className="radio-item">
+                    <input
+                      type="radio"
+                      name="chef"
+                      value="text"
+                      checked={chonkieSettings.chef === 'text'}
+                      onChange={(e) => {
+                        handleChonkieSettingChange('chef', e.target.value);
+                      }}
+                    />
+                    <span>Text</span>
+                  </label>
+                  <label className="radio-item">
+                    <input
+                      type="radio"
+                      name="chef"
+                      value="table"
+                      checked={chonkieSettings.chef === 'table'}
+                      onChange={(e) => {
+                        handleChonkieSettingChange('chef', e.target.value);
+                      }}
+                    />
+                    <span>Table</span>
+                  </label>
+                </div>
+              </div>
+              
               {/* Chunker Selection */}
               <div className="param-group">
                 <label>Available Chunkers:</label>

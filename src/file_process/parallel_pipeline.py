@@ -335,8 +335,10 @@ class ParallelFileProcessingPipeline:
         # Initialize FileSplitter with the provided parameters
         if framework == "langchain":        
             self.file_splitter = LangchainFileSplitter(**kwargs)
+            logger.info(f"Using LangchainFileSplitter with parameters: {kwargs}")
         elif framework == "chonkie":
             self.file_splitter = ChonkieFileSplitter(**kwargs)
+            logger.info(f"Using ChonkieFileSplitter with parameters: {kwargs}")
         else:
             raise ValueError(f"Unsupported chunking framework: {framework}")
         

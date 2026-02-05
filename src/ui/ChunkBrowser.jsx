@@ -93,6 +93,7 @@ const ChunkBrowser = () => {
       } else if (activeFramework === 'chonkie') {
         // Chonkie framework settings
         formData.append('framework', 'chonkie');
+        formData.append('chef', splitterSettings.chonkieSettings.chef);
         
         // Prepare chunkers array from the selected chunkers with their individual parameters
         const chunkers = splitterSettings.chonkieSettings.chunkers.map(chunker => {
