@@ -514,7 +514,7 @@ const useKnowledgebaseStore = create((set, get) => {
                 newChunker = {
                   type: chunkerType,
                   params: {
-                    chunkSize: 100,
+                    chunkSize: 1000,
                     threshold: 0.8,
                     similarityWindow: 3
                   }
