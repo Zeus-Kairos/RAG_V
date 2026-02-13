@@ -7,6 +7,7 @@ import pymupdf.layout
 import pymupdf4llm
 from pypdf import PdfReader
 import pdfplumber
+from docling.document_converter import DocumentConverter
 
 from src.utils.logging_config import get_logger
 
@@ -185,3 +186,25 @@ class PdfPlumberParser(BaseParser):
         with pdfplumber.open(file_path) as pdf:
                 text = "\n".join([page.extract_text(**self.parser_params) for page in pdf.pages])
         return text
+
+@BaseParser.register_parser("docling")
+class DoclingParser(BaseParser):
+    """
+    File parsing module that converts files to text using docling.  
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+    
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a file and return the text content.
+        
+        Args:
+            file_path: Path to the PDF file to parse
+            
+        Returns:
+            Parsed text content as string
+        """
+        converter = DocumentConverter()
+        result = converter.convert(file_path)
+        return result.document.export_to_markdown()
