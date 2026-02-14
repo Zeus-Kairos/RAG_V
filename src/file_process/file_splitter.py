@@ -202,13 +202,13 @@ class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
     """Splitter that uses Docling's HybridChunker for chunking."""
     
     def __init__(self, **kwargs):
-        self.parser_params = kwargs.get("parser_params", {})
+        self.parser_params = kwargs
 
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:
         filename = metadata.get("filename", None)
         converter = DocumentConverter()
         doc = converter.convert_string(text, InputFormat.MD, filename).document
-        
+
         chunker = HybridChunker(**self.parser_params)
         chunks = chunker.chunk(doc)
         documents = []
