@@ -90,6 +90,7 @@ npm run dev
 
 Open your web browser and navigate to `http://localhost:5173` (for development server) or `http://localhost:8000` (for production build).
 
+
 ## System Components
 
 ### Parsers
@@ -102,14 +103,33 @@ The system supports multiple parsers for different document types:
   - unstructured
   - pypdf
   - pdfplumber
+  - docling
 
 - **DOCX Parsers**:
   - markitdown (default)
   - unstructured
+  - docling
 
 - **PPTX Parsers**:
   - markitdown (default)
   - unstructured
+  - docling
+
+### Chunkers
+
+The system supports multiple chunkers:
+
+- **Langchain Splitters**:
+  - MarkdownHeaderSplitter
+  - RecursiveCharacterTextSplitter
+
+- **Chonkie Chunkers**:
+  - Sentence Chunker
+  - Recursive Chunker
+  - Semantic Chunker
+
+- **Docling Chunkers**:
+  - Hybrid Chunker
 
 ### Embedding Models
 
@@ -127,6 +147,7 @@ The system implements multiple retrieval strategies:
 - **Vector**: Semantic search using embeddings
 - **Fusion**: Combines BM25 and semantic search
 - **Rerank**: Improves search results using advanced reranker models
+
 
 ## How to Extend
 
