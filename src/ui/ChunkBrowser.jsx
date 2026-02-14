@@ -17,6 +17,9 @@ const ChunkBrowser = () => {
   // Get active knowledgebase
   const activeKnowledgebase = knowledgebases.find(kb => kb.is_active === 1) || knowledgebases[0];
   
+  // Destructure doclingSettings from splitterSettings
+  const { doclingSettings } = splitterSettings;
+  
   // Fetch chunk runs when component mounts or active knowledgebase changes
   useEffect(() => {
     if (activeKnowledgebase) {
@@ -127,6 +130,18 @@ const ChunkBrowser = () => {
         
         // Add chunkers as JSON string
         formData.append('chunkers', JSON.stringify(chunkers));
+      } else if (activeFramework === 'docling') {
+        // Docling framework settings
+        formData.append('framework', 'docling');
+        
+        // Add Docling-specific parameters
+        if (doclingSettings.tokenizer) {
+          formData.append('tokenizer', doclingSettings.tokenizer);
+        }
+        if (!doclingSettings.useDefaultMaxTokens) {
+          formData.append('max_tokens', doclingSettings.maxTokens.toString());
+        }
+        formData.append('merge_peers', doclingSettings.mergePeers.toString());
       }
       
       // Send request to chunk-files endpoint
@@ -267,6 +282,7 @@ const ChunkBrowser = () => {
             >
               <option value="langchain">Langchain</option>
               <option value="chonkie">Chonkie</option>
+              <option value="docling">Docling</option>
             </select>
           </div>
         </div>

@@ -14,7 +14,8 @@ const SplitterSettings = () => {
     toggleSplitter, 
     updateMarkdownSettings, 
     updateRecursiveSettings,
-    updateChonkieSettings 
+    updateChonkieSettings,
+    updateDoclingSettings
   } = useKnowledgebaseStore();
   
   const { 
@@ -22,7 +23,8 @@ const SplitterSettings = () => {
     isRecursiveEnabled, 
     markdownSettings, 
     recursiveSettings,
-    chonkieSettings
+    chonkieSettings,
+    doclingSettings
   } = splitterSettings;
   
   // Sync local state with store when store values change
@@ -83,6 +85,12 @@ const SplitterSettings = () => {
             onClick={() => setActiveFramework('chonkie')}
           >
             Chonkie
+          </button>
+          <button 
+            className={`tab-btn ${activeFramework === 'docling' ? 'active' : ''}`}
+            onClick={() => setActiveFramework('docling')}
+          >
+            Docling
           </button>
         </div>
       </div>
@@ -475,6 +483,86 @@ const SplitterSettings = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        
+        {/* Docling Tab Content */}
+        {activeFramework === 'docling' && (
+          <div className="splitter-section">
+            
+            <div className="splitter-section-content">
+              {/* Docling Splitter Settings */}
+              
+              {/* Tokenizer Parameter */}
+              <div className="param-group">
+                <label className="param-label-with-input">
+                  Tokenizer: 
+                  <input
+                    type="text"
+                    className="param-text-input"
+                    placeholder="Name or path of Hugging Face pretrained model"
+                    value={doclingSettings.tokenizer}
+                    onChange={(e) => updateDoclingSettings({ tokenizer: e.target.value })}
+                  />
+                </label>
+                <p className="param-description">
+                  name or path of HuggingFace pretrained model
+                </p>
+              </div>
+              
+              {/* Max Tokens Parameter */}
+              <div className="param-group">
+                <div className="param-label-with-input">
+                  <label className="param-label-with-input">Max Tokens:</label>
+                  <label className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={doclingSettings.useDefaultMaxTokens}
+                      onChange={(e) => updateDoclingSettings({ useDefaultMaxTokens: e.target.checked })}
+                    />
+                    <span>Use Default</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="param-text-input-inline"
+                    min="100"
+                    max="5000"
+                    value={doclingSettings.maxTokens}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!isNaN(value)) {
+                        updateDoclingSettings({ maxTokens: value });
+                      }
+                    }}
+                    disabled={doclingSettings.useDefaultMaxTokens}
+                  />
+                </div>
+                <input
+                  type="range"
+                  id="max-tokens"
+                  className="param-slider"
+                  min="100"
+                  max="5000"
+                  value={doclingSettings.maxTokens}
+                  onChange={(e) => updateDoclingSettings({ maxTokens: parseInt(e.target.value) })}
+                  disabled={doclingSettings.useDefaultMaxTokens}
+                />
+                <p className="param-description">
+                  The maximum number of tokens per chunk. If use default, limit is resolved from the tokenizer
+                </p>
+              </div>
+              
+              {/* Merge Peers Parameter */}
+              <div className="param-group checkbox">
+                <input
+                  type="checkbox"
+                  id="merge-peers"
+                  checked={doclingSettings.mergePeers}
+                  onChange={(e) => updateDoclingSettings({ mergePeers: e.target.checked })}
+                />
+                <label htmlFor="merge-peers">Merge Peers</label>
+              </div>
             </div>
           </div>
         )}

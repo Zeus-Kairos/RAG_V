@@ -6,7 +6,7 @@ from langchain_core.documents import Document
 from src.file_process.utils import SUPPORTED_FORMATS
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
-from src.file_process.file_splitter import ChonkieFileSplitter, LangchainFileSplitter
+from src.file_process.file_splitter import BaseFileSplitter
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser
 from src.memory.memory import MemoryManager
@@ -47,7 +47,7 @@ class ParallelFileProcessingPipeline:
         if not self.file_parser:
             self.file_parser = FileParser()
         if not self.file_splitter:
-            self.file_splitter = LangchainFileSplitter()  # Default to LangchainFileSplitter
+            self.file_splitter = BaseFileSplitter.create("langchain")  # Default to LangchainFileSplitter
         if not self.indexer:
             self.indexer = Indexer()  # Initialize indexer if not provided in constructor
         
@@ -333,14 +333,8 @@ class ParallelFileProcessingPipeline:
         logger.info(f"Starting parallel chunking for knowledgebase: knowledgebase_id={knowledgebase_id}")
         
         # Initialize FileSplitter with the provided parameters
-        if framework == "langchain":        
-            self.file_splitter = LangchainFileSplitter(**kwargs)
-            logger.info(f"Using LangchainFileSplitter with parameters: {kwargs}")
-        elif framework == "chonkie":
-            self.file_splitter = ChonkieFileSplitter(**kwargs)
-            logger.info(f"Using ChonkieFileSplitter with parameters: {kwargs}")
-        else:
-            raise ValueError(f"Unsupported chunking framework: {framework}")
+        self.file_splitter = BaseFileSplitter.create(framework, **kwargs)
+        logger.info(f"Using {framework} FileSplitter with parameters: {kwargs}")
         
         try:                      
             chunk_run_id = self.memory_manager.chunking_manager.save_chunk_run_config(

@@ -110,6 +110,13 @@ const useKnowledgebaseStore = create((set, get) => {
             }
           }
         ] // Array of chunker objects with their own parameters
+      },
+      // Docling splitter settings
+      doclingSettings: {
+        tokenizer: "sentence-transformers/all-MiniLM-L6-v2",
+        maxTokens: 1000,
+        useDefaultMaxTokens: true,
+        mergePeers: true
       }
     },
     
@@ -464,6 +471,18 @@ const useKnowledgebaseStore = create((set, get) => {
           }
         };
       });
+    },
+    
+    updateDoclingSettings: (settings) => {
+      set(prev => ({
+        splitterSettings: {
+          ...prev.splitterSettings,
+          doclingSettings: {
+            ...prev.splitterSettings.doclingSettings,
+            ...settings
+          }
+        }
+      }));
     },
     
     updateChonkieSettings: (settings) => {
