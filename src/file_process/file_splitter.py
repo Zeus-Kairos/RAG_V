@@ -225,6 +225,81 @@ class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
             documents.append(document)
         return documents
 
+class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
+    """Splitter that uses Langchain and Chonkie for chunking."""
+
+    def __init__(self, **kwargs):
+        self.parser_params = kwargs
+
+    def split_text(self, text: str, metadata: dict = None) -> list[Document]:
+        """Split text into chunks.
+        
+        Args:
+            text: Text to split
+            metadata: Metadata to attach to chunks
+            
+        Returns:
+            List of Document objects
+        """
+        header_levels = self.parser_params.get("header_levels", 3)
+        headers_to_split_on = [("#"*i, f"Header {i}") for i in range(1, header_levels + 1)]
+        strip_headers = self.parser_params.get("strip_headers", False)
+        markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on, strip_headers=strip_headers)
+        docs = markdown_splitter.split_text(text)
+
+        chunk_size = self.parser_params.get("chunk_size", 1000)
+        pipeline = Pipeline().process_with("markdown").chunk_with("recursive", chunk_size=chunk_size)
+
+        chunk_index = 0
+        documents = []
+        for doc in docs:
+            splits, chunk_index = self._split_pipeline(pipeline, doc, chunk_index, metadata)
+            documents.extend(splits)
+        return documents
+
+    def _split_pipeline(self, pipeline: Pipeline, doc: Document, chunk_index: int, metadata: dict) -> list[Document]:
+        """Split document into recursive chunks with Chonkie pipeline.
+        
+        Args:
+            pipeline: Chonkie pipeline to use for chunking
+            doc: Document to split
+            chunk_index: Current chunk index
+            metadata: Metadata to attach to chunks
+            
+        Returns:
+            List of Document objects and updated chunk_index
+        """
+        document = pipeline.run(doc.page_content)
+        chunks = getattr(document, 'chunks', [])
+        images = getattr(document, 'images', [])
+        tables = getattr(document, 'tables', [])
+        codes = getattr(document, 'code', [])
+        chunk_tuples = [(chunk.start_index, "text", chunk.text, {k: v for k, v in chunk.to_dict().items() if k != "text"}) for chunk in chunks]
+        image_tuples = [(image.start_index, "image", image.content, {k: v for k, v in asdict(image).items() if k != "content"}) for image in images]
+        table_tuples = [(table.start_index, "table", table.content, {k: v for k, v in asdict(table).items() if k != "content"}) for table in tables]
+        code_tuples = [(code.start_index, "code", code.content, {k: v for k, v in asdict(code).items() if k != "content"}) for code in codes]
+    
+        # Merge all tuples
+        all_tuples = chunk_tuples + image_tuples + table_tuples + code_tuples
+    
+        # Sort by start index
+        all_tuples.sort(key=lambda x: x[0])
+    
+        file_id = metadata.get("file_id", "")
+        documents = []
+        for _, chunk_type, content, chunk_meta in all_tuples:
+            document = Document(page_content=content, 
+                    metadata={
+                        "chunk_id": f"{file_id}_{chunk_index}",
+                        "chunk_type": chunk_type,
+                        **doc.metadata,
+                        **chunk_meta,                         
+                        **metadata
+                    })
+            chunk_index += 1
+            documents.append(document)
+        return documents, chunk_index
+
 if __name__ == "__main__":
 
     text = """
@@ -294,6 +369,12 @@ This document compares the legacy 8480 and the new N8480 power sensors. It also 
     ])
     recursive_splits = recursive_only_splitter.split_text(text, metadata={"file_id": 4})
     for split in recursive_splits:
+        print(split)
+
+    print("\n\nTesting HybridSplitter:")
+    hybrid_splitter = BaseFileSplitter.create("hybrid")
+    hybrid_splits = hybrid_splitter.split_text(text, metadata={"file_id": 5})
+    for split in hybrid_splits:
         print(split)
         
         

@@ -142,6 +142,13 @@ const ChunkBrowser = () => {
           formData.append('max_tokens', doclingSettings.maxTokens.toString());
         }
         formData.append('merge_peers', doclingSettings.mergePeers.toString());
+      } else if (activeFramework === 'hybrid') {
+        // Hybrid framework settings
+        formData.append('framework', 'hybrid');
+        
+        // Add Hybrid-specific parameters
+        formData.append('header_levels', splitterSettings.hybridSettings.headerLevels.toString());
+        formData.append('chunk_size', splitterSettings.hybridSettings.chunkSize.toString());
       }
       
       // Send request to chunk-files endpoint
@@ -283,6 +290,7 @@ const ChunkBrowser = () => {
               <option value="langchain">Langchain</option>
               <option value="chonkie">Chonkie</option>
               <option value="docling">Docling</option>
+              <option value="hybrid">Hybrid</option>
             </select>
           </div>
         </div>

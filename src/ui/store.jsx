@@ -117,6 +117,11 @@ const useKnowledgebaseStore = create((set, get) => {
         maxTokens: 1000,
         useDefaultMaxTokens: true,
         mergePeers: true
+      },
+      // Hybrid splitter settings
+      hybridSettings: {
+        headerLevels: 3,
+        chunkSize: 1000
       }
     },
     
@@ -485,6 +490,18 @@ const useKnowledgebaseStore = create((set, get) => {
       }));
     },
     
+    updateHybridSettings: (settings) => {
+      set(prev => ({
+        splitterSettings: {
+          ...prev.splitterSettings,
+          hybridSettings: {
+            ...prev.splitterSettings.hybridSettings,
+            ...settings
+          }
+        }
+      }));
+    },
+    
     updateChonkieSettings: (settings) => {
       set(prev => {
         // Create updated chonkie settings first
@@ -688,6 +705,16 @@ const useKnowledgebaseStore = create((set, get) => {
                 }
               }
             ]
+          },
+          doclingSettings: {
+            tokenizer: "sentence-transformers/all-MiniLM-L6-v2",
+            maxTokens: 1000,
+            useDefaultMaxTokens: true,
+            mergePeers: true
+          },
+          hybridSettings: {
+            headerLevels: 3,
+            chunkSize: 1000
           }
         },
         parserSettings: {

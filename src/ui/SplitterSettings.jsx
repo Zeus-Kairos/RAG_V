@@ -15,7 +15,8 @@ const SplitterSettings = () => {
     updateMarkdownSettings, 
     updateRecursiveSettings,
     updateChonkieSettings,
-    updateDoclingSettings
+    updateDoclingSettings,
+    updateHybridSettings
   } = useKnowledgebaseStore();
   
   const { 
@@ -24,7 +25,8 @@ const SplitterSettings = () => {
     markdownSettings, 
     recursiveSettings,
     chonkieSettings,
-    doclingSettings
+    doclingSettings,
+    hybridSettings
   } = splitterSettings;
   
   // Sync local state with store when store values change
@@ -91,6 +93,12 @@ const SplitterSettings = () => {
             onClick={() => setActiveFramework('docling')}
           >
             Docling
+          </button>
+          <button 
+            className={`tab-btn ${activeFramework === 'hybrid' ? 'active' : ''}`}
+            onClick={() => setActiveFramework('hybrid')}
+          >
+            Hybrid
           </button>
         </div>
       </div>
@@ -562,6 +570,60 @@ const SplitterSettings = () => {
                   onChange={(e) => updateDoclingSettings({ mergePeers: e.target.checked })}
                 />
                 <label htmlFor="merge-peers">Merge Peers</label>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Hybrid Tab Content */}
+        {activeFramework === 'hybrid' && (
+          <div className="splitter-section">
+            
+            <div className="splitter-section-content">
+              {/* Hybrid Splitter Settings */}
+              
+              {/* Header Levels Parameter */}
+              <div className="param-group">
+                <label htmlFor="hybrid-header-levels">Header Levels: {hybridSettings.headerLevels}</label>
+                <input
+                  type="range"
+                  id="hybrid-header-levels"
+                  className="param-slider"
+                  min="1"
+                  max="10"
+                  value={hybridSettings.headerLevels}
+                  onChange={(e) => updateHybridSettings({ headerLevels: parseInt(e.target.value) })}
+                />
+              </div>
+              
+              {/* Chunk Size Parameter */}
+              <div className="param-group">
+                <label htmlFor="hybrid-chunk-size" className="param-label-with-input">
+                  Chunk Size: 
+                  <input
+                    type="number"
+                    id="hybrid-chunk-size-input"
+                    className="param-text-input-inline"
+                    min="50"
+                    max="10000"
+                    value={hybridSettings.chunkSize}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!isNaN(value)) {
+                        updateHybridSettings({ chunkSize: value });
+                      }
+                    }}
+                  />
+                </label>
+                <input
+                  type="range"
+                  id="hybrid-chunk-size"
+                  className="param-slider"
+                  min="50"
+                  max="10000"
+                  value={hybridSettings.chunkSize}
+                  onChange={(e) => updateHybridSettings({ chunkSize: parseInt(e.target.value) })}
+                />
               </div>
             </div>
           </div>
