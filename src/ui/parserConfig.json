@@ -15,6 +15,11 @@
         {
           "name": "pymupdf4llm",
           "params": {
+            "embed_images": {
+              "type": "boolean",
+              "default": false,
+              "label": "Embed Images"
+            },
             "use_ocr": {
               "type": "boolean",
               "default": false,
