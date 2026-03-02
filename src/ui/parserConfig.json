@@ -61,6 +61,16 @@
           "name": "docling",
           "params": {
           }
+        },
+        {
+          "name": "mineru",
+          "params": {
+            "table_enable": {
+              "type": "boolean",
+              "default": true,
+              "label": "Enable Table"
+            }
+          }
         }
       ]
     },

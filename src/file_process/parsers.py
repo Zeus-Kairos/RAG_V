@@ -207,3 +207,39 @@ class DoclingParser(BaseParser):
         converter = DocumentConverter()
         result = converter.convert(file_path)
         return result.document.export_to_markdown()
+
+@BaseParser.register_parser("mineru")
+class MineruParser(BaseParser):
+    """
+    File parsing module that converts files to markdown format using mineru.
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+    
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a file and return the markdown content.
+        
+        Args:
+            file_path: Path to the file to parse
+            
+        Returns:
+            Parsed markdown content as string
+        """
+        from pathlib import Path
+        from src.file_process.mineru_parse import parse_doc
+        import tempfile
+        
+        # Create a temporary directory for output
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Call parse_doc with the file path
+            markdown_strings = parse_doc(
+                path_list=[Path(file_path)],
+                output_dir=temp_dir,
+                backend=self.parser_params.get("backend", "pipeline"),
+                method=self.parser_params.get("method", "auto"),
+                lang=self.parser_params.get("lang", "en"),
+                **self.parser_params
+            )
+            # Return the first markdown string (since we're parsing a single file)
+            return markdown_strings[0] if markdown_strings else ""
