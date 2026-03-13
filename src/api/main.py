@@ -763,6 +763,7 @@ async def get_file_by_id(file_id: int):
             "parsed_text": file_parsed[0]["parsed_text"],
             "parser": file_parsed[0]["parser"],
             "parameters": file_parsed[0]["parameters"],
+            "time_usage": file_parsed[0]["time_usage"],
             "time": file_parsed[0]["time"],
         }
         

@@ -13,8 +13,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     parser: '',
     time: '',
     parse_run_id: '',
+    time_usage: null,
     parameters: {}
   });
+
+  const formatTimeUsage = (seconds) => {
+    if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return '';
+    return `${Number(seconds).toFixed(3)}s`;
+  };
 
   const handleChunkRunSelect = (runId) => {
     const newSelected = new Set(selectedChunkRuns);
@@ -54,6 +60,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       const parsedTextParser = fileData.success ? fileData.file.parser : '';
       const parsedTextTime = fileData.success ? fileData.file.time : '';
       const parsedTextRunId = fileData.success ? fileData.file.parse_run_id : '';
+      const parsedTextTimeUsage = fileData.success ? fileData.file.time_usage : null;
       const parsedTextParameters = fileData.success ? fileData.file.parameters : {};
       
       // Update component state for consistency
@@ -61,6 +68,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         parser: parsedTextParser,
         time: parsedTextTime,
         parse_run_id: parsedTextRunId,
+        time_usage: parsedTextTimeUsage,
         parameters: parsedTextParameters
       });
       
@@ -86,6 +94,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         parser: parsedTextParser,
         time: parsedTextTime,
         parse_run_id: fileData.success ? fileData.file.parse_run_id : '',
+        time_usage: fileData.success ? fileData.file.time_usage : null,
         parameters: fileData.success ? fileData.file.parameters : {}
       });
     } catch (err) {
@@ -706,7 +715,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             <div class="run-header">
               <div style="margin-bottom: 5px; font-weight: bold;">Parsed Text</div>
               <div style="font-size: 12px; color: #666;">
-                ${parsedTextMetadata.parse_run_id ? `Run ID: ${parsedTextMetadata.parse_run_id} | ` : ''}Parser: ${parsedTextMetadata.parser || 'Unknown'} ${parsedTextParams ? `| Parameters: ${parsedTextParams}` : ''} | Time: ${parsedTextMetadata.time ? formatDateTime(parsedTextMetadata.time) : 'Unknown'}
+                ${parsedTextMetadata.parse_run_id ? `Run ID: ${parsedTextMetadata.parse_run_id} | ` : ''}Parser: ${parsedTextMetadata.parser || 'Unknown'} ${parsedTextParams ? `| Parameters: ${parsedTextParams}` : ''} | Time Usage: ${formatTimeUsage(parsedTextMetadata.time_usage) || 'N/A'} | Time: ${parsedTextMetadata.time ? formatDateTime(parsedTextMetadata.time) : 'Unknown'}
               </div>
             </div>
           </div>
@@ -897,7 +906,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
               <div class="legend">
                 <div class="legend-item">
                   <span class="legend-color" style="background-color: ${baseColor}; opacity: 0.3;"></span>
-                  <span>Framework: ${framework} | Run Parameters: ${formattedParams} | Parser: ${parsedTextMetadata.parser || 'Unknown'} ${parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0 ? `| Parser Parameters: ${formatParamsForDisplay(parsedTextMetadata.parameters)}` : ''}</span>
+                  <span>Framework: ${framework} | Run Parameters: ${formattedParams} | Parser: ${parsedTextMetadata.parser || 'Unknown'} | Parse Time Usage: ${formatTimeUsage(parsedTextMetadata.time_usage) || 'N/A'} ${parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0 ? `| Parser Parameters: ${formatParamsForDisplay(parsedTextMetadata.parameters)}` : ''}</span>
                 </div>
               </div>
             </div>
@@ -997,6 +1006,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             parser: data.file.parser || '',
             time: data.file.time || '',
             parse_run_id: data.file.parse_run_id || '',
+            time_usage: data.file.time_usage ?? null,
             parameters: data.file.parameters || {}
           });
         }
@@ -1094,6 +1104,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                 {((parsedTextMetadata.parser !== undefined && parsedTextMetadata.parser !== '') || 
                   parsedTextMetadata.parse_run_id !== undefined || 
                   (parsedTextMetadata.time !== undefined && parsedTextMetadata.time !== '') ||
+                  parsedTextMetadata.time_usage !== null ||
                   (parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0)) && (
                   <span className="parsed-text-metadata">
                     {parsedTextMetadata.parse_run_id !== undefined && (
@@ -1105,8 +1116,11 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                     {parsedTextMetadata.parameters && Object.keys(parsedTextMetadata.parameters).length > 0 && (
                       <span className="params-info"> | Parameters: {formatParamsForDisplay(parsedTextMetadata.parameters)}</span>
                     )}
+                    {parsedTextMetadata.time_usage !== null && (
+                      <span className="time-usage-info"> | Time Usage: {formatTimeUsage(parsedTextMetadata.time_usage)}</span>
+                    )}
                     {parsedTextMetadata.time && (
-                      <span className="time-info">| Time: {formatDateTime(parsedTextMetadata.time)}</span>
+                      <span className="time-info"> | Time: {formatDateTime(parsedTextMetadata.time)}</span>
                     )}
                   </span>
                 )}

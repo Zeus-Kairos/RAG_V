@@ -4,6 +4,13 @@ import { fetchWithAuth } from './store';
 const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoading, 
   setIsLoading, setError, knowledgebases, fetchDirectoryContents, currentPath, refreshFileBrowser, 
   setSelectedFileId, setSelectedFileName, setShowChunkRunPanel, directoryCache, setDirectoryCache, directoryCacheRef }) => {
+  const formatTimeUsage = (seconds) => {
+    if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
+      return 'N/A';
+    }
+    return `${Number(seconds).toFixed(3)}s`;
+  };
+
   // Delete a parse run
   const handleDeleteParseRun = async (parseRunId) => {
     setIsLoading(true);
@@ -432,6 +439,10 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
                 <span class="detail-label">Time</span>
                 <span class="detail-value">${new Date(parseRun.time).toLocaleString()}</span>
               </div>
+              <div class="detail-item">
+                <span class="detail-label">Time Usage</span>
+                <span class="detail-value">${formatTimeUsage(parseRun.time_usage)}</span>
+              </div>
             </div>
           </div>
           <div class="text-container">
@@ -498,8 +509,15 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
         if (data.success && data.parsed_content && data.parsed_content.length > 0) {
           // Use the first parsed content item (assuming one per file/run)
           const parsedContent = data.parsed_content[0];
+          const parseRunWithContentData = {
+            ...parseRun,
+            parser: parsedContent.parser ?? parseRun.parser,
+            parameters: parsedContent.parameters ?? parseRun.parameters,
+            time: parsedContent.time ?? parseRun.time,
+            time_usage: parsedContent.time_usage ?? parseRun.time_usage
+          };
           // Open the parsed content window with the fetched data
-          openParsedContentWindow(parsedContent.parsed_text, item.name, parseRun, loadingWindow);
+          openParsedContentWindow(parsedContent.parsed_text, item.name, parseRunWithContentData, loadingWindow);
         } else {
           throw new Error('No parsed content found');
         }
@@ -556,6 +574,10 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
             <div className="detail-item">
               <span className="detail-label">Parser:</span>
               <span className="detail-value">{parseRun.parser}</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Time Usage:</span>
+              <span className="detail-value">{formatTimeUsage(parseRun.time_usage)}</span>
             </div>
             {/* Only show Parameters if it's not an empty object */}
             {Object.keys(parseRun.parameters).length > 0 && (

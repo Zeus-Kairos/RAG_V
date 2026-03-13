@@ -1359,7 +1359,7 @@ const KnowledgebaseBrowser = () => {
                       border: run.is_active ? '2px solid #4CAF50' : 'none',
                       boxShadow: run.is_active ? '0 0 0 2px rgba(76, 175, 80, 0.3)' : 'none'
                     }}
-                    title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}\n${run.is_active ? '✓ Active' : ''}`}
+                    title={`Parser: ${run.parser}\nTime Usage: ${run.time_usage != null ? `${Number(run.time_usage).toFixed(3)}s` : 'N/A'}\nTime: ${new Date(run.time).toLocaleString()}\n${run.is_active ? '✓ Active' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedParseRun(run);
@@ -1561,7 +1561,7 @@ const KnowledgebaseBrowser = () => {
                                           border: run.is_active ? '2px solid #4CAF50' : 'none',
                                           boxShadow: run.is_active ? '0 0 0 2px rgba(76, 175, 80, 0.3)' : 'none'
                                         }}
-                                        title={`Parser: ${run.parser}\nTime: ${new Date(run.time).toLocaleString()}\n${run.is_active ? '✓ Active' : ''}`}
+                                        title={`Parser: ${run.parser}\nTime Usage: ${run.time_usage != null ? `${Number(run.time_usage).toFixed(3)}s` : 'N/A'}\nTime: ${new Date(run.time).toLocaleString()}\n${run.is_active ? '✓ Active' : ''}`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           // Show parse run popup
@@ -1827,6 +1827,9 @@ const KnowledgebaseBrowser = () => {
                             <div className="upload-result-details">
                               {result.content_length !== undefined && (
                                 <span>Content Length: {result.content_length} chars</span>
+                              )}
+                              {result.time_usage !== undefined && (
+                                <span>• Time Usage: {Number(result.time_usage).toFixed(3)}s</span>
                               )}
                             </div>
                           )}

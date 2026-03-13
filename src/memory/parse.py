@@ -49,6 +49,7 @@ class ParserManager:
                     parsed_text TEXT,
                     parser TEXT NOT NULL,
                     parameters TEXT DEFAULT '{}',
+                    time_usage REAL,
                     is_active INTEGER DEFAULT 0,
                     time TIMESTAMP,
                     FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE,
@@ -116,7 +117,7 @@ class ParserManager:
             logger.error(f"Error creating parse run: {e}")
             raise
     
-    def add_parsed_content(self, file_id: int, parse_run_id: int, parse_run_time: str, parsed_text: str, parser: str, parameters: dict, is_active: bool = True) -> int:
+    def add_parsed_content(self, file_id: int, parse_run_id: int, parse_run_time: str, parsed_text: str, parser: str, parameters: dict, is_active: bool = True, time_usage: Optional[float] = None) -> int:
         """
         Add parsed content to the database.
         
@@ -138,8 +139,8 @@ class ParserManager:
             params_json = json.dumps(parameters)
             
             cur.execute(
-                "INSERT INTO parsed (file_id, parse_run_id, parsed_text, parser, parameters, is_active, time) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (file_id, parse_run_id, parsed_text, parser, params_json, 1 if is_active else 0, parse_run_time)
+                "INSERT INTO parsed (file_id, parse_run_id, parsed_text, parser, parameters, time_usage, is_active, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (file_id, parse_run_id, parsed_text, parser, params_json, time_usage, 1 if is_active else 0, parse_run_time)
             )
             parsed_id = cur.lastrowid
             
@@ -200,12 +201,12 @@ class ParserManager:
             
             if is_active is not None:
                 cur.execute(
-                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active, time FROM parsed WHERE file_id = ? AND is_active = ?",
+                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, time_usage, is_active, time FROM parsed WHERE file_id = ? AND is_active = ?",
                     (file_id, 1 if is_active else 0)
                 )
             else:
                 cur.execute(
-                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active, time FROM parsed WHERE file_id = ?",
+                    "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, time_usage, is_active, time FROM parsed WHERE file_id = ?",
                     (file_id,)
                 )
             
@@ -218,8 +219,9 @@ class ParserManager:
                     "parsed_text": row[3],
                     "parser": row[4],
                     "parameters": json.loads(row[5]),
-                    "is_active": bool(row[6]),
-                    "time": row[7]
+                    "time_usage": row[6],
+                    "is_active": bool(row[7]),
+                    "time": row[8]
                 })
             
             return parsed_contents
@@ -242,7 +244,7 @@ class ParserManager:
             cur = self.conn.cursor()     
 
             cur.execute(
-                "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, is_active, time FROM parsed WHERE file_id = ? AND parse_run_id = ?",
+                "SELECT parse_id, file_id, parse_run_id, parsed_text, parser, parameters, time_usage, is_active, time FROM parsed WHERE file_id = ? AND parse_run_id = ?",
                 (file_id, parse_run_id)
             )
             
@@ -255,7 +257,9 @@ class ParserManager:
                     "parsed_text": row[3],
                     "parser": row[4],
                     "parameters": json.loads(row[5]),
-                    "is_active": bool(row[6])
+                    "time_usage": row[6],
+                    "is_active": bool(row[7]),
+                    "time": row[8]
                 })
             
             return parsed_contents
@@ -276,7 +280,7 @@ class ParserManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT parse_run_id, file_id, parser, parameters, time, is_active FROM parsed WHERE file_id = ?",
+                "SELECT parse_run_id, file_id, parser, parameters, time_usage, time, is_active FROM parsed WHERE file_id = ?",
                 (file_id,)
             )
             
@@ -287,8 +291,9 @@ class ParserManager:
                     "file_id": row[1],
                     "parser": row[2],
                     "parameters": json.loads(row[3]),
-                    "time": row[4],
-                    "is_active": bool(row[5])
+                    "time_usage": row[4],
+                    "time": row[5],
+                    "is_active": bool(row[6])
                 })
             
             return parse_runs

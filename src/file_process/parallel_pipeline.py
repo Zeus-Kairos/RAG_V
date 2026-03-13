@@ -1,5 +1,6 @@
 import os
 import asyncio
+import time
 from typing import List, Dict, Any, AsyncGenerator
 from fastapi import UploadFile
 from langchain_core.documents import Document
@@ -260,25 +261,30 @@ class ParallelFileProcessingPipeline:
                     parsed_text="",
                     parser="combined",
                     parameters=parameters,
-                    is_active=True
+                    is_active=True,
+                    time_usage=0.0
                 )
                 return {
                     "file_id": file_id,
                     "filename": filename,
                     "parse_run_id": parse_run_id,
                     "parse_run_time": parse_run_time,
+                    "time_usage": 0.0,
                     "parsed": True,
                     "parsed_id": parsed_id
                 }
             
             # Parse the file (run sync method in thread pool)
+            parse_start_time = time.perf_counter()
             parse_result = await asyncio.to_thread(self.file_parser.parse_file, filepath)
+            parse_duration = round(time.perf_counter() - parse_start_time, 4)
             
             result = {
                 "file_id": file_id,
                 "filename": filename,
                 "parse_run_id": parse_run_id,
-                "parse_run_time": parse_run_time
+                "parse_run_time": parse_run_time,
+                "time_usage": parse_duration
             }
             
             if parse_result["success"]:
@@ -295,7 +301,8 @@ class ParallelFileProcessingPipeline:
                     parsed_text=parse_result["content"],
                     parser=parse_result["parser"],
                     parameters=parse_result["parameters"],
-                    is_active=True
+                    is_active=True,
+                    time_usage=parse_duration
                 )
                 result["parsed_id"] = parsed_id
                 
