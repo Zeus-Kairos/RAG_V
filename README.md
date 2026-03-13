@@ -99,11 +99,13 @@ The system supports multiple parsers for different document types:
 
 - **PDF Parsers**:
   - pymupdf4llm (default)
+  - pymupdf
   - markitdown
   - unstructured
   - pypdf
   - pdfplumber
   - docling
+  - minerU
 
 - **DOCX Parsers**:
   - markitdown (default)

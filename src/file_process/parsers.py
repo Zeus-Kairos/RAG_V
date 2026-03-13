@@ -3,6 +3,7 @@ import shutil
 from typing import Any, Dict
 from markitdown import MarkItDown
 from unstructured.partition.auto import partition
+import pymupdf
 import pymupdf.layout
 import pymupdf4llm
 from pypdf import PdfReader
@@ -138,6 +139,31 @@ class UnstructuredParser(BaseParser):
         """
         elements = partition(file_path)
         return "\n\n".join([str(el) for el in elements])
+
+@BaseParser.register_parser("pymupdf")
+class PyMuPdfTextParser(BaseParser):
+    """
+    PDF parsing module that converts PDF files to text using PyMuPDF.
+    """
+    def __init__(self, parameters: Dict[str, Any] = {}):
+        self.parser_params = parameters
+
+    def parse(self, file_path: str) -> str:
+        """
+        Parse a PDF file and return extracted text from all pages.
+
+        Args:
+            file_path: Path to the PDF file to parse
+
+        Returns:
+            Extracted text content as string
+        """
+        page_texts = []
+        with pymupdf.open(file_path) as doc:
+            for page in doc:
+                page_texts.append(page.get_text(**self.parser_params))
+
+        return "\n".join(page_texts)
 
 @BaseParser.register_parser("pypdf")
 class PyPdfParser(BaseParser):

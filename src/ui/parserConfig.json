@@ -5,29 +5,6 @@
       "defaultFramework": "pymupdf4llm",
       "frameworks": [
         {
-          "name": "markitdown",
-          "params": {}
-        },
-        {
-          "name": "unstructured",
-          "params": {}
-        },
-        {
-          "name": "pymupdf4llm",
-          "params": {
-            "embed_images": {
-              "type": "boolean",
-              "default": false,
-              "label": "Embed Images"
-            },
-            "use_ocr": {
-              "type": "boolean",
-              "default": false,
-              "label": "Use OCR"
-            }
-          }
-        },
-        {
           "name": "pypdf",
           "params": {
             "keep_layout": {
@@ -57,6 +34,34 @@
             }
           }
         },
+        {
+          "name": "pymupdf",
+          "params": {
+          }
+        },
+        {
+          "name": "markitdown",
+          "params": {}
+        },
+        {
+          "name": "unstructured",
+          "params": {}
+        },
+        {
+          "name": "pymupdf4llm",
+          "params": {
+            "embed_images": {
+              "type": "boolean",
+              "default": false,
+              "label": "Embed Images"
+            },
+            "use_ocr": {
+              "type": "boolean",
+              "default": false,
+              "label": "Use OCR"
+            }
+          }
+        },       
         {
           "name": "docling",
           "params": {
