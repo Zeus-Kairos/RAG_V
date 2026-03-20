@@ -232,6 +232,11 @@ body {
   overflow: hidden;
 }
 
+.app-container-no-sidebar .main-content {
+  flex: 1;
+  width: 100%;
+}
+
 /* Sidebar styles */
 .sidebar {
     width: 350px;

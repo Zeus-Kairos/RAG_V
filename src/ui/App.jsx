@@ -7,6 +7,7 @@ import SplitterSettings from './SplitterSettings';
 import ParserSettings from './ParserSettings';
 import ChunkBrowser from './ChunkBrowser';
 import RetrievalBrowser from './RetrievalBrowser';
+import Dashboard from './Dashboard';
 import ErrorBoundary from './ErrorBoundary';
 
 function App() {
@@ -27,14 +28,18 @@ function App() {
     return <div className="loading">Loading...</div>;
   }
 
+  const showSidebar = activeTab !== 'dashboard';
+
   // Show main app with sidebar layout
   return (
-    <div className="app-container">
-      <div className="sidebar">
-        {activeTab === 'chunk' && <SplitterSettings />}
-        {activeTab === 'knowledgebase' && <ParserSettings />}
-        {activeTab === 'retrieval' && <EmbeddingSettings />}
-      </div>
+    <div className={`app-container ${!showSidebar ? 'app-container-no-sidebar' : ''}`}>
+      {showSidebar && (
+        <div className="sidebar">
+          {activeTab === 'chunk' && <SplitterSettings />}
+          {activeTab === 'knowledgebase' && <ParserSettings />}
+          {activeTab === 'retrieval' && <EmbeddingSettings />}
+        </div>
+      )}
       <div className="main-content">
         {/* Tab Navigation */}
         <div className="main-tabs">
@@ -56,10 +61,21 @@ function App() {
           >
             Retrieval Browser
           </button>
+          <button 
+            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            Dashboard
+          </button>
         </div>
         
         {/* Tab Content */}
         <div className="tab-content">
+          {activeTab === 'dashboard' && (
+            <ErrorBoundary>
+              <Dashboard />
+            </ErrorBoundary>
+          )}
           {activeTab === 'chunk' && <ChunkBrowser />}
           {activeTab === 'knowledgebase' && (
             <ErrorBoundary>

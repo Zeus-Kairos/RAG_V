@@ -1,0 +1,90 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.dashboard-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #202124;
+}
+
+.dashboard-subtitle {
+  font-size: 0.9rem;
+  color: #5f6368;
+  margin-bottom: 16px;
+}
+
+.dashboard-error {
+  padding: 12px;
+  background: #fce8e6;
+  color: #c5221f;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.dashboard-loading,
+.dashboard-empty {
+  padding: 24px;
+  text-align: center;
+  color: #5f6368;
+  font-size: 14px;
+}
+
+.dashboard-table-wrap {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.dashboard-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #5f6368;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dashboard-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.dashboard-table .col-filename {
+  font-weight: 500;
+  color: #202124;
+}
+
+.dashboard-table .col-path {
+  color: #5f6368;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+.dashboard-table .col-duration {
+  font-variant-numeric: tabular-nums;
+  color: #1a73e8;
+}
+
+.dashboard-table .col-parser-header {
+  font-weight: 600;
+  color: #202124;
+}

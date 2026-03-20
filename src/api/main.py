@@ -228,6 +228,20 @@ async def list_knowledgebases():
         logger.error(f"Error listing knowledgebases: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to get parse duration table for all parsed files in a knowledgebase
+@app.get("/api/knowledgebase/{kb_id}/parse-duration")
+async def get_parse_duration_table(kb_id: int):
+    """Get parse duration for all parsed files in the knowledgebase."""
+    try:
+        rows = memory_manager.parser_manager.get_parse_duration_by_knowledgebase(kb_id)
+        return {
+            "success": True,
+            "parse_duration": rows
+        }
+    except Exception as e:
+        logger.error(f"Error getting parse duration table: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint to get root directory info with parse runs
 @app.get("/api/knowledgebase/{kb_id}/root-info")
 async def get_root_directory_info(kb_id: int, knowledge_base: str = "default"):

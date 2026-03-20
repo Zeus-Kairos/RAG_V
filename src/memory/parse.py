@@ -302,6 +302,39 @@ class ParserManager:
             raise
 
     
+    def get_parse_duration_by_knowledgebase(self, knowledgebase_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all parsed files with their parse duration for a knowledgebase.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase
+            
+        Returns:
+            List of dicts with filepath, filename, parser, time_usage, time for each parsed file
+        """
+        try:
+            cur = self.conn.cursor()
+            cur.execute("""
+                SELECT f.filepath, f.filename, p.parser, p.time_usage
+                FROM files f
+                JOIN parsed p ON f.file_id = p.file_id
+                WHERE f.knowledgebase_id = ? AND f.type = 'file'
+                ORDER BY f.filepath ASC
+            """, (knowledgebase_id,))
+            rows = cur.fetchall()
+            return [
+                {
+                    "filepath": row[0],
+                    "filename": row[1],
+                    "parser": row[2],
+                    "time_usage": row[3]
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            logger.error(f"Error getting parse duration by knowledgebase: {e}")
+            raise
+
     def get_files_by_parse_run_id(self, parse_run_id: int) -> List[int]:
         """
         Get all file IDs associated with a parse run.
