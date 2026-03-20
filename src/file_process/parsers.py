@@ -1,6 +1,7 @@
 import os
 import shutil
 from typing import Any, Dict
+from docling.datamodel.base_models import InputFormat
 from markitdown import MarkItDown
 from unstructured.partition.auto import partition
 import pymupdf
@@ -8,7 +9,8 @@ import pymupdf.layout
 import pymupdf4llm
 from pypdf import PdfReader
 import pdfplumber
-from docling.document_converter import DocumentConverter
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 
 from src.utils.logging_config import get_logger
 
@@ -230,9 +232,20 @@ class DoclingParser(BaseParser):
         Returns:
             Parsed text content as string
         """
-        converter = DocumentConverter()
-        result = converter.convert(file_path)
-        return result.document.export_to_markdown()
+        if file_path.endswith(".pdf"):
+            pipeline_options = PdfPipelineOptions()
+            pipeline_options.do_ocr = self.parser_params.get("ocr_enable", False)
+            pipeline_options.do_table_structure = self.parser_params.get("table_enable", True)
+            pipeline_options.do_formula_enrichment = self.parser_params.get("formula_enable", True)
+            pipeline_options.do_code_enrichment = self.parser_params.get("code_enable", False)
+            converter = DocumentConverter(format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)})
+            result = converter.convert(file_path)
+            return result.document.export_to_markdown()
+        else:
+            converter = DocumentConverter()
+            result = converter.convert(file_path)
+            return result.document.export_to_markdown()
 
 @BaseParser.register_parser("mineru")
 class MineruParser(BaseParser):

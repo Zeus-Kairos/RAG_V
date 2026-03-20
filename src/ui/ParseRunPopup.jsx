@@ -201,6 +201,10 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Parsed Content: ${fileName}</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"><\/script>
+        <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"><\/script>
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
         <style>
           * {
             box-sizing: border-box;
@@ -224,6 +228,9 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
           
           h1 {
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
           }
           
           /* Single grid container for perfect alignment */
@@ -235,6 +242,9 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
           }
           
           .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             margin-bottom: 15px;
           }
           
@@ -339,6 +349,97 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
             margin: 0;
           }
           
+          /* Rendered markdown styles */
+          .markdown-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #24292e;
+          }
+          .markdown-content h1, .markdown-content h2, .markdown-content h3,
+          .markdown-content h4, .markdown-content h5, .markdown-content h6 {
+            margin-top: 1.2em; margin-bottom: 0.6em; font-weight: 600; line-height: 1.3;
+          }
+          .markdown-content h1 { font-size: 1.8em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+          .markdown-content h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+          .markdown-content h3 { font-size: 1.25em; }
+          .markdown-content p { margin-bottom: 0.8em; }
+          .markdown-content ul, .markdown-content ol { padding-left: 2em; margin-bottom: 0.8em; }
+          .markdown-content li { margin-bottom: 0.3em; }
+          .markdown-content code {
+            background: #f6f8fa; padding: 0.15em 0.4em; border-radius: 3px;
+            font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace; font-size: 0.9em;
+          }
+          .markdown-content pre {
+            background: #f6f8fa; padding: 14px; border-radius: 6px; overflow-x: auto;
+            margin-bottom: 0.8em; border: 1px solid #e1e4e8;
+          }
+          .markdown-content pre code { background: none; padding: 0; font-size: 0.85em; }
+          .markdown-content blockquote {
+            border-left: 4px solid #dfe2e5; padding: 0.5em 1em; margin: 0.8em 0; color: #6a737d;
+          }
+          .markdown-content table { border-collapse: collapse; margin-bottom: 0.8em; width: 100%; }
+          .markdown-content th, .markdown-content td {
+            border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left;
+          }
+          .markdown-content th { background: #f6f8fa; font-weight: 600; }
+          .markdown-content tr:nth-child(even) { background: #f9fafb; }
+          .markdown-content img { max-width: 100%; }
+          .markdown-content hr { border: none; border-top: 1px solid #eaecef; margin: 1.5em 0; }
+          .markdown-content a { color: #0366d6; text-decoration: none; }
+          .markdown-content a:hover { text-decoration: underline; }
+          .markdown-content .katex-display { overflow-x: auto; overflow-y: hidden; margin: 0.8em 0; }
+          .markdown-content .katex { font-size: 1.1em; }
+          
+          /* Toggle switch */
+          .toggle-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
+          .toggle-label {
+            font-size: 13px;
+            color: #555;
+            user-select: none;
+            cursor: pointer;
+          }
+          .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            flex-shrink: 0;
+          }
+          .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+          }
+          .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #ccc;
+            border-radius: 22px;
+            transition: background-color 0.25s;
+          }
+          .toggle-slider::before {
+            content: "";
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.25s;
+          }
+          .toggle-switch input:checked + .toggle-slider {
+            background-color: #1976d2;
+          }
+          .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(18px);
+          }
+          
           .scroll-container {
             scrollbar-width: thin; /* Firefox */
             scrollbar-color: #ccc #f0f0f0; /* Firefox */
@@ -416,7 +517,16 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
         </style>
       </head>
       <body>
-        <h1>Parsed Content: ${escapeHtml(fileName)}</h1>
+        <h1>
+          <span>Parsed Content: ${escapeHtml(fileName)}</span>
+          <div class="toggle-bar">
+            <label class="toggle-label" for="mdToggle">Render Markdown</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="mdToggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </h1>
         <div class="main-container">
           <div class="run-info concise">
             <h2>Parse Run Details</h2>
@@ -446,9 +556,49 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
             </div>
           </div>
           <div class="text-container">
-            <div class="chunk-text">${escapeHtml(parsedText)}</div>
+            <div id="rawView" class="chunk-text">${escapeHtml(parsedText)}</div>
+            <div id="mdView" class="markdown-content" style="display:none;"></div>
           </div>
         </div>
+        <script>
+          (function() {
+            var rawText = document.getElementById('rawView').textContent;
+            var mdView  = document.getElementById('mdView');
+            var rawView = document.getElementById('rawView');
+            var toggle  = document.getElementById('mdToggle');
+
+            // Pre-render markdown once the library loads
+            function renderMd() {
+              if (typeof marked !== 'undefined') {
+                mdView.innerHTML = marked.parse(rawText);
+                if (typeof renderMathInElement !== 'undefined') {
+                  renderMathInElement(mdView, {
+                    delimiters: [
+                      {left: '$$', right: '$$', display: true},
+                      {left: '$', right: '$', display: false},
+                      {left: '\\\\[', right: '\\\\]', display: true},
+                      {left: '\\\\(', right: '\\\\)', display: false}
+                    ],
+                    throwOnError: false
+                  });
+                }
+              } else {
+                mdView.innerHTML = '<p style="color:#b00020;">Failed to load markdown renderer.</p>';
+              }
+            }
+
+            toggle.addEventListener('change', function() {
+              if (toggle.checked) {
+                renderMd();
+                rawView.style.display = 'none';
+                mdView.style.display  = 'block';
+              } else {
+                rawView.style.display = 'block';
+                mdView.style.display  = 'none';
+              }
+            });
+          })();
+        <\/script>
       </body>
       </html>
     `;

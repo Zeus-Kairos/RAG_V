@@ -65,6 +65,26 @@
         {
           "name": "docling",
           "params": {
+            "ocr_enable": {
+              "type": "boolean",
+              "default": false,
+              "label": "Use OCR"
+            },
+            "table_enable": {
+              "type": "boolean",
+              "default": true,
+              "label": "Enable Table"
+            },
+            "formula_enable": {
+              "type": "boolean",
+              "default": true,
+              "label": "Enable Formula"
+            },
+            "code_enable": {
+              "type": "boolean",
+              "default": false,
+              "label": "Enable Code"
+            }
           }
         },
         {
