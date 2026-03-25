@@ -212,18 +212,19 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
             padding: 0;
           }
           
-          body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            padding: 20px;
-          }
-          
           html, body {
             height: 100%;
             margin: 0;
-            padding: 20px;
             background-color: #f5f5f5;
             font-family: Arial, sans-serif;
+          }
+          
+          body {
+            min-height: 100vh;
+            padding: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
           }
           
           h1 {
@@ -237,7 +238,8 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
           .main-container {
             display: flex;
             flex-direction: column;
-            height: calc(100vh - 40px); /* Subtract body padding */
+            flex: 1;
+            min-height: 0;
             width: 100%;
           }
           
@@ -336,6 +338,7 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
             border-radius: 8px;
             padding: 20px;
             flex: 1;
+            min-height: 0;
             overflow: auto;
             scrollbar-width: thin;
           }

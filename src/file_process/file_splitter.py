@@ -1,3 +1,4 @@
+import re
 from dataclasses import asdict
 from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import InputFormat
@@ -198,6 +199,43 @@ class ChonkieFileSplitter(BaseFileSplitter, splitter_name="chonkie"):
         return documents
 
 
+# Docling parses Markdown before chunking; ``\\`` is a hard line break and breaks LaTeX row
+# separators inside math. Private-use chars are unlikely in source text and survive round-trip.
+_DOCLING_LTX_BS_MARKER = "\uE000\uE001\uE002"
+
+
+def _mask_latex_double_backslash_in_math(text: str) -> str:
+    """Replace ``\\\\`` (LaTeX row / alignment) inside math spans so MD parsing does not alter it."""
+
+    def sub_pairs(s: str) -> str:
+        return re.sub(r"\\\\", _DOCLING_LTX_BS_MARKER, s)
+
+    parts = text.split("$$")
+    for i in range(1, len(parts), 2):
+        parts[i] = sub_pairs(parts[i])
+
+    def mask_block(seg: str, o: str, c: str) -> str:
+        esc_o, esc_c = re.escape(o), re.escape(c)
+        pat = re.compile(esc_o + r"(.*?)" + esc_c, re.DOTALL)
+
+        def repl(m: re.Match) -> str:
+            return o + sub_pairs(m.group(1)) + c
+
+        return pat.sub(repl, seg)
+
+    for i in range(0, len(parts), 2):
+        s = parts[i]
+        s = mask_block(s, r"\[", r"\]")
+        s = mask_block(s, r"\(", r"\)")
+        parts[i] = s
+
+    return "$$".join(parts)
+
+
+def _restore_latex_double_backslash(text: str) -> str:
+    return text.replace(_DOCLING_LTX_BS_MARKER, "\\\\")
+
+
 class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
     """Splitter that uses Docling's HybridChunker for chunking."""
     
@@ -206,8 +244,9 @@ class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
 
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:
         filename = metadata.get("filename", None)
+        masked = _mask_latex_double_backslash_in_math(text)
         converter = DocumentConverter()
-        doc = converter.convert_string(text, InputFormat.MD, filename).document
+        doc = converter.convert_string(masked, InputFormat.MD, filename).document
 
         chunker = HybridChunker(**self.parser_params)
         chunks = chunker.chunk(doc)
@@ -215,7 +254,7 @@ class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
         chunk_index = 0
         file_id = metadata.get("file_id", "")
         for chunk in chunks:
-            document = Document(page_content=chunk.text, 
+            document = Document(page_content=_restore_latex_double_backslash(chunk.text), 
                         metadata={
                             **chunk.meta.export_json_dict(),
                             "chunk_id": f"{file_id}_{chunk_index}",

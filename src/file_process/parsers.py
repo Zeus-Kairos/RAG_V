@@ -3,6 +3,7 @@ import shutil
 from typing import Any, Dict
 from docling.datamodel.base_models import InputFormat
 from markitdown import MarkItDown
+from unstructured.partition.pdf import partition_pdf
 from unstructured.partition.auto import partition
 import pymupdf
 import pymupdf.layout
@@ -119,7 +120,7 @@ class MarkitdownParser(BaseParser):
         """
         md = MarkItDown(enable_plugins=False) # Set to True to enable plugins
         result = md.convert(file_path)
-        return result.text_content
+        return result.markdown
 
 @BaseParser.register_parser("unstructured")
 class UnstructuredParser(BaseParser):
@@ -139,7 +140,10 @@ class UnstructuredParser(BaseParser):
         Returns:
             Parsed markdown content as string
         """
-        elements = partition(file_path)
+        if file_path.endswith(".pdf"):
+            elements = partition_pdf(file_path, strategy="auto")
+        else:
+            elements = partition(file_path)
         return "\n\n".join([str(el) for el in elements])
 
 @BaseParser.register_parser("pymupdf")

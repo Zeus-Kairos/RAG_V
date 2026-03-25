@@ -317,6 +317,55 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     };
 
+    /** Same label + palette index as chunk boundary markers (encoding color). */
+    const resolveEncodingColor = (chunkId, chunkIdx, palette) => {
+      const labelBase = (() => {
+        if (typeof chunkId === 'string') {
+          const parts = chunkId.split('_');
+          return parts[parts.length - 1] || chunkId;
+        }
+        return chunkId ?? chunkIdx + 1;
+      })();
+      const n = Array.isArray(palette) && palette.length > 0 ? palette.length : 1;
+      const num = parseInt(String(labelBase), 10);
+      let paletteIndex;
+      if (!Number.isNaN(num)) {
+        paletteIndex = ((num % n) + n) % n;
+      } else {
+        const s = String(chunkId ?? labelBase);
+        let h = 0;
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+        paletteIndex = h % n;
+      }
+      const color = palette[paletteIndex] ?? '#333';
+      return { color, labelBase };
+    };
+
+    const buildChunksOnlyHtml = (chunkRows, fileText, palette) =>
+      chunkRows
+        .map((chunk, idx) => {
+          const { color, labelBase } = resolveEncodingColor(chunk.chunk_id, idx, palette);
+          const hasDocSpan =
+            typeof chunk.start_idx === 'number' &&
+            typeof chunk.end_idx === 'number' &&
+            chunk.start_idx >= 0 &&
+            chunk.end_idx >= chunk.start_idx;
+          const rawBody = hasDocSpan
+            ? fileText.slice(chunk.start_idx, chunk.end_idx)
+            : String(chunk.content ?? '');
+          const body = escapeHtml(rawBody);
+          const numLabel = escapeHtml(String(labelBase));
+          return `
+            <div class="chunk-only-block" style="--chunk-color: ${color}; border-left-color: ${color}; background: ${applyAlpha(color, 0.06)};">
+              <div class="chunk-only-block-head">
+                <span class="chunk-only-badge" style="background: ${color};">${numLabel}</span>
+              </div>
+              <div class="chunk-only-text" style="color: ${color};">${body}</div>
+            </div>
+          `;
+        })
+        .join('');
+
     // Build HTML that keeps the original text exactly once, inserting zero-width
     // boundary markers (so overlaps never duplicate/extend the text).
     const formatTextWithBoundaryMarkers = (
@@ -356,26 +405,12 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           .slice()
           .sort((a, b) => (a.kind === b.kind ? a.idx - b.idx : a.kind === 'end' ? -1 : 1))
           .forEach((b, stackIdx) => {
-            const labelBase = (() => {
-              if (typeof b.chunkId === 'string') {
-                const parts = b.chunkId.split('_');
-                return parts[parts.length - 1] || b.chunkId;
-              }
-              return b.chunkId ?? b.idx + 1;
-            })();
+            const { color: boundaryColor, labelBase } = resolveEncodingColor(
+              b.chunkId,
+              b.idx,
+              palette
+            );
             const label = b.kind === 'start' ? String(labelBase) : `${labelBase}e`;
-
-            const paletteIndex = (() => {
-              const n = Array.isArray(palette) && palette.length > 0 ? palette.length : 1;
-              const num = parseInt(String(labelBase), 10);
-              if (!Number.isNaN(num)) return ((num % n) + n) % n;
-              // Fallback: simple string hash
-              const s = String(b.chunkId ?? labelBase);
-              let h = 0;
-              for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-              return h % n;
-            })();
-            const boundaryColor = palette[paletteIndex] ?? '#333';
 
             result += `<span class="chunk-boundary" data-kind="${b.kind}" data-label="${label}" style="--boundary-color: ${boundaryColor}; --boundary-stack: ${stackIdx};"></span>`;
           });
@@ -698,10 +733,104 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           .chunk-boundary[data-kind="end"]::after {
             opacity: 0.22;
           }
+
+          .viz-page-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 20px;
+          }
+
+          .viz-page-head h1 {
+            margin-bottom: 0;
+          }
+
+          .viz-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .viz-toggle-chunk-only {
+            font-size: 13px;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background: #fff;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+          }
+
+          .viz-toggle-chunk-only:hover {
+            background: #f0f0f0;
+          }
+
+          .viz-toggle-chunk-only[aria-pressed="true"] {
+            background: #333;
+            color: #fff;
+            border-color: #333;
+          }
+
+          .chunk-only-view.chunk-only-mode {
+            display: none;
+          }
+
+          body.chunk-visual--chunk-only .chunk-doc-mode {
+            display: none;
+          }
+
+          body.chunk-visual--chunk-only .chunk-only-view.chunk-only-mode {
+            display: block;
+          }
+
+          .chunk-only-block {
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-left: 3px solid var(--chunk-color, #333);
+            border-radius: 0 6px 6px 0;
+          }
+
+          .chunk-only-block:last-child {
+            margin-bottom: 0;
+          }
+
+          .chunk-only-block-head {
+            margin-bottom: 6px;
+          }
+
+          .chunk-only-badge {
+            display: inline-block;
+            color: #fff;
+            font-size: 10px;
+            font-weight: bold;
+            line-height: 1;
+            padding: 2px 6px;
+            border-radius: 2px;
+          }
+
+          .chunk-only-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+          }
         </style>
       </head>
       <body>
-        <h1>Chunk Visualization: ${fileName}</h1>
+        ${
+          hasChunkRuns
+            ? `<div class="viz-page-head">
+          <h1>Chunk Visualization: ${fileName}</h1>
+          <div class="viz-toolbar">
+            <button type="button" class="viz-toggle-chunk-only" id="toggle-chunk-only" aria-pressed="false">Chunk only</button>
+          </div>
+        </div>`
+            : `<h1>Chunk Visualization: ${fileName}</h1>`
+        }
         <div class="main-container">
           <div class="grid-wrapper">
     `;
@@ -859,7 +988,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         const runParams = runParamsMap.get(parseInt(runId));
         const formattedParams = formatParamsForDisplay(runParams);
         
-        // Find positions for all chunks and filter out those with no match
+        // Match chunks to parsed text; only successful matches get boundary markers.
+        // Chunk-only view still lists every chunk in order, using stored content when unmatched.
         let lastStart = -1;
         // Check if markdown header splitting was disabled (use exact match in that case)
         const useExactMatch = runParams && runParams.markdown_header_splitting === false;
@@ -878,27 +1008,37 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           return String(aId).localeCompare(String(bId));
         });
 
-        const chunksWithPositions = runChunksSorted
-          .map(chunk => {
-            const minStart = lastStart + 1; // enforce strictly after previous start
-            const positions = findChunkPositions(chunk.content, parsedText, minStart, useExactMatch);
-            if (!positions) return null;
+        const chunksWithPositions = [];
+        const chunkOnlyRows = [];
+        runChunksSorted.forEach(chunk => {
+          const minStart = lastStart + 1; // enforce strictly after previous start
+          const positions = findChunkPositions(chunk.content, parsedText, minStart, useExactMatch);
+          if (positions) {
             lastStart = positions.start_idx;
-            return { ...chunk, ...positions };
-          })
-          .filter(chunk => chunk !== null);
+            const row = { ...chunk, ...positions };
+            chunksWithPositions.push(row);
+            chunkOnlyRows.push(row);
+          } else {
+            chunkOnlyRows.push({ ...chunk });
+          }
+        });
+
         const highlightedText = formatTextWithBoundaryMarkers(
           parsedText,
           chunksWithPositions,
           colors
         );
-        
+        const chunksOnlyHtml = buildChunksOnlyHtml(chunkOnlyRows, parsedText, colors);
+
         // Generate HTML for this run's content
         html += `
           <div class="content-column">
             <div class="column-content">
               <div class="text-container" style="position: relative;">
-                <div class="chunk-text">${highlightedText}</div>
+                <div class="chunk-text chunk-doc-mode">${highlightedText}</div>
+                <div class="chunk-only-view chunk-only-mode">
+                  <div class="chunk-only-list">${chunksOnlyHtml}</div>
+                </div>
             `;
         
         html += `
@@ -922,6 +1062,15 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         <script>
           // Synchronized scrolling implementation that handles scrollbar alignment
           document.addEventListener('DOMContentLoaded', () => {
+            const toggleBtn = document.getElementById('toggle-chunk-only');
+            if (toggleBtn) {
+              toggleBtn.addEventListener('click', () => {
+                const on = document.body.classList.toggle('chunk-visual--chunk-only');
+                toggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                toggleBtn.textContent = on ? 'Full document' : 'Chunk only';
+              });
+            }
+
             const textContainers = document.querySelectorAll('.text-container');
             const scrollContainer = document.querySelector('.scroll-container');
             let isScrolling = false;
