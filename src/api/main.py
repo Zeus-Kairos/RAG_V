@@ -242,6 +242,310 @@ async def get_parse_duration_table(kb_id: int):
         logger.error(f"Error getting parse duration table: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
+# API endpoint to get parsing/chunking graph for a knowledgebase
+@app.get("/api/knowledgebase/{kb_id}/graph")
+async def get_knowledgebase_graph(kb_id: int):
+    """Get a graph view of document->parser and parser->chunker relationships.
+
+    Nodes:
+      - documents: each file (type='file')
+      - parsers: each parser name observed in parse runs
+      - chunkers: each chunker observed in chunk runs (may be framework-level for some splitters)
+
+    Edges (multi-edges allowed):
+      - parse edges: document -> parser, with parse parameters + time_usage + timestamps
+      - chunk edges: parser -> chunker, with chunk parameters + run_time (+ chunks_count)
+    """
+    try:
+        cur = memory_manager.conn.cursor()
+
+        # ---- Parse edges: file -> parser (one edge per parsed row) ----
+        cur.execute(
+            """
+            SELECT
+                p.parse_id,
+                p.file_id,
+                f.filename,
+                f.filepath,
+                p.parse_run_id,
+                p.parser,
+                p.parameters,
+                p.time_usage,
+                p.time,
+                p.is_active
+            FROM parsed p
+            JOIN files f ON f.file_id = p.file_id
+            WHERE f.knowledgebase_id = ?
+              AND f.type = 'file'
+            ORDER BY p.time DESC, p.parse_id DESC
+            """,
+            (kb_id,),
+        )
+        parse_rows = cur.fetchall()
+
+        # ---- Chunk edges: parser -> chunker (derive from chunks + chunk_run) ----
+        cur.execute(
+            """
+            SELECT
+                p.parse_id,
+                c.file_id,
+                f.filename,
+                f.filepath,
+                c.parse_run_id,
+                p.parser,
+                p.parameters AS parser_parameters,
+                p.time_usage AS parse_time_usage,
+                p.time AS parse_time,
+                p.is_active AS parse_is_active,
+                c.chunk_run_id,
+                cr.framework,
+                cr.parameters AS chunk_parameters,
+                cr.is_active AS chunk_run_is_active,
+                cr.in_sync AS chunk_run_in_sync,
+                cr.run_time,
+                COUNT(*) AS chunks_count
+            FROM chunks c
+            JOIN files f ON f.file_id = c.file_id
+            JOIN parsed p
+              ON p.file_id = c.file_id
+             AND p.parse_run_id = c.parse_run_id
+            JOIN chunk_run cr ON cr.id = c.chunk_run_id
+            WHERE f.knowledgebase_id = ?
+              AND f.type = 'file'
+            GROUP BY
+                p.parse_id,
+                c.file_id,
+                f.filename,
+                f.filepath,
+                c.parse_run_id,
+                p.parser,
+                p.parameters,
+                p.time_usage,
+                p.time,
+                p.is_active,
+                c.chunk_run_id,
+                cr.framework,
+                cr.parameters,
+                cr.is_active,
+                cr.in_sync,
+                cr.run_time
+            ORDER BY cr.run_time DESC, c.chunk_run_id DESC
+            """,
+            (kb_id,),
+        )
+        chunk_groups = cur.fetchall()
+
+        # ---- Build nodes & edges ----
+        nodes_by_id = {}
+
+        def upsert_node(node_id: str, node_type: str, label: str, extra: Dict[str, Any] | None = None):
+            if node_id in nodes_by_id:
+                return
+            node = {"id": node_id, "type": node_type, "label": label}
+            if extra:
+                node.update(extra)
+            nodes_by_id[node_id] = node
+
+        edges = []
+
+        # Helper to safely load JSON fields stored as TEXT
+        def _loads_maybe_json(value: Any) -> Any:
+            if value is None:
+                return {}
+            if isinstance(value, (dict, list)):
+                return value
+            if isinstance(value, (bytes, bytearray)):
+                try:
+                    value = value.decode("utf-8")
+                except Exception:
+                    return {}
+            if isinstance(value, str):
+                s = value.strip()
+                if s == "":
+                    return {}
+                try:
+                    return json.loads(s)
+                except Exception:
+                    return {"_raw": value}
+            return {"_raw": value}
+
+        # Parse edges (document -> parser)
+        for r in parse_rows:
+            parse_id = int(r[0])
+            file_id = int(r[1])
+            filename = r[2]
+            filepath = r[3]
+            parse_run_id = int(r[4])
+            parser = r[5] or "unknown"
+            parameters = _loads_maybe_json(r[6])
+            time_usage = r[7]
+            time_value = r[8]
+            is_active = bool(r[9])
+
+            doc_node_id = f"doc:{file_id}"
+            parser_node_id = f"parser:{parser}"
+
+            upsert_node(doc_node_id, "document", filename, {"file_id": file_id, "filepath": filepath})
+            upsert_node(parser_node_id, "parser", parser)
+
+            edges.append(
+                {
+                    "id": f"parse:{parse_id}",
+                    "type": "parse",
+                    "source": doc_node_id,
+                    "target": parser_node_id,
+                    "attributes": {
+                        "parse_id": parse_id,
+                        "file_id": file_id,
+                        "filename": filename,
+                        "filepath": filepath,
+                        "parse_run_id": parse_run_id,
+                        "parser": parser,
+                        "parameters": parameters,
+                        "time_usage": time_usage,
+                        "time": time_value,
+                        "is_active": is_active,
+                    },
+                }
+            )
+
+        # Chunk edges (parser -> chunker), expanded by chunkers pipeline if present
+        for r in chunk_groups:
+            parse_id = int(r[0])
+            file_id = int(r[1])
+            filename = r[2]
+            filepath = r[3]
+            parse_run_id = int(r[4])
+            parser = r[5] or "unknown"
+            parser_parameters = _loads_maybe_json(r[6])
+            parse_time_usage = r[7]
+            parse_time = r[8]
+            parse_is_active = bool(r[9])
+            chunk_run_id = int(r[10])
+            framework = r[11] or "unknown"
+            chunk_parameters = _loads_maybe_json(r[12])
+            chunk_run_is_active = bool(r[13])
+            chunk_run_in_sync = bool(r[14])
+            run_time = r[15]
+            chunks_count = int(r[16]) if r[16] is not None else None
+
+            parser_node_id = f"parser:{parser}"
+            upsert_node(parser_node_id, "parser", parser)
+
+            chunkers = chunk_parameters.get("chunkers")
+            # Special rule: langchain should be a single node (do not expand inner chunkers)
+            if framework == "langchain":
+                chunker_node_id = "chunker:langchain"
+                upsert_node(chunker_node_id, "chunker", "langchain", {"framework": "langchain"})
+
+                edges.append(
+                    {
+                        "id": f"chunk:{chunk_run_id}:{file_id}:{parse_run_id}:langchain",
+                        "type": "chunk",
+                        "source": parser_node_id,
+                        "target": chunker_node_id,
+                        "attributes": {
+                            "parse_id": parse_id,
+                            "file_id": file_id,
+                            "filename": filename,
+                            "filepath": filepath,
+                            "parse_run_id": parse_run_id,
+                            "parser": parser,
+                            "parser_parameters": parser_parameters,
+                            "parse_time_usage": parse_time_usage,
+                            "parse_time": parse_time,
+                            "parse_is_active": parse_is_active,
+                            "chunk_run_id": chunk_run_id,
+                            "framework": framework,
+                            "chunk_run_is_active": chunk_run_is_active,
+                            "chunk_run_in_sync": chunk_run_in_sync,
+                            "run_parameters": chunk_parameters,
+                            "run_time": run_time,
+                            "chunks_count": chunks_count,
+                        },
+                    }
+                )
+            elif isinstance(chunkers, list) and len(chunkers) > 0:
+                for idx, ch in enumerate(chunkers):
+                    chunker_name = (ch or {}).get("chunker") or "unknown"
+                    chunker_params = (ch or {}).get("params") or {}
+                    chunker_node_id = f"chunker:{framework}:{chunker_name}"
+                    upsert_node(chunker_node_id, "chunker", f"{framework}/{chunker_name}", {"framework": framework, "chunker": chunker_name})
+
+                    edges.append(
+                        {
+                            "id": f"chunk:{chunk_run_id}:{file_id}:{parse_run_id}:{chunker_name}:{idx}",
+                            "type": "chunk",
+                            "source": parser_node_id,
+                            "target": chunker_node_id,
+                            "attributes": {
+                                "parse_id": parse_id,
+                                "file_id": file_id,
+                                "filename": filename,
+                                "filepath": filepath,
+                                "parse_run_id": parse_run_id,
+                                "parser": parser,
+                                "parser_parameters": parser_parameters,
+                                "parse_time_usage": parse_time_usage,
+                                "parse_time": parse_time,
+                                "parse_is_active": parse_is_active,
+                                "chunk_run_id": chunk_run_id,
+                                "framework": framework,
+                                "chunk_run_is_active": chunk_run_is_active,
+                                "chunk_run_in_sync": chunk_run_in_sync,
+                                "chunker": chunker_name,
+                                "chunker_parameters": chunker_params,
+                                "run_parameters": chunk_parameters,
+                                "run_time": run_time,
+                                "chunks_count": chunks_count,
+                            },
+                        }
+                    )
+            else:
+                # Framework-only chunker
+                chunker_node_id = f"chunker:{framework}"
+                upsert_node(chunker_node_id, "chunker", framework, {"framework": framework})
+
+                edges.append(
+                    {
+                        "id": f"chunk:{chunk_run_id}:{file_id}:{parse_run_id}",
+                        "type": "chunk",
+                        "source": parser_node_id,
+                        "target": chunker_node_id,
+                        "attributes": {
+                            "parse_id": parse_id,
+                            "file_id": file_id,
+                            "filename": filename,
+                            "filepath": filepath,
+                            "parse_run_id": parse_run_id,
+                            "parser": parser,
+                            "parser_parameters": parser_parameters,
+                            "parse_time_usage": parse_time_usage,
+                            "parse_time": parse_time,
+                            "parse_is_active": parse_is_active,
+                            "chunk_run_id": chunk_run_id,
+                            "framework": framework,
+                            "chunk_run_is_active": chunk_run_is_active,
+                            "chunk_run_in_sync": chunk_run_in_sync,
+                            "run_parameters": chunk_parameters,
+                            "run_time": run_time,
+                            "chunks_count": chunks_count,
+                        },
+                    }
+                )
+
+        return {
+            "success": True,
+            "graph": {
+                "nodes": list(nodes_by_id.values()),
+                "edges": edges,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error building knowledgebase graph: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint to get root directory info with parse runs
 @app.get("/api/knowledgebase/{kb_id}/root-info")
 async def get_root_directory_info(kb_id: int, knowledge_base: str = "default"):

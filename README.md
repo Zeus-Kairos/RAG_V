@@ -34,6 +34,8 @@ RAG_V is a comprehensive Retrieval-Augmented Generation (RAG) visualization tool
 - Python 3.10+
 - Node.js 18+
 - Conda (recommended for Python environment management)
+- Tesseract-OCR (required if you enable OCR in PDF parsers)
+  - On Windows, you can install via the official installer or `choco install tesseract`
 
 ### Step 1: Clone the Repository
 

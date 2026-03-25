@@ -17,6 +17,8 @@
     "node-fetch": "^3.3.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "d3-force": "^3.0.0",
+    "react-force-graph-2d": "^1.29.1",
     "styled-components": "^6.1.19",
     "uuid": "^13.0.0",
     "zustand": "^5.0.8"

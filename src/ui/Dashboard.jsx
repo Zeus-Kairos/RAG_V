@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useKnowledgebaseStore, { fetchWithAuth } from './store';
 import parserConfig from './parserConfig.json';
 import './Dashboard.css';
+import GraphView from './GraphView';
 
 // Parser order from parser settings (first occurrence across file types)
 const PARSER_ORDER = (() => {
@@ -22,18 +23,19 @@ const Dashboard = () => {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
+  const [activeView, setActiveView] = useState('graph'); // 'parse' | 'graph'
   const [parseDuration, setParseDuration] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (activeKB) {
-      fetchParseDuration(activeKB.id);
+      if (activeView === 'parse') fetchParseDuration(activeKB.id);
     } else {
       setIsLoading(false);
       setParseDuration([]);
     }
-  }, [activeKB?.id]);
+  }, [activeKB?.id, activeView]);
 
   const fetchParseDuration = async (kbId) => {
     setIsLoading(true);
@@ -88,7 +90,7 @@ const Dashboard = () => {
   if (!activeKB) {
     return (
       <div className="dashboard">
-        <h2 className="dashboard-title">Parse Duration Dashboard</h2>
+        <h2 className="dashboard-title">Dashboard</h2>
         <div className="dashboard-empty">No active knowledgebase. Select or create one first.</div>
       </div>
     );
@@ -96,12 +98,32 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard">
-      <h2 className="dashboard-title">Parse Duration Dashboard</h2>
-      <p className="dashboard-subtitle">Knowledgebase: {activeKB.name}</p>
+      <div className="dashboard-header">
+        <div>
+          <h2 className="dashboard-title">Dashboard</h2>
+          <p className="dashboard-subtitle">Knowledgebase: {activeKB.name}</p>
+        </div>
+        <div className="dashboard-view-tabs">
+          <button
+            className={`view-tab ${activeView === 'parse' ? 'active' : ''}`}
+            onClick={() => setActiveView('parse')}
+          >
+            Parse Duration
+          </button>
+          <button
+            className={`view-tab ${activeView === 'graph' ? 'active' : ''}`}
+            onClick={() => setActiveView('graph')}
+          >
+            Graph View
+          </button>
+        </div>
+      </div>
 
-      {error && <div className="dashboard-error">{error}</div>}
+      {activeView === 'parse' && error && <div className="dashboard-error">{error}</div>}
 
-      {isLoading ? (
+      {activeView === 'graph' ? (
+        <GraphView />
+      ) : isLoading ? (
         <div className="dashboard-loading">Loading parse duration...</div>
       ) : rows.length === 0 ? (
         <div className="dashboard-empty">No parsed files in this knowledgebase.</div>

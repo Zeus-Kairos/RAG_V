@@ -1,8 +1,47 @@
 .dashboard {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
   height: 100%;
   overflow: hidden;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.dashboard-view-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dashboard-view-tabs .view-tab {
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #202124;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dashboard-view-tabs .view-tab:hover {
+  background: #f1f3f4;
+}
+
+.dashboard-view-tabs .view-tab.active {
+  border-color: #1a73e8;
+  color: #1a73e8;
+  background: #e8f0fe;
 }
 
 .dashboard-title {
