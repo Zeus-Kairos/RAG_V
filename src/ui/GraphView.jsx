@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCollide } from 'd3-force';
 import useKnowledgebaseStore, { fetchWithAuth } from './store';
@@ -104,6 +104,8 @@ const GraphView = () => {
 
   const fgRef = useRef(null);
   const canvasWrapRef = useRef(null);
+  const hasAutoFitRef = useRef(false);
+  const hasInteractedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [rawGraph, setRawGraph] = useState({ nodes: [], edges: [] });
@@ -114,22 +116,57 @@ const GraphView = () => {
   const [includeNeighbors, setIncludeNeighbors] = useState(true);
   const [onlyActive, setOnlyActive] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = canvasWrapRef.current;
     if (!el) return;
 
-    const update = () => {
+    const readSize = () => {
       const rect = el.getBoundingClientRect();
-      const width = Math.max(320, Math.floor(rect.width));
-      const height = Math.max(260, Math.floor(rect.height));
+      const w = Math.max(el.clientWidth || 0, el.offsetWidth || 0, rect.width || 0);
+      const h = Math.max(el.clientHeight || 0, el.offsetHeight || 0, rect.height || 0);
+      return {
+        width: Math.max(320, Math.floor(w)),
+        height: Math.max(260, Math.floor(h)),
+        rect,
+      };
+    };
+
+    const update = () => {
+      const { width, height, rect } = readSize();
       setCanvasSize(prev => (prev.width === width && prev.height === height ? prev : { width, height }));
     };
 
+    // Initial + a few ticks: fixes cases where the container finishes layout after mount/tab switch.
+    let raf = 0;
+    let ticks = 0;
+    const pump = () => {
+      update();
+      ticks += 1;
+      if (ticks < 8) raf = requestAnimationFrame(pump);
+    };
     update();
-    const ro = new ResizeObserver(() => update());
+    raf = requestAnimationFrame(pump);
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries?.[0];
+      const cr = entry?.contentRect;
+      if (cr && cr.width && cr.height) {
+        const width = Math.max(320, Math.floor(cr.width));
+        const height = Math.max(260, Math.floor(cr.height));
+        setCanvasSize(prev => (prev.width === width && prev.height === height ? prev : { width, height }));
+        return;
+      }
+      update();
+    });
     ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+
+    window.addEventListener('resize', update, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', update);
+      ro.disconnect();
+    };
+  }, [isLoading, rawGraph?.nodes?.length]);
 
   useEffect(() => {
     const fetchGraph = async () => {
@@ -304,8 +341,9 @@ const GraphView = () => {
     const fg = fgRef.current;
     if (!fg) return;
     try {
-      fg.d3Force('charge')?.strength(-420);
-      fg.d3Force('link')?.distance((l) => (l.type === 'parse' ? 170 : 130))?.strength(0.95);
+      // Baseline forces (compact but readable)
+      fg.d3Force('charge')?.strength(-820);
+      fg.d3Force('link')?.distance((l) => (l.type === 'parse' ? 220 : 170))?.strength(0.9);
       fg.d3Force(
         'collide',
         forceCollide()
@@ -317,7 +355,7 @@ const GraphView = () => {
             return 24;
           })
           .strength(0.9)
-          .iterations(2)
+          .iterations(4)
       );
       fg.d3ReheatSimulation();
     } catch {
@@ -328,15 +366,21 @@ const GraphView = () => {
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg) return;
+    hasAutoFitRef.current = false;
+    hasInteractedRef.current = false;
     const t = setTimeout(() => {
       try {
-        fg.zoomToFit(450, 24);
+        // Don't fit immediately; wait for the simulation to spread out.
+        if (!hasInteractedRef.current && !hasAutoFitRef.current) {
+          fg.zoomToFit(900, 48);
+          hasAutoFitRef.current = true;
+        }
       } catch {
         // ignore
       }
-    }, 50);
+    }, 250);
     return () => clearTimeout(t);
-  }, [activeKB?.id, filteredGraphData.nodes.length, filteredGraphData.links.length, canvasSize.width, canvasSize.height]);
+  }, [activeKB?.id, filteredGraphData.nodes.length, filteredGraphData.links.length]);
 
   if (!activeKB) {
     return (
@@ -528,14 +572,21 @@ const GraphView = () => {
               linkDirectionalArrowLength={4}
               linkDirectionalArrowRelPos={1}
               linkCurvature={(l) => l.curvature || 0}
-              onEngineStop={() => {
+              onNodeDrag={() => {
+                hasInteractedRef.current = true;
                 try {
-                  fgRef.current?.zoomToFit(450, 24);
+                  fgRef.current?.d3ReheatSimulation();
                 } catch {
                   // ignore
                 }
               }}
-              onNodeDrag={() => {
+              onNodeDragEnd={(node) => {
+                // Ensure nodes don't remain pinned together after drag.
+                hasInteractedRef.current = true;
+                if (node) {
+                  node.fx = undefined;
+                  node.fy = undefined;
+                }
                 try {
                   fgRef.current?.d3ReheatSimulation();
                 } catch {
