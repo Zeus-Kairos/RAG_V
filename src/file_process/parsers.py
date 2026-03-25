@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 from typing import Any, Dict
 from docling.datamodel.base_models import InputFormat
 from markitdown import MarkItDown
@@ -8,7 +9,7 @@ from unstructured.partition.auto import partition
 import pymupdf
 import pymupdf.layout
 import pymupdf4llm
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 import pdfplumber
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -244,12 +245,44 @@ class DoclingParser(BaseParser):
             pipeline_options.do_code_enrichment = self.parser_params.get("code_enable", False)
             converter = DocumentConverter(format_options={
                 InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)})
-            result = converter.convert(file_path)
-            return result.document.export_to_markdown()
-        else:
-            converter = DocumentConverter()
-            result = converter.convert(file_path)
-            return result.document.export_to_markdown()
+            try:
+                result = converter.convert(file_path)
+                return result.document.export_to_markdown()
+            except Exception as exc:
+                logger.warning(
+                    "Docling failed for PDF %s; trying repaired copy. Error: %s",
+                    file_path,
+                    str(exc),
+                )
+                repaired_pdf = self._repair_pdf_for_docling(file_path)
+                try:
+                    result = converter.convert(repaired_pdf)
+                    logger.info("Docling succeeded on repaired PDF copy: %s", file_path)
+                    return result.document.export_to_markdown()
+                finally:
+                    try:
+                        os.remove(repaired_pdf)
+                    except Exception:
+                        logger.debug("Failed to remove temporary repaired PDF: %s", repaired_pdf)
+
+        converter = DocumentConverter()
+        result = converter.convert(file_path)
+        return result.document.export_to_markdown()
+
+    def _repair_pdf_for_docling(self, file_path: str) -> str:
+        """Rewrite PDF pages to normalize page boxes so Docling can read dimensions."""
+        fd, repaired_path = tempfile.mkstemp(suffix=".pdf", prefix="docling_repaired_")
+        os.close(fd)
+
+        reader = PdfReader(file_path)
+        writer = PdfWriter()
+        for page in reader.pages:
+            writer.add_page(page)
+
+        with open(repaired_path, "wb") as repaired_file:
+            writer.write(repaired_file)
+
+        return repaired_path
 
 @BaseParser.register_parser("mineru")
 class MineruParser(BaseParser):
