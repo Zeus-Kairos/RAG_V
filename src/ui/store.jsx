@@ -121,7 +121,13 @@ const useKnowledgebaseStore = create((set, get) => {
       // Hybrid splitter settings
       hybridSettings: {
         headerLevels: 3,
-        chunkSize: 1000
+        chunkSize: 1000,
+        // Table chunker settings (Chonkie TableChunker)
+        tableChunkEnabled: false,
+        tableTokenizer: "row",
+        // Keep per-tokenizer values so switching modes preserves settings
+        tableChunkSizeRow: 3,
+        tableChunkSizeCharacter: 200
       }
     },
     

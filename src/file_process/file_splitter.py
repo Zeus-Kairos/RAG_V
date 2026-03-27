@@ -1,11 +1,22 @@
 import re
 from dataclasses import asdict
-from docling.document_converter import DocumentConverter
-from docling.datamodel.base_models import InputFormat
-from docling.chunking import HybridChunker
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from chonkie import Pipeline
+
+try:
+    from docling.document_converter import DocumentConverter
+    from docling.datamodel.base_models import InputFormat
+    from docling.chunking import HybridChunker
+except Exception:  # pragma: no cover
+    DocumentConverter = None
+    InputFormat = None
+    HybridChunker = None
+
+try:
+    from chonkie import TableChunker
+except Exception:  # pragma: no cover
+    TableChunker = None
 
 
 class BaseFileSplitter:
@@ -243,6 +254,11 @@ class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
         self.parser_params = kwargs
 
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:
+        if DocumentConverter is None or InputFormat is None or HybridChunker is None:
+            raise ImportError(
+                "DoclingSplitter requires 'docling' and its dependencies. "
+                "Install the docling extra/deps (e.g. numpy/pandas) or use a different splitter."
+            )
         filename = metadata.get("filename", None)
         masked = _mask_latex_double_backslash_in_math(text)
         converter = DocumentConverter()
@@ -269,6 +285,7 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
 
     def __init__(self, **kwargs):
         self.parser_params = kwargs
+        self._table_chunker = None
 
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:
         """Split text into chunks.
@@ -280,6 +297,16 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         Returns:
             List of Document objects
         """
+        # Initialize TableChunker at runtime (only if configured)
+        self._table_chunker = None
+        table_chunk_size = self.parser_params.get("table_chunk_size", 3)
+        table_tokenizer = self.parser_params.get("table_tokenizer", "row")
+        if TableChunker is not None and table_chunk_size:
+            try:
+                self._table_chunker = TableChunker(tokenizer=table_tokenizer, chunk_size=int(table_chunk_size))
+            except Exception:
+                self._table_chunker = None
+
         header_levels = self.parser_params.get("header_levels", 3)
         headers_to_split_on = [("#"*i, f"Header {i}") for i in range(1, header_levels + 1)]
         strip_headers = self.parser_params.get("strip_headers", False)
@@ -315,7 +342,14 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         codes = getattr(document, 'code', [])
         chunk_tuples = [(chunk.start_index, "text", chunk.text, {k: v for k, v in chunk.to_dict().items() if k != "text"}) for chunk in chunks]
         image_tuples = [(image.start_index, "image", image.content, {k: v for k, v in asdict(image).items() if k != "content"}) for image in images]
-        table_tuples = [(table.start_index, "table", table.content, {k: v for k, v in asdict(table).items() if k != "content"}) for table in tables]
+        table_tuples = []
+        for table in tables:
+            base_meta = {k: v for k, v in asdict(table).items() if k != "content"}
+            parts = self._chunk_table(table.content)
+            total = len(parts)
+            for part_index, part in enumerate(parts):
+                part_meta = {**base_meta, "table_chunk_index": part_index, "table_chunk_count": total}
+                table_tuples.append((table.start_index, "table", part, part_meta))
         code_tuples = [(code.start_index, "code", code.content, {k: v for k, v in asdict(code).items() if k != "content"}) for code in codes]
     
         # Merge all tuples
@@ -338,6 +372,16 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
             chunk_index += 1
             documents.append(document)
         return documents, chunk_index
+
+    def _chunk_table(self, table_content: str) -> list[str]:
+        if not table_content:
+            return []
+        if self._table_chunker is None:
+            return [table_content]
+        try:
+            return [c.text for c in self._table_chunker.chunk(table_content)]
+        except Exception:
+            return [table_content]
 
 if __name__ == "__main__":
 

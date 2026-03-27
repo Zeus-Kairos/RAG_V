@@ -581,6 +581,14 @@ const SplitterSettings = () => {
             
             <div className="splitter-section-content">
               {/* Hybrid Splitter Settings */}
+              {(() => {
+                const tableTokenizer = hybridSettings.tableTokenizer || "row";
+                const tableChunkEnabled = hybridSettings.tableChunkEnabled !== false;
+                const rowSize = hybridSettings.tableChunkSizeRow ?? 3;
+                const characterSize = hybridSettings.tableChunkSizeCharacter ?? 200;
+                const activeTableChunkSize = tableTokenizer === "character" ? characterSize : rowSize;
+                return (
+                  <>
               
               {/* Header Levels Parameter */}
               <div className="param-group">
@@ -625,6 +633,103 @@ const SplitterSettings = () => {
                   onChange={(e) => updateHybridSettings({ chunkSize: parseInt(e.target.value) })}
                 />
               </div>
+
+              {/* Enable Table Chunker */}
+              <div className="param-group checkbox">
+                <input
+                  type="checkbox"
+                  id="hybrid-enable-table-chunker"
+                  checked={tableChunkEnabled}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    updateHybridSettings({
+                      tableChunkEnabled: enabled,
+                      ...(enabled
+                        ? {
+                            tableChunkSizeRow: (hybridSettings.tableChunkSizeRow ?? 0) > 0 ? hybridSettings.tableChunkSizeRow : 3,
+                            tableChunkSizeCharacter: (hybridSettings.tableChunkSizeCharacter ?? 0) > 0 ? hybridSettings.tableChunkSizeCharacter : 200
+                          }
+                        : {})
+                    });
+                  }}
+                />
+                <label htmlFor="hybrid-enable-table-chunker">Enable Table Chunker</label>
+              </div>
+
+              {/* Table Tokenizer Parameter */}
+              <div className="param-group">
+                <label htmlFor="hybrid-table-tokenizer">Table Tokenizer</label>
+                <select
+                  id="hybrid-table-tokenizer"
+                  className="param-select"
+                  value={hybridSettings.tableTokenizer || "row"}
+                  onChange={(e) => {
+                    const nextTokenizer = e.target.value;
+                    updateHybridSettings({
+                      tableTokenizer: nextTokenizer
+                    });
+                  }}
+                  disabled={!tableChunkEnabled}
+                >
+                  <option value="row">row</option>
+                  <option value="character">character</option>
+                </select>
+              </div>
+
+              {/* Table Chunk Size Parameter */}
+              <div className="param-group">
+                <label htmlFor="hybrid-table-chunk-size" className="param-label-with-input">
+                  Table Chunk Size ({tableTokenizer === "character" ? "chars" : "rows"}):
+                  <input
+                    type="number"
+                    id="hybrid-table-chunk-size-input"
+                    className="param-text-input-inline"
+                    min="0"
+                    max={tableTokenizer === "character" ? 20000 : 1000}
+                    value={activeTableChunkSize}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!isNaN(value) && value >= 0) {
+                        updateHybridSettings(
+                          tableTokenizer === "character"
+                            ? { tableChunkSizeCharacter: value }
+                            : { tableChunkSizeRow: value }
+                        );
+                      }
+                    }}
+                    disabled={!tableChunkEnabled}
+                  />
+                </label>
+                {tableTokenizer === "character" ? (
+                  <input
+                    type="range"
+                    id="hybrid-table-chunk-size-character"
+                    className="param-slider"
+                    min="0"
+                    max="2000"
+                    value={Math.min(Math.max(characterSize, 0), 2000)}
+                    onChange={(e) => updateHybridSettings({ tableChunkSizeCharacter: parseInt(e.target.value) })}
+                    disabled={!tableChunkEnabled}
+                  />
+                ) : (
+                  <input
+                    type="range"
+                    id="hybrid-table-chunk-size-row"
+                    className="param-slider"
+                    min="0"
+                    max="50"
+                    value={Math.min(Math.max(rowSize, 0), 50)}
+                    onChange={(e) => updateHybridSettings({ tableChunkSizeRow: parseInt(e.target.value) })}
+                    disabled={!tableChunkEnabled}
+                  />
+                )}
+                <p className="param-description">
+                  Defaults: row=3 (rows), character=200 (chars). Chunking preserves table headers.
+                </p>
+              </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
