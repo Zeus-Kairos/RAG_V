@@ -149,16 +149,14 @@ const ChunkBrowser = () => {
         // Add Hybrid-specific parameters
         formData.append('header_levels', splitterSettings.hybridSettings.headerLevels.toString());
         formData.append('chunk_size', splitterSettings.hybridSettings.chunkSize.toString());
+        const tableChunkOn = splitterSettings.hybridSettings.tableChunkEnabled === true;
+        formData.append('table_chunk_enabled', tableChunkOn ? 'true' : 'false');
         const tableTokenizer = splitterSettings.hybridSettings.tableTokenizer || "row";
         const tableChunkSize =
-          tableTokenizer === "character"
+          tableTokenizer === 'character'
             ? (splitterSettings.hybridSettings.tableChunkSizeCharacter ?? 200)
             : (splitterSettings.hybridSettings.tableChunkSizeRow ?? 3);
-        if (
-          splitterSettings.hybridSettings.tableChunkEnabled !== false &&
-          tableChunkSize &&
-          tableChunkSize > 0
-        ) {
+        if (tableChunkOn && tableChunkSize > 0) {
           formData.append('table_chunk_size', tableChunkSize.toString());
           formData.append('table_tokenizer', tableTokenizer);
         }

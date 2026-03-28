@@ -301,15 +301,20 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         Returns:
             List of Document objects
         """
-        # Initialize TableChunker at runtime (only if configured)
+        # Initialize TableChunker only when explicitly enabled (UI sends table_chunk_enabled).
+        # If table_chunk_enabled is absent, keep legacy behavior: default size 3 when flag not used.
         self._table_chunker = None
-        table_chunk_size = self.parser_params.get("table_chunk_size", 3)
-        table_tokenizer = self.parser_params.get("table_tokenizer", "row")
-        if TableChunker is not None and table_chunk_size:
-            try:
-                self._table_chunker = TableChunker(tokenizer=table_tokenizer, chunk_size=int(table_chunk_size))
-            except Exception:
-                self._table_chunker = None
+        table_chunk_enabled = self.parser_params.get("table_chunk_enabled")
+        if table_chunk_enabled is False:
+            pass
+        else:
+            table_chunk_size = self.parser_params.get("table_chunk_size", 3)
+            table_tokenizer = self.parser_params.get("table_tokenizer", "row")
+            if TableChunker is not None:
+                try:
+                    self._table_chunker = TableChunker(tokenizer=table_tokenizer, chunk_size=table_chunk_size)
+                except Exception:
+                    pass    
 
         header_levels = self.parser_params.get("header_levels", 3)
         headers_to_split_on = [("#"*i, f"Header {i}") for i in range(1, header_levels + 1)]
