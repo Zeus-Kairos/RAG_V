@@ -121,7 +121,11 @@ class LangchainFileSplitter(BaseFileSplitter, splitter_name="langchain"):
                 chunk_overlap = chunker["params"].get("chunk_overlap", 50)
                 self.splitters.append({
                     "type": "recursive",
-                    "splitter": RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap, strip_whitespace=False)
+                    "splitter": RecursiveCharacterTextSplitter(
+                        chunk_size=chunk_size, chunk_overlap=chunk_overlap, 
+                        separators=["\n\n", "\n", " "], 
+                        keep_separator=True,
+                        strip_whitespace=False)
                 })
     
     def split_text(self, text: str, metadata: dict = None) -> list[Document]:

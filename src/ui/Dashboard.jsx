@@ -105,16 +105,16 @@ const Dashboard = () => {
         </div>
         <div className="dashboard-view-tabs">
           <button
-            className={`view-tab ${activeView === 'parse' ? 'active' : ''}`}
-            onClick={() => setActiveView('parse')}
-          >
-            Parse Duration
-          </button>
-          <button
             className={`view-tab ${activeView === 'graph' ? 'active' : ''}`}
             onClick={() => setActiveView('graph')}
           >
             Graph View
+          </button>
+          <button
+            className={`view-tab ${activeView === 'parse' ? 'active' : ''}`}
+            onClick={() => setActiveView('parse')}
+          >
+            Parse Duration
           </button>
         </div>
       </div>
