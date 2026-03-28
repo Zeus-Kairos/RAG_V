@@ -183,6 +183,18 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     const hasChunkRuns = runIds.length > 0;
     const isSingleRun = runIds.length === 1;
 
+    /** Lookup for chunk metadata panel: only persisted chunk `metadata` JSON (keyed by chunk_run_id then chunk_id). */
+    const chunkMetaByRun = {};
+    if (hasChunkRuns) {
+      runIds.forEach((rid) => {
+        chunkMetaByRun[rid] = {};
+        (chunksByRunId[rid] || []).forEach((ch) => {
+          const cid = ch.chunk_id;
+          chunkMetaByRun[rid][cid] = ch.metadata ?? {};
+        });
+      });
+    }
+
     // Helper function to find chunk positions in the text
     const findChunkPositions = (chunkContent, fileText, minStart = 0, useExactMatch = false) => {
       
@@ -341,7 +353,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
       return { color, labelBase };
     };
 
-    const buildChunksOnlyHtml = (chunkRows, fileText, palette) =>
+    const buildChunksOnlyHtml = (chunkRows, fileText, palette, runIdStr) =>
       chunkRows
         .map((chunk, idx) => {
           const { color, labelBase } = resolveEncodingColor(chunk.chunk_id, idx, palette);
@@ -355,10 +367,12 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             : String(chunk.content ?? '');
           const body = escapeHtml(rawBody);
           const numLabel = escapeHtml(String(labelBase));
+          const ridAttr = escapeHtml(String(runIdStr));
+          const cidAttr = escapeHtml(String(chunk.chunk_id ?? ''));
           return `
             <div class="chunk-only-block" style="--chunk-color: ${color}; border-left-color: ${color}; background: ${applyAlpha(color, 0.06)};">
               <div class="chunk-only-block-head">
-                <span class="chunk-only-badge" style="background: ${color};">${numLabel}</span>
+                <button type="button" class="chunk-only-badge" style="background: ${color}; border: none; cursor: pointer;" data-run-id="${ridAttr}" data-chunk-id="${cidAttr}" title="Show chunk metadata">${numLabel}</button>
               </div>
               <div class="chunk-only-text" style="color: ${color};">${body}</div>
             </div>
@@ -371,7 +385,8 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     const formatTextWithBoundaryMarkers = (
       fileText,
       chunksWithPositions,
-      palette
+      palette,
+      runIdStr
     ) => {
       let result = '';
       let cursor = 0;
@@ -411,8 +426,14 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
               palette
             );
             const label = b.kind === 'start' ? String(labelBase) : `${labelBase}e`;
+            const ridAttr = escapeHtml(String(runIdStr));
+            const cidAttr = escapeHtml(String(b.chunkId ?? ''));
+            const clickAttrs =
+              b.kind === 'start'
+                ? ` data-run-id="${ridAttr}" data-chunk-id="${cidAttr}" role="button" tabindex="0" title="Show chunk metadata"`
+                : '';
 
-            result += `<span class="chunk-boundary" data-kind="${b.kind}" data-label="${label}" style="--boundary-color: ${boundaryColor}; --boundary-stack: ${stackIdx};"></span>`;
+            result += `<span class="chunk-boundary" data-kind="${b.kind}" data-label="${label}" style="--boundary-color: ${boundaryColor}; --boundary-stack: ${stackIdx};"${clickAttrs}></span>`;
           });
 
         cursor = pos;
@@ -712,9 +733,15 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             padding: 1px 4px;
             border-radius: 2px;
             opacity: 0.92;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
             white-space: nowrap;
             background: var(--boundary-color, #000);
+          }
+
+          .chunk-boundary[data-kind="start"]:focus {
+            outline: 2px solid #4a6cf7;
+            outline-offset: 2px;
           }
 
           /* tiny vertical tick that doesn't affect layout */
@@ -736,6 +763,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
 
           .viz-page-head {
             display: flex;
+            flex-direction: row;
             flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
@@ -743,8 +771,152 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             margin-bottom: 20px;
           }
 
+          .viz-page-head-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+          }
+
           .viz-page-head h1 {
             margin-bottom: 0;
+          }
+
+          .chunk-meta-float-root {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+          }
+
+          .chunk-meta-float-root.is-hidden {
+            display: none;
+          }
+
+          .chunk-meta-float-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.18);
+            cursor: default;
+          }
+
+          .chunk-meta-float-window {
+            position: relative;
+            z-index: 1;
+            width: min(640px, 100%);
+            max-height: min(72vh, 560px);
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+            overflow: hidden;
+          }
+
+          .chunk-meta-float-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            border-bottom: 1px solid #e8e8e8;
+            background: #fafafa;
+            flex-shrink: 0;
+          }
+
+          .chunk-meta-float-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #333;
+          }
+
+          .chunk-meta-float-close {
+            border: none;
+            background: transparent;
+            font-size: 22px;
+            line-height: 1;
+            padding: 0 4px;
+            cursor: pointer;
+            color: #666;
+            border-radius: 4px;
+          }
+
+          .chunk-meta-float-close:hover {
+            background: #eee;
+            color: #111;
+          }
+
+          .chunk-meta-float-body {
+            margin: 0;
+            padding: 14px 16px;
+            overflow: auto;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #222;
+            flex: 1;
+            min-height: 0;
+          }
+
+          .chunk-meta-float-body .chunk-meta-empty-msg {
+            color: #777;
+            font-style: italic;
+            margin: 0;
+          }
+
+          .chunk-meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+
+          .chunk-meta-table thead th {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 700;
+            color: #333;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+          }
+
+          .chunk-meta-table tbody th[scope="row"] {
+            width: 32%;
+            border: 1px solid #e5e5e5;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+            background: #fafafa;
+            font-weight: 600;
+            color: #444;
+            font-family: ui-monospace, 'Cascadia Code', 'Courier New', monospace;
+            font-size: 11px;
+            word-break: break-word;
+          }
+
+          .chunk-meta-table tbody td {
+            border: 1px solid #e5e5e5;
+            padding: 8px 10px;
+            vertical-align: top;
+            background: #fff;
+          }
+
+          .chunk-meta-cell-pre {
+            margin: 0;
+            font-family: ui-monospace, 'Cascadia Code', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
           }
 
           .viz-toolbar {
@@ -808,6 +980,12 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
             line-height: 1;
             padding: 2px 6px;
             border-radius: 2px;
+            font-family: inherit;
+          }
+
+          .chunk-only-badge:focus {
+            outline: 2px solid #4a6cf7;
+            outline-offset: 2px;
           }
 
           .chunk-only-text {
@@ -824,12 +1002,28 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         ${
           hasChunkRuns
             ? `<div class="viz-page-head">
-          <h1>Chunk Visualization: ${fileName}</h1>
-          <div class="viz-toolbar">
-            <button type="button" class="viz-toggle-chunk-only" id="toggle-chunk-only" aria-pressed="false">Chunk only</button>
+          <div class="viz-page-head-row">
+            <h1>Chunk Visualization: ${fileName}</h1>
+            <div class="viz-toolbar">
+              <button type="button" class="viz-toggle-chunk-only" id="toggle-chunk-only" aria-pressed="false">Chunk only</button>
+            </div>
           </div>
         </div>`
             : `<h1>Chunk Visualization: ${fileName}</h1>`
+        }
+        ${
+          hasChunkRuns
+            ? `<div id="chunk-meta-float-root" class="chunk-meta-float-root is-hidden" aria-hidden="true">
+          <div class="chunk-meta-float-backdrop" id="chunk-meta-float-backdrop" title="Click to close"></div>
+          <div class="chunk-meta-float-window" id="chunk-meta-float-window" role="dialog" aria-modal="true" aria-labelledby="chunk-meta-float-title">
+            <div class="chunk-meta-float-header">
+              <span class="chunk-meta-float-title" id="chunk-meta-float-title">Chunk metadata</span>
+              <button type="button" class="chunk-meta-float-close" id="chunk-meta-float-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="chunk-meta-float-body" id="chunk-meta-float-body"></div>
+          </div>
+        </div>`
+            : ''
         }
         <div class="main-container">
           <div class="grid-wrapper">
@@ -1026,9 +1220,10 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         const highlightedText = formatTextWithBoundaryMarkers(
           parsedText,
           chunksWithPositions,
-          colors
+          colors,
+          runId
         );
-        const chunksOnlyHtml = buildChunksOnlyHtml(chunkOnlyRows, parsedText, colors);
+        const chunksOnlyHtml = buildChunksOnlyHtml(chunkOnlyRows, parsedText, colors, runId);
 
         // Generate HTML for this run's content
         html += `
@@ -1060,6 +1255,100 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
           </div> <!-- End grid-wrapper -->
         </div> <!-- End main-container -->
         <script>
+          const CHUNK_META = ${JSON.stringify(chunkMetaByRun).replace(/</g, '\\u003c')};
+
+          function closeChunkMetaFloat() {
+            const root = document.getElementById('chunk-meta-float-root');
+            if (!root || root.classList.contains('is-hidden')) return;
+            root.classList.add('is-hidden');
+            root.setAttribute('aria-hidden', 'true');
+          }
+
+          function escapeChunkMetaHtml(s) {
+            return String(s)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;');
+          }
+
+          function formatMetaCellValue(v) {
+            if (v === null || v === undefined) return '';
+            if (typeof v === 'object') return JSON.stringify(v, null, 2);
+            return String(v);
+          }
+
+          function metadataToTableHtml(meta) {
+            if (meta === null || meta === undefined) {
+              return '<p class="chunk-meta-empty-msg">No metadata for this chunk.</p>';
+            }
+            if (typeof meta !== 'object') {
+              return (
+                '<table class="chunk-meta-table"><thead><tr><th>Value</th></tr></thead><tbody><tr><td><pre class="chunk-meta-cell-pre">' +
+                escapeChunkMetaHtml(formatMetaCellValue(meta)) +
+                '</pre></td></tr></tbody></table>'
+              );
+            }
+            if (Array.isArray(meta)) {
+              if (meta.length === 0) {
+                return '<p class="chunk-meta-empty-msg">Empty metadata array.</p>';
+              }
+              const rows = meta
+                .map(function (item, i) {
+                  return (
+                    '<tr><th scope="row">' +
+                    escapeChunkMetaHtml(String(i)) +
+                    '</th><td><pre class="chunk-meta-cell-pre">' +
+                    escapeChunkMetaHtml(formatMetaCellValue(item)) +
+                    '</pre></td></tr>'
+                  );
+                })
+                .join('');
+              return (
+                '<table class="chunk-meta-table"><thead><tr><th>Index</th><th>Value</th></tr></thead><tbody>' +
+                rows +
+                '</tbody></table>'
+              );
+            }
+            const keys = Object.keys(meta).sort();
+            if (keys.length === 0) {
+              return '<p class="chunk-meta-empty-msg">Empty metadata object.</p>';
+            }
+            const rows = keys
+              .map(function (k) {
+                return (
+                  '<tr><th scope="row">' +
+                  escapeChunkMetaHtml(k) +
+                  '</th><td><pre class="chunk-meta-cell-pre">' +
+                  escapeChunkMetaHtml(formatMetaCellValue(meta[k])) +
+                  '</pre></td></tr>'
+                );
+              })
+              .join('');
+            return (
+              '<table class="chunk-meta-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>' +
+              rows +
+              '</tbody></table>'
+            );
+          }
+
+          function openChunkMetaFloat(runId, chunkId) {
+            const root = document.getElementById('chunk-meta-float-root');
+            const bodyEl = document.getElementById('chunk-meta-float-body');
+            if (!root || !bodyEl) return;
+            const runMap = CHUNK_META && CHUNK_META[runId];
+            const meta = runMap && runMap[chunkId];
+            if (meta === undefined || meta === null) {
+              bodyEl.innerHTML = '<p class="chunk-meta-empty-msg">No metadata for this chunk.</p>';
+            } else {
+              bodyEl.innerHTML = metadataToTableHtml(meta);
+            }
+            root.classList.remove('is-hidden');
+            root.setAttribute('aria-hidden', 'false');
+            const closeBtn = document.getElementById('chunk-meta-float-close');
+            if (closeBtn) closeBtn.focus();
+          }
+
           // Synchronized scrolling implementation that handles scrollbar alignment
           document.addEventListener('DOMContentLoaded', () => {
             const toggleBtn = document.getElementById('toggle-chunk-only');
@@ -1070,6 +1359,50 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
                 toggleBtn.textContent = on ? 'Full document' : 'Chunk only';
               });
             }
+
+            const backdrop = document.getElementById('chunk-meta-float-backdrop');
+            const floatWindow = document.getElementById('chunk-meta-float-window');
+            const closeBtn = document.getElementById('chunk-meta-float-close');
+            if (backdrop) {
+              backdrop.addEventListener('click', () => closeChunkMetaFloat());
+            }
+            if (closeBtn) {
+              closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeChunkMetaFloat();
+              });
+            }
+            if (floatWindow) {
+              floatWindow.addEventListener('click', (e) => e.stopPropagation());
+            }
+
+            document.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') closeChunkMetaFloat();
+            });
+
+            document.body.addEventListener('click', (e) => {
+              const badge = e.target.closest('.chunk-only-badge[data-chunk-id]');
+              if (badge) {
+                e.stopPropagation();
+                openChunkMetaFloat(badge.getAttribute('data-run-id'), badge.getAttribute('data-chunk-id'));
+                return;
+              }
+              const boundary = e.target.closest('.chunk-boundary[data-kind="start"][data-chunk-id]');
+              if (boundary) {
+                e.stopPropagation();
+                openChunkMetaFloat(boundary.getAttribute('data-run-id'), boundary.getAttribute('data-chunk-id'));
+              }
+            });
+
+            document.body.addEventListener('keydown', (e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              const boundary = e.target.closest('.chunk-boundary[data-kind="start"][data-chunk-id]');
+              if (boundary) {
+                e.preventDefault();
+                e.stopPropagation();
+                openChunkMetaFloat(boundary.getAttribute('data-run-id'), boundary.getAttribute('data-chunk-id'));
+              }
+            });
 
             const textContainers = document.querySelectorAll('.text-container');
             const scrollContainer = document.querySelector('.scroll-container');
