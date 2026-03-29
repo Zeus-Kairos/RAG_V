@@ -87,6 +87,133 @@ function linkEndpointIds(link) {
   return { s, t };
 }
 
+/**
+ * Pipeline direction: document → parser → chunker → embedding.
+ * No undirected hops (e.g. chunker → parser → unrelated chunker).
+ *
+ * - Chunker / embedding seeds: backward only into parsers + docs tied by chunk edges into
+ *   anchor chunker(s); forward only chunker → embedding.
+ * - Document seeds: forward-only parse → chunk → embed.
+ * - Parser seeds: backward-only along parse edges (document → parser) for files/parse runs,
+ *   then forward-only parser → chunker → embedding.
+ */
+function expandPipelineFilterClosure(seedIds, links, nodeById) {
+  const seeds = seedIds.filter(Boolean);
+  if (seeds.length === 0) return new Set();
+
+  const seedSet = new Set(seeds);
+  const typeOf = (id) => nodeById?.get?.(id)?.type;
+
+  const keep = new Set(seeds);
+
+  const anchorChunkers = new Set();
+  for (const id of seeds) {
+    if (typeOf(id) === 'chunker') anchorChunkers.add(id);
+  }
+  for (const l of links) {
+    if (l.type !== 'embed') continue;
+    const { s, t } = linkEndpointIds(l);
+    if (seedSet.has(t) && typeOf(t) === 'embedding') anchorChunkers.add(s);
+  }
+
+  for (const c of anchorChunkers) keep.add(c);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const l of links) {
+      if (l.type !== 'chunk') continue;
+      const { s, t } = linkEndpointIds(l);
+      if (!anchorChunkers.has(t)) continue;
+      if (!keep.has(s)) {
+        keep.add(s);
+        changed = true;
+      }
+    }
+    for (const l of links) {
+      if (l.type !== 'parse') continue;
+      const { s, t } = linkEndpointIds(l);
+      if (!keep.has(t)) continue;
+      const a = l.attributes || {};
+      const fileId = a.file_id;
+      const parseRunId = a.parse_run_id;
+      if (fileId == null || parseRunId == null) continue;
+      const hasWitness = links.some((ch) => {
+        if (ch.type !== 'chunk') return false;
+        const chs = linkEndpointIds(ch);
+        if (chs.s !== t || !anchorChunkers.has(chs.t)) return false;
+        const ca = ch.attributes || {};
+        return ca.file_id === fileId && ca.parse_run_id === parseRunId;
+      });
+      if (hasWitness && !keep.has(s)) {
+        keep.add(s);
+        changed = true;
+      }
+    }
+  }
+
+  for (const l of links) {
+    if (l.type !== 'embed') continue;
+    const { s, t } = linkEndpointIds(l);
+    if (anchorChunkers.has(s)) keep.add(t);
+  }
+
+  const reachedFromDocSeed = new Set(seeds.filter((id) => typeOf(id) === 'document'));
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const l of links) {
+      const { s, t } = linkEndpointIds(l);
+      if (!reachedFromDocSeed.has(s) || reachedFromDocSeed.has(t)) continue;
+      if (l.type === 'parse' && typeOf(s) === 'document') {
+        reachedFromDocSeed.add(t);
+        keep.add(t);
+        changed = true;
+      } else if (l.type === 'chunk' && typeOf(s) === 'parser') {
+        reachedFromDocSeed.add(t);
+        keep.add(t);
+        changed = true;
+      } else if (l.type === 'embed' && typeOf(s) === 'chunker') {
+        reachedFromDocSeed.add(t);
+        keep.add(t);
+        changed = true;
+      }
+    }
+  }
+
+  const parserSeeds = seeds.filter((id) => typeOf(id) === 'parser');
+  for (const p of parserSeeds) {
+    for (const l of links) {
+      if (l.type !== 'parse') continue;
+      const { s, t } = linkEndpointIds(l);
+      if (t === p && s) keep.add(s);
+    }
+  }
+
+  const reachedFromParserSeed = new Set(parserSeeds);
+  for (const p of parserSeeds) keep.add(p);
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const l of links) {
+      const { s, t } = linkEndpointIds(l);
+      if (!reachedFromParserSeed.has(s)) continue;
+      if (l.type === 'chunk') {
+        if (!reachedFromParserSeed.has(t)) {
+          reachedFromParserSeed.add(t);
+          keep.add(t);
+          changed = true;
+        }
+      } else if (l.type === 'embed' && typeOf(s) === 'chunker' && !keep.has(t)) {
+        keep.add(t);
+        changed = true;
+      }
+    }
+  }
+
+  return keep;
+}
+
 function isEdgeActive(link) {
   const a = link?.attributes || {};
   if (link?.type === 'parse') return Boolean(a.is_active);
@@ -184,7 +311,7 @@ function lightenHex(hex, amount01) {
   return `rgb(${lr} ${lg} ${lb})`;
 }
 
-const GraphView = () => {
+export default function GraphView() {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
@@ -201,8 +328,6 @@ const GraphView = () => {
   const [filterNodeIds, setFilterNodeIds] = useState([]); // node ids
   const [includeNeighbors, setIncludeNeighbors] = useState(true);
   const [onlyActive, setOnlyActive] = useState(false);
-  const [opBusy, setOpBusy] = useState(false);
-  const [opMessage, setOpMessage] = useState(null);
   const linkClickRef = useRef({ linkId: null, t: 0 });
 
   const refetchGraph = useCallback(async () => {
@@ -297,10 +422,6 @@ const GraphView = () => {
     fetchGraph();
   }, [activeKB?.id]);
 
-  useEffect(() => {
-    setOpMessage(null);
-  }, [activeKB?.id]);
-
   const baseGraphData = useMemo(() => {
     const nodes = (rawGraph.nodes || []).map(n => {
       const type = n.type || 'unknown';
@@ -368,8 +489,6 @@ const GraphView = () => {
       const fileId = a.file_id;
       const parseRunId = a.parse_run_id;
       if (fileId == null || parseRunId == null) return;
-      setOpMessage(null);
-      setOpBusy(true);
       try {
         const res = await fetchWithAuth(`/api/parse-runs/set-active/${fileId}/${parseRunId}`, { method: 'PUT' });
         const parseBody = await res.json().catch(() => ({}));
@@ -392,15 +511,8 @@ const GraphView = () => {
           }
         }
         await refetchGraph();
-        setOpMessage(
-          chunkRunId != null
-            ? 'Parse run and latest related chunk run set active.'
-            : 'Parse run set active (no chunk run for this parse).'
-        );
       } catch (e) {
-        setOpMessage(e.message || 'Operation failed');
-      } finally {
-        setOpBusy(false);
+        console.error(e);
       }
     },
     [activeKB, baseGraphData.links, refetchGraph]
@@ -412,8 +524,6 @@ const GraphView = () => {
       const fileId = a.file_id;
       const chunkRunId = a.chunk_run_id;
       if (chunkRunId == null || !activeKB) return;
-      setOpMessage(null);
-      setOpBusy(true);
       try {
         const res = await fetchWithAuth(`/api/chunk-runs/${chunkRunId}/active`, {
           method: 'PATCH',
@@ -436,15 +546,8 @@ const GraphView = () => {
           }
         }
         await refetchGraph();
-        setOpMessage(
-          parseRunId != null
-            ? 'Chunk run and latest related parse run set active.'
-            : 'Chunk run set active (could not resolve parse run).'
-        );
       } catch (e) {
-        setOpMessage(e.message || 'Operation failed');
-      } finally {
-        setOpBusy(false);
+        console.error(e);
       }
     },
     [activeKB, baseGraphData.links, refetchGraph]
@@ -520,19 +623,9 @@ const GraphView = () => {
     }
 
     const seed = new Set(filterNodeIds);
-    const keep = new Set(filterNodeIds);
-
-    if (includeNeighbors) {
-      for (const l of baseLinks) {
-        const s = typeof l.source === 'string' ? l.source : l.source?.id;
-        const t = typeof l.target === 'string' ? l.target : l.target?.id;
-        if (!s || !t) continue;
-        if (seed.has(s) || seed.has(t)) {
-          keep.add(s);
-          keep.add(t);
-        }
-      }
-    }
+    const keep = includeNeighbors
+      ? expandPipelineFilterClosure(filterNodeIds, baseLinks, nodeIndex)
+      : new Set(filterNodeIds);
 
     const nodes = baseGraphData.nodes.filter(n => keep.has(n.id));
 
@@ -541,12 +634,15 @@ const GraphView = () => {
       const t = typeof l.target === 'string' ? l.target : l.target?.id;
       if (!s || !t) return false;
       if (!keep.has(s) || !keep.has(t)) return false;
-      // keep links that touch the selected nodes (or fully inside selection)
+      if (includeNeighbors) {
+        // Full induced subgraph on the closure: e.g. chunker filter shows doc↔parser edges for parsers on chunk edges.
+        return true;
+      }
       return seed.has(s) || seed.has(t);
     });
 
     return { nodes, links };
-  }, [baseGraphData, filterNodeIds, includeNeighbors, onlyActive]);
+  }, [baseGraphData, filterNodeIds, includeNeighbors, onlyActive, nodeIndex]);
 
   const searchMatches = useMemo(() => {
     const q = filterQuery.trim().toLowerCase();
@@ -639,8 +735,6 @@ const GraphView = () => {
   return (
     <div className="graph-view">
       {error && <div className="graph-error">{error}</div>}
-      {opMessage && <div className={`graph-op-message ${opBusy ? 'graph-op-message-pending' : ''}`}>{opMessage}</div>}
-      {opBusy && !opMessage && <div className="graph-op-message graph-op-message-pending">Updating active runs…</div>}
 
       {baseGraphData.nodes.length === 0 ? (
         <div className="graph-empty">No graph data (parse some documents and run chunking first).</div>
@@ -1060,7 +1154,4 @@ const GraphView = () => {
       )}
     </div>
   );
-};
-
-export default GraphView;
-
+}
