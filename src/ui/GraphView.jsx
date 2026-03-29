@@ -92,10 +92,13 @@ function linkEndpointIds(link) {
  * No undirected hops (e.g. chunker → parser → unrelated chunker).
  *
  * - Chunker / embedding seeds: backward only into parsers + docs tied by chunk edges into
- *   anchor chunker(s); forward only chunker → embedding.
+ *   anchor chunker(s); forward chunker → embedding only for embedding seeds (no sibling models).
+ *   If a chunker is also in the filter, all embeddings from those chunkers are included.
  * - Document seeds: forward-only parse → chunk → embed.
  * - Parser seeds: backward-only along parse edges (document → parser) for files/parse runs,
  *   then forward-only parser → chunker → embedding.
+ * - Combined parser + chunker seeds: intersect — only chunk edges between selected parsers
+ *   and selected chunkers (and matching parse runs / docs).
  */
 function expandPipelineFilterClosure(seedIds, links, nodeById) {
   const seeds = seedIds.filter(Boolean);
@@ -103,6 +106,15 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
 
   const seedSet = new Set(seeds);
   const typeOf = (id) => nodeById?.get?.(id)?.type;
+  const parserSeeds = seeds.filter((id) => typeOf(id) === 'parser');
+  const chunkerSeeds = seeds.filter((id) => typeOf(id) === 'chunker');
+  const parserSeedSet = new Set(parserSeeds);
+  const chunkerSeedSet = new Set(chunkerSeeds);
+
+  const hasChunkerSeed = chunkerSeeds.length > 0;
+  const hasEmbeddingSeed = seeds.some((id) => typeOf(id) === 'embedding');
+  // With an embedding filter but no chunker filter, do not pull sibling embeddings from the same chunker.
+  const restrictEmbeddingTargets = hasEmbeddingSeed && !hasChunkerSeed;
 
   const keep = new Set(seeds);
 
@@ -125,6 +137,7 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
       if (l.type !== 'chunk') continue;
       const { s, t } = linkEndpointIds(l);
       if (!anchorChunkers.has(t)) continue;
+      if (parserSeedSet.size > 0 && !parserSeedSet.has(s)) continue;
       if (!keep.has(s)) {
         keep.add(s);
         changed = true;
@@ -142,6 +155,7 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
         if (ch.type !== 'chunk') return false;
         const chs = linkEndpointIds(ch);
         if (chs.s !== t || !anchorChunkers.has(chs.t)) return false;
+        if (parserSeedSet.size > 0 && !parserSeedSet.has(chs.s)) return false;
         const ca = ch.attributes || {};
         return ca.file_id === fileId && ca.parse_run_id === parseRunId;
       });
@@ -155,7 +169,9 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
   for (const l of links) {
     if (l.type !== 'embed') continue;
     const { s, t } = linkEndpointIds(l);
-    if (anchorChunkers.has(s)) keep.add(t);
+    if (!anchorChunkers.has(s)) continue;
+    if (restrictEmbeddingTargets && !seedSet.has(t)) continue;
+    keep.add(t);
   }
 
   const reachedFromDocSeed = new Set(seeds.filter((id) => typeOf(id) === 'document'));
@@ -166,14 +182,18 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
       const { s, t } = linkEndpointIds(l);
       if (!reachedFromDocSeed.has(s) || reachedFromDocSeed.has(t)) continue;
       if (l.type === 'parse' && typeOf(s) === 'document') {
+        if (parserSeedSet.size > 0 && !parserSeedSet.has(t)) continue;
         reachedFromDocSeed.add(t);
         keep.add(t);
         changed = true;
       } else if (l.type === 'chunk' && typeOf(s) === 'parser') {
+        if (parserSeedSet.size > 0 && !parserSeedSet.has(s)) continue;
+        if (chunkerSeedSet.size > 0 && !chunkerSeedSet.has(t)) continue;
         reachedFromDocSeed.add(t);
         keep.add(t);
         changed = true;
       } else if (l.type === 'embed' && typeOf(s) === 'chunker') {
+        if (restrictEmbeddingTargets && !seedSet.has(t)) continue;
         reachedFromDocSeed.add(t);
         keep.add(t);
         changed = true;
@@ -181,12 +201,23 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
     }
   }
 
-  const parserSeeds = seeds.filter((id) => typeOf(id) === 'parser');
   for (const p of parserSeeds) {
     for (const l of links) {
       if (l.type !== 'parse') continue;
       const { s, t } = linkEndpointIds(l);
-      if (t === p && s) keep.add(s);
+      if (t !== p || !s) continue;
+      if (chunkerSeedSet.size > 0) {
+        const a = l.attributes || {};
+        const linked = links.some((ch) => {
+          if (ch.type !== 'chunk') return false;
+          const chs = linkEndpointIds(ch);
+          if (chs.s !== p || !chunkerSeedSet.has(chs.t)) return false;
+          const ca = ch.attributes || {};
+          return ca.file_id === a.file_id && ca.parse_run_id === a.parse_run_id;
+        });
+        if (!linked) continue;
+      }
+      keep.add(s);
     }
   }
 
@@ -199,12 +230,14 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
       const { s, t } = linkEndpointIds(l);
       if (!reachedFromParserSeed.has(s)) continue;
       if (l.type === 'chunk') {
+        if (chunkerSeedSet.size > 0 && !chunkerSeedSet.has(t)) continue;
         if (!reachedFromParserSeed.has(t)) {
           reachedFromParserSeed.add(t);
           keep.add(t);
           changed = true;
         }
       } else if (l.type === 'embed' && typeOf(s) === 'chunker' && !keep.has(t)) {
+        if (restrictEmbeddingTargets && !seedSet.has(t)) continue;
         keep.add(t);
         changed = true;
       }
@@ -329,6 +362,7 @@ export default function GraphView() {
   const [includeNeighbors, setIncludeNeighbors] = useState(true);
   const [onlyActive, setOnlyActive] = useState(false);
   const linkClickRef = useRef({ linkId: null, t: 0 });
+  const nodeClickRef = useRef({ nodeId: null, t: 0 });
 
   const refetchGraph = useCallback(async () => {
     if (!activeKB) return;
@@ -997,10 +1031,21 @@ export default function GraphView() {
                 }
               }}
               onNodeClick={(node) => {
+                const now = Date.now();
+                const nid = node?.id;
+                const prev = nodeClickRef.current;
+                const isDbl = nid != null && prev.nodeId === nid && now - prev.t < 450;
                 linkClickRef.current = { linkId: null, t: 0 };
+                if (isDbl) {
+                  nodeClickRef.current = { nodeId: null, t: 0 };
+                  addFilterNode(nid);
+                  return;
+                }
+                nodeClickRef.current = { nodeId: nid, t: now };
                 setSelected({ kind: 'node', data: node });
               }}
               onLinkClick={(link) => {
+                nodeClickRef.current = { nodeId: null, t: 0 };
                 const now = Date.now();
                 const lid = link.id;
                 const prev = linkClickRef.current;
@@ -1019,6 +1064,7 @@ export default function GraphView() {
               }}
               onBackgroundClick={() => {
                 linkClickRef.current = { linkId: null, t: 0 };
+                nodeClickRef.current = { nodeId: null, t: 0 };
                 setSelected(null);
               }}
             />
@@ -1035,7 +1081,10 @@ export default function GraphView() {
             {!selected ? (
               <div className="details-empty">
                 Click a node or an edge to inspect attributes.
-                <div className="details-hint">Double-click a parse or chunk edge to set that run active (and sync the latest related chunk/parse run).</div>
+                <div className="details-hint">
+                  Double-click a node to add it to the filter.
+                  Double-click a parse or chunk edge to set that run active (and sync the latest related chunk/parse run).
+                </div>
               </div>
             ) : selected.kind === 'node' ? (
               <div className="details-content">
