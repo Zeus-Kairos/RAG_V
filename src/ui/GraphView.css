@@ -186,6 +186,10 @@
   background: rgba(5, 150, 105, 0.12);
   color: #047857;
 }
+.badge-embedding {
+  background: rgba(217, 119, 6, 0.14);
+  color: #b45309;
+}
 .badge-unknown {
   background: rgba(100, 116, 139, 0.12);
   color: #475569;

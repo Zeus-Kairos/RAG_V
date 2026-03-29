@@ -8,13 +8,38 @@ const NODE_COLORS = {
   document: '#2563eb',
   parser: '#7c3aed',
   chunker: '#059669',
+  embedding: '#d97706',
   unknown: '#64748b',
 };
 
 const EDGE_COLORS = {
-  parseActive: 'rgba(124, 58, 237, 0.55)',
-  chunkActive: 'rgba(5, 150, 105, 0.55)',
-  inactive: 'rgba(148, 163, 184, 0.55)', // slate-400
+  // Saturated + high alpha so active edges read clearly vs gray inactive.
+  parseActive: 'rgba(109, 40, 217, 0.92)',
+  chunkActive: 'rgba(4, 120, 87, 0.92)',
+  embedActive: 'rgba(217, 119, 6, 0.92)',
+  inactive: 'rgba(148, 163, 184, 0.38)',
+};
+
+// Node highlights aligned with active edge colors (parser / chunker / embedding).
+const NODE_HIGHLIGHT = {
+  parser: {
+    fill: '#6d28d9',
+    auraRgb: '109, 40, 217',
+    text: '#4c1d95',
+    shadow: 'rgba(109, 40, 217, 0.5)',
+  },
+  chunker: {
+    fill: '#047857',
+    auraRgb: '4, 120, 87',
+    text: '#065f46',
+    shadow: 'rgba(4, 120, 87, 0.5)',
+  },
+  embedding: {
+    fill: '#d97706',
+    auraRgb: '217, 119, 6',
+    text: '#92400e',
+    shadow: 'rgba(217, 119, 6, 0.5)',
+  },
 };
 
 function safeStringify(value) {
@@ -56,6 +81,12 @@ function JsonBlock({ title, value, defaultOpen = false }) {
   );
 }
 
+function linkEndpointIds(link) {
+  const s = typeof link?.source === 'string' ? link.source : link?.source?.id;
+  const t = typeof link?.target === 'string' ? link.target : link?.target?.id;
+  return { s, t };
+}
+
 function isEdgeActive(link) {
   const a = link?.attributes || {};
   if (link?.type === 'parse') return Boolean(a.is_active);
@@ -68,6 +99,15 @@ function isEdgeActive(link) {
     const okRun = runActive === undefined ? true : Boolean(runActive);
     const okSync = inSync === undefined ? true : Boolean(inSync);
     return okParse && okRun && okSync;
+  }
+  if (link?.type === 'embed') {
+    const runActive = a.chunk_run_is_active;
+    const inSync = a.chunk_run_in_sync;
+    const embActive = a.embedding_is_active;
+    const okRun = runActive === undefined ? true : Boolean(runActive);
+    const okSync = inSync === undefined ? true : Boolean(inSync);
+    const okEmb = embActive === undefined ? true : Boolean(embActive);
+    return okRun && okSync && okEmb;
   }
   return true;
 }
@@ -200,11 +240,20 @@ const GraphView = () => {
       const type = n.type || 'unknown';
       const color = NODE_COLORS[type] || NODE_COLORS.unknown;
 
-      // Better initial layout: document -> parser -> chunker along X axis.
+      // Better initial layout: document -> parser -> chunker -> embedding along X axis.
       // Keep deterministic scatter via hash so it doesn't start in a corner.
       const u = hash01(n.id || '');
       const v = hash01(`${n.id || ''}::y`);
-      const xBand = type === 'document' ? -240 : type === 'parser' ? 0 : type === 'chunker' ? 240 : 0;
+      const xBand =
+        type === 'document'
+          ? -320
+          : type === 'parser'
+            ? -107
+            : type === 'chunker'
+              ? 107
+              : type === 'embedding'
+                ? 320
+                : 0;
       const yScatter = (v - 0.5) * 240;
       const xScatter = (u - 0.5) * 120;
 
@@ -247,6 +296,28 @@ const GraphView = () => {
     return { nodes, links };
   }, [rawGraph]);
 
+  /** Parsers / chunkers / embeddings that participate in at least one active edge. */
+  const { activeParserIds, activeChunkerIds, activeEmbeddingIds } = useMemo(() => {
+    const parserIds = new Set();
+    const chunkerIds = new Set();
+    const embeddingIds = new Set();
+    for (const l of baseGraphData.links) {
+      if (!isEdgeActive(l)) continue;
+      const { s, t } = linkEndpointIds(l);
+      if (!s || !t) continue;
+      if (l.type === 'parse') {
+        parserIds.add(t);
+      } else if (l.type === 'chunk') {
+        parserIds.add(s);
+        chunkerIds.add(t);
+      } else if (l.type === 'embed') {
+        chunkerIds.add(s);
+        embeddingIds.add(t);
+      }
+    }
+    return { activeParserIds: parserIds, activeChunkerIds: chunkerIds, activeEmbeddingIds: embeddingIds };
+  }, [baseGraphData.links]);
+
   const nodeIndex = useMemo(() => {
     const byId = new Map();
     for (const n of baseGraphData.nodes) byId.set(n.id, n);
@@ -255,7 +326,7 @@ const GraphView = () => {
 
   const nodeOptions = useMemo(() => {
     const nodes = [...baseGraphData.nodes];
-    const typeRank = { document: 0, parser: 1, chunker: 2, unknown: 3 };
+    const typeRank = { document: 0, parser: 1, chunker: 2, embedding: 3, unknown: 4 };
     nodes.sort((a, b) => {
       const tr = (typeRank[a.type] ?? 9) - (typeRank[b.type] ?? 9);
       if (tr !== 0) return tr;
@@ -343,7 +414,9 @@ const GraphView = () => {
     try {
       // Baseline forces (compact but readable)
       fg.d3Force('charge')?.strength(-820);
-      fg.d3Force('link')?.distance((l) => (l.type === 'parse' ? 220 : 170))?.strength(0.9);
+      fg.d3Force('link')
+        ?.distance((l) => (l.type === 'parse' ? 220 : l.type === 'embed' ? 150 : 170))
+        ?.strength(0.9);
       fg.d3Force(
         'collide',
         forceCollide()
@@ -352,6 +425,7 @@ const GraphView = () => {
             if (t === 'document') return 34;
             if (t === 'parser') return 26;
             if (t === 'chunker') return 26;
+            if (t === 'embedding') return 26;
             return 24;
           })
           .strength(0.9)
@@ -411,7 +485,7 @@ const GraphView = () => {
               <div className="filter-search">
                 <input
                   className="filter-input"
-                  placeholder="Search nodes… (e.g. filename / parser / chunker)"
+                  placeholder="Search nodes… (e.g. filename / parser / chunker / embedding)"
                   value={filterQuery}
                   onChange={(e) => setFilterQuery(e.target.value)}
                 />
@@ -450,6 +524,13 @@ const GraphView = () => {
               <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
                 <option value="" disabled>+ Chunker</option>
                 {nodeOptions.filter(n => n.type === 'chunker').map(n => (
+                  <option key={n.id} value={n.id}>{n.label || n.id}</option>
+                ))}
+              </select>
+
+              <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
+                <option value="" disabled>+ Embedding</option>
+                {nodeOptions.filter(n => n.type === 'embedding').map(n => (
                   <option key={n.id} value={n.id}>{n.label || n.id}</option>
                 ))}
               </select>
@@ -508,20 +589,59 @@ const GraphView = () => {
                   const a = l.attributes || {};
                   return `chunk | ${a.parser || ''} → ${(a.framework && a.chunker) ? `${a.framework}/${a.chunker}` : (a.framework || '')}\nchunk_run: ${a.chunk_run_id ?? '–'} | chunks: ${a.chunks_count ?? '–'}`;
                 }
+                if (l.type === 'embed') {
+                  const a = l.attributes || {};
+                  return `embed | chunk_run: ${a.chunk_run_id ?? '–'} → embedding: ${a.embedding_configure_id ?? '–'}\nindex_run: ${a.index_run_id ?? '–'}`;
+                }
                 return l.id || 'edge';
               }}
               nodeCanvasObject={(node, ctx, globalScale) => {
                 const label = node.label || node.id;
-                const base = node.color || NODE_COLORS.unknown;
-                const radius = 7;
-                const fontSize = Math.max(10, 12 / globalScale);
+                const t = node.type || 'unknown';
+                const isHlParser = t === 'parser' && activeParserIds.has(node.id);
+                const isHlChunker = t === 'chunker' && activeChunkerIds.has(node.id);
+                const isHlEmbedding = t === 'embedding' && activeEmbeddingIds.has(node.id);
+                const highlighted = isHlParser || isHlChunker || isHlEmbedding;
+
+                const hlStyle = isHlParser
+                  ? NODE_HIGHLIGHT.parser
+                  : isHlEmbedding
+                    ? NODE_HIGHLIGHT.embedding
+                    : NODE_HIGHLIGHT.chunker;
+                const base = highlighted
+                  ? hlStyle.fill
+                  : (node.color || NODE_COLORS.unknown);
+                const radius = highlighted ? 8.5 : 7;
+                const fontSize = Math.max(10, (highlighted ? 13.5 : 12) / globalScale);
+
+                // Active parser/chunker/embedding: soft color wash behind the sphere (no outer stroke ring).
+                if (highlighted) {
+                  const rgb = hlStyle.auraRgb;
+                  ctx.save();
+                  const aura = ctx.createRadialGradient(
+                    node.x,
+                    node.y,
+                    radius * 0.15,
+                    node.x,
+                    node.y,
+                    radius + 14
+                  );
+                  aura.addColorStop(0, `rgba(${rgb}, 0.42)`);
+                  aura.addColorStop(0.45, `rgba(${rgb}, 0.14)`);
+                  aura.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                  ctx.fillStyle = aura;
+                  ctx.beginPath();
+                  ctx.arc(node.x, node.y, radius + 14, 0, 2 * Math.PI, false);
+                  ctx.fill();
+                  ctx.restore();
+                }
 
                 // Soft ambient shadow for depth
                 ctx.save();
-                ctx.shadowColor = 'rgba(15, 23, 42, 0.22)';
-                ctx.shadowBlur = 10;
+                ctx.shadowColor = highlighted ? hlStyle.shadow : 'rgba(15, 23, 42, 0.22)';
+                ctx.shadowBlur = highlighted ? 18 : 10;
                 ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 5;
+                ctx.shadowOffsetY = highlighted ? 6 : 5;
 
                 // Main sphere with radial highlight
                 const grad = ctx.createRadialGradient(
@@ -532,7 +652,7 @@ const GraphView = () => {
                   node.y,
                   radius + 1
                 );
-                grad.addColorStop(0, lightenHex(base, 0.55));
+                grad.addColorStop(0, lightenHex(base, highlighted ? 0.68 : 0.55));
                 grad.addColorStop(0.55, base);
                 grad.addColorStop(1, 'rgba(0, 0, 0, 0.12)');
 
@@ -542,34 +662,57 @@ const GraphView = () => {
                 ctx.fill();
                 ctx.restore();
 
-                // Outer glow ring
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
-                ctx.lineWidth = 1.2;
-                ctx.arc(node.x, node.y, radius + 0.6, 0, 2 * Math.PI, false);
-                ctx.stroke();
-                ctx.restore();
+                // Subtle white rim only for non-highlighted nodes (no colored outer ring).
+                if (!highlighted) {
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+                  ctx.lineWidth = 1.2;
+                  ctx.arc(node.x, node.y, radius + 0.6, 0, 2 * Math.PI, false);
+                  ctx.stroke();
+                  ctx.restore();
+                }
 
-                ctx.font = `${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+                ctx.font = `${highlighted ? '600 ' : ''}${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-                ctx.fillText(label, node.x + 9, node.y);
+                ctx.fillStyle = highlighted ? hlStyle.text : 'rgba(15, 23, 42, 0.85)';
+                if (highlighted) {
+                  ctx.save();
+                  ctx.shadowColor = isHlParser
+                    ? 'rgba(109, 40, 217, 0.35)'
+                    : isHlEmbedding
+                      ? 'rgba(217, 119, 6, 0.35)'
+                      : 'rgba(4, 120, 87, 0.35)';
+                  ctx.shadowBlur = 6;
+                  ctx.shadowOffsetX = 0;
+                  ctx.shadowOffsetY = 0;
+                  ctx.fillText(label, node.x + 9, node.y);
+                  ctx.restore();
+                } else {
+                  ctx.fillText(label, node.x + 9, node.y);
+                }
               }}
-              linkWidth={(l) => (l.type === 'parse' ? 1.4 : 1.2)}
+              linkWidth={(l) => {
+                if (!isEdgeActive(l)) return 0.85;
+                if (l.type === 'parse') return 2.6;
+                return 2.1;
+              }}
               linkColor={(l) => {
                 const active = isEdgeActive(l);
                 if (!active) return EDGE_COLORS.inactive;
-                return l.type === 'parse' ? EDGE_COLORS.parseActive : EDGE_COLORS.chunkActive;
+                if (l.type === 'parse') return EDGE_COLORS.parseActive;
+                if (l.type === 'embed') return EDGE_COLORS.embedActive;
+                return EDGE_COLORS.chunkActive;
               }}
               linkDirectionalParticles={(l) => {
                 if (!isEdgeActive(l)) return 0;
-                return l.type === 'parse' ? 2 : 1;
+                if (l.type === 'parse') return 4;
+                return 3;
               }}
-              linkDirectionalParticleWidth={2}
-              linkDirectionalParticleSpeed={0.010}
-              linkDirectionalArrowLength={4}
+              linkDirectionalParticleWidth={(l) => (isEdgeActive(l) ? 2.8 : 0)}
+              linkDirectionalParticleSpeed={(l) => (isEdgeActive(l) ? 0.014 : 0)}
+              linkDirectionalArrowLength={(l) => (isEdgeActive(l) ? 8 : 3)}
               linkDirectionalArrowRelPos={1}
               linkCurvature={(l) => l.curvature || 0}
               onNodeDrag={() => {
@@ -631,6 +774,14 @@ const GraphView = () => {
                   </Section>
                 )}
 
+                {selected.data.type === 'embedding' && (
+                  <Section title="Embedding" defaultOpen>
+                    <Kv k="embedding_config_id" v={selected.data.embedding_config_id} />
+                    <Kv k="embedding_provider" v={selected.data.embedding_provider} />
+                    <Kv k="embedding_model" v={selected.data.embedding_model} />
+                  </Section>
+                )}
+
                 <JsonBlock title="Raw JSON" value={selected.data} defaultOpen={false} />
               </div>
             ) : (
@@ -686,6 +837,22 @@ const GraphView = () => {
                     <JsonBlock title="Chunker parameters" value={selected.data.attributes?.chunker_parameters || {}} defaultOpen />
                     <JsonBlock title="Chunk run parameters" value={selected.data.attributes?.run_parameters || {}} defaultOpen={false} />
                     <JsonBlock title="Parser parameters (from parse run)" value={selected.data.attributes?.parser_parameters || {}} defaultOpen={false} />
+                  </>
+                )}
+
+                {selected.data.type === 'embed' && (
+                  <>
+                    <Section title="Index run" defaultOpen>
+                      <Kv k="index_run_id" v={selected.data.attributes?.index_run_id} />
+                      <Kv k="chunk_run_id" v={selected.data.attributes?.chunk_run_id} />
+                      <Kv k="embedding_configure_id" v={selected.data.attributes?.embedding_configure_id} />
+                      <Kv k="run_time" v={selected.data.attributes?.run_time} />
+                    </Section>
+                    <Section title="Active flags" defaultOpen>
+                      <Kv k="chunk_run_is_active" v={String(selected.data.attributes?.chunk_run_is_active ?? '–')} />
+                      <Kv k="chunk_run_in_sync" v={String(selected.data.attributes?.chunk_run_in_sync ?? '–')} />
+                      <Kv k="embedding_is_active" v={String(selected.data.attributes?.embedding_is_active ?? '–')} />
+                    </Section>
                   </>
                 )}
 

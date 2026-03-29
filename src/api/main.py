@@ -246,16 +246,18 @@ async def get_parse_duration_table(kb_id: int):
 # API endpoint to get parsing/chunking graph for a knowledgebase
 @app.get("/api/knowledgebase/{kb_id}/graph")
 async def get_knowledgebase_graph(kb_id: int):
-    """Get a graph view of document->parser and parser->chunker relationships.
+    """Get a graph view of document->parser, parser->chunker, and chunker->embedding.
 
     Nodes:
       - documents: each file (type='file')
       - parsers: each parser name observed in parse runs
       - chunkers: each chunker observed in chunk runs (may be framework-level for some splitters)
+      - embeddings: each embedding config used by an index run for this knowledgebase
 
     Edges (multi-edges allowed):
       - parse edges: document -> parser, with parse parameters + time_usage + timestamps
       - chunk edges: parser -> chunker, with chunk parameters + run_time (+ chunks_count)
+      - embed edges: chunker -> embedding (from index_run: chunk_run + embedding config)
     """
     try:
         cur = memory_manager.conn.cursor()
@@ -531,6 +533,102 @@ async def get_knowledgebase_graph(kb_id: int):
                             "run_parameters": chunk_parameters,
                             "run_time": run_time,
                             "chunks_count": chunks_count,
+                        },
+                    }
+                )
+
+        # ---- Embed edges: chunker -> embedding (from index runs for this KB) ----
+        def _chunker_node_ids_for_run(framework: str, chunk_parameters: dict) -> List[str]:
+            fw = framework or "unknown"
+            chunkers = (chunk_parameters or {}).get("chunkers")
+            if fw == "langchain":
+                return ["chunker:langchain"]
+            if isinstance(chunkers, list) and len(chunkers) > 0:
+                out = []
+                for ch in chunkers:
+                    chunker_name = (ch or {}).get("chunker") or "unknown"
+                    out.append(f"chunker:{fw}:{chunker_name}")
+                return out
+            return [f"chunker:{fw}"]
+
+        def _ensure_chunker_node(chunker_node_id: str, framework: str) -> None:
+            if chunker_node_id in nodes_by_id:
+                return
+            if chunker_node_id == "chunker:langchain":
+                upsert_node(chunker_node_id, "chunker", "langchain", {"framework": "langchain"})
+                return
+            parts = chunker_node_id.split(":", 2)
+            if len(parts) == 3 and parts[0] == "chunker":
+                _, fw, nm = parts
+                upsert_node(chunker_node_id, "chunker", f"{fw}/{nm}", {"framework": fw, "chunker": nm})
+                return
+            fw = chunker_node_id.replace("chunker:", "", 1) if chunker_node_id.startswith("chunker:") else framework
+            upsert_node(chunker_node_id, "chunker", fw or framework, {"framework": fw or framework})
+
+        try:
+            index_runs = memory_manager.index_manager.get_index_runs_by_knowledgebase_id(kb_id)
+        except Exception:
+            index_runs = []
+
+        for ir in index_runs:
+            idx_id = ir.get("id")
+            chunk_run_id = ir.get("chunk_run_id")
+            emb_config_id = ir.get("embedding_configure_id")
+            run_time = ir.get("run_time")
+            if idx_id is None or chunk_run_id is None or not emb_config_id:
+                continue
+
+            emb_key = str(emb_config_id)
+
+            cr_conf = memory_manager.chunking_manager.get_chunk_run_config(int(chunk_run_id))
+            if not cr_conf or int(cr_conf.get("knowledgebase_id") or -1) != int(kb_id):
+                continue
+
+            framework = cr_conf.get("framework") or "unknown"
+            chunk_params = cr_conf.get("parameters") or {}
+            if isinstance(chunk_params, str):
+                chunk_params = _loads_maybe_json(chunk_params)
+            cr_is_active = bool(cr_conf.get("is_active"))
+            cr_in_sync = bool(cr_conf.get("in_sync"))
+
+            emb = memory_manager.embedding_manager.get_embedding_configuration(emb_key)
+            if not emb:
+                continue
+            cur.execute("SELECT is_active FROM embedding_configure WHERE id = ?", (emb_key,))
+            emb_row = cur.fetchone()
+            emb_is_active = bool(emb_row[0]) if emb_row else False
+
+            prov = emb.get("embedding_provider") or "?"
+            model = emb.get("embedding_model") or "?"
+            emb_label = f"{prov}/{model}"
+            emb_node_id = f"embedding:{emb_key}"
+            upsert_node(
+                emb_node_id,
+                "embedding",
+                emb_label,
+                {
+                    "embedding_config_id": emb_key,
+                    "embedding_provider": emb.get("embedding_provider"),
+                    "embedding_model": emb.get("embedding_model"),
+                },
+            )
+
+            for tgt in _chunker_node_ids_for_run(framework, chunk_params):
+                _ensure_chunker_node(tgt, framework)
+                edges.append(
+                    {
+                        "id": f"embed:{idx_id}:{tgt}",
+                        "type": "embed",
+                        "source": tgt,
+                        "target": emb_node_id,
+                        "attributes": {
+                            "index_run_id": idx_id,
+                            "chunk_run_id": int(chunk_run_id),
+                            "embedding_configure_id": emb_key,
+                            "run_time": run_time,
+                            "chunk_run_is_active": cr_is_active,
+                            "chunk_run_in_sync": cr_in_sync,
+                            "embedding_is_active": emb_is_active,
                         },
                     }
                 )
