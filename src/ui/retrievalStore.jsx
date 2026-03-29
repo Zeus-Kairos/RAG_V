@@ -8,6 +8,8 @@ const useRetrievalStore = create((set, get) => {
     indexRuns: [],
     selectedRuns: new Set(), // Currently selected index runs
     isIndexing: false,
+    isLoading: false,
+    indexRunsLoading: false,
     currentQuery: '',
     lastSearchQuery: '', // Query used for the last search
     activeKnowledgebase: { name: 'default' }, // Default knowledgebase
@@ -238,34 +240,33 @@ const useRetrievalStore = create((set, get) => {
     
     fetchIndexRuns: async (kbId = null) => {
       try {
-        set({ isLoading: true, error: null });
-        
+        set({ indexRunsLoading: true, error: null });
+
         const { activeKnowledgebase } = get();
         const knowledgebaseId = kbId || activeKnowledgebase?.id || 1; // Use provided ID, then knowledgebase ID, then default to 1
-        
+
         // Call the API endpoint
         const response = await fetchWithAuth(`/api/index-runs/${knowledgebaseId}`);
-        
+
         if (!response.ok) {
           throw new Error(`API error: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-          // Use the actual index runs from the API
-          set({ 
+          set({
             indexRuns: data.index_runs || [],
-            isLoading: false 
+            indexRunsLoading: false,
           });
         } else {
           throw new Error(data.message || 'Failed to fetch index runs');
         }
       } catch (error) {
         console.error('Error fetching index runs:', error);
-        set({ 
-          error: 'Failed to fetch index runs: ' + error.message, 
-          isLoading: false 
+        set({
+          error: 'Failed to fetch index runs: ' + error.message,
+          indexRunsLoading: false,
         });
       }
     },

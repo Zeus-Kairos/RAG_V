@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import useKnowledgebaseStore from './store';
 import useRetrievalStore from './retrievalStore';
 import './EmbeddingSettings.css';
@@ -14,13 +15,15 @@ const EmbeddingSettings = () => {
     setActiveEmbeddingConfig 
   } = useKnowledgebaseStore();
   
-  // Retriever settings
-  const { 
-    retrieverType, 
-    setRetrieverType, 
-    k, 
-    setK 
-  } = useRetrievalStore();
+  // Retriever settings (shallow: avoid re-renders when unrelated retrieval state changes)
+  const { retrieverType, setRetrieverType, k, setK } = useRetrievalStore(
+    useShallow((s) => ({
+      retrieverType: s.retrieverType,
+      setRetrieverType: s.setRetrieverType,
+      k: s.k,
+      setK: s.setK,
+    })),
+  );
   
   // Available retrievers
   const [availableRetrievers, setAvailableRetrievers] = useState(['vector', 'bm25', 'fusion']);

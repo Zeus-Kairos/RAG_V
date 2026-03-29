@@ -288,6 +288,7 @@ typing-inspect==0.9.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.3
+umap-learn>=0.5.9
 ultralytics==8.4.19
 ultralytics-thop==2.0.18
 unstructured==0.18.31

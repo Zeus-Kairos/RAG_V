@@ -331,7 +331,55 @@ class ChunkingManager:
         except Exception as e:
             logger.error(f"Error getting chunks by chunk run ID: {e}")
             raise
-    
+
+    def get_chunk_content_by_run_and_id(self, chunk_run_id: int, chunk_id: str) -> Optional[str]:
+        """Return stored chunk text for a chunk_run + chunk_id (canonical source when FAISS docstore lacks text)."""
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT content FROM chunks WHERE chunk_run_id = ? AND chunk_id = ?",
+                (chunk_run_id, str(chunk_id)),
+            )
+            row = cur.fetchone()
+            if row is None or row[0] is None:
+                return None
+            text = str(row[0]).strip()
+            return text if text else None
+        except Exception as e:
+            logger.error(f"Error getting chunk content by run and id: {e}")
+            return None
+
+    def get_chunk_record_by_run_and_id(self, chunk_run_id: int, chunk_id: str) -> Optional[Dict[str, Any]]:
+        """Full chunk row: content + parsed metadata JSON (for UMAP / viewer detail)."""
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata "
+                "FROM chunks WHERE chunk_run_id = ? AND chunk_id = ?",
+                (chunk_run_id, str(chunk_id)),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            meta_raw = row["metadata"] if hasattr(row, "keys") else row[5]
+            meta: Dict[str, Any] = {}
+            if meta_raw:
+                try:
+                    meta = json.loads(meta_raw) if isinstance(meta_raw, str) else dict(meta_raw)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+            return {
+                "chunk_id": row["chunk_id"] if hasattr(row, "keys") else row[0],
+                "file_id": row["file_id"] if hasattr(row, "keys") else row[1],
+                "parse_run_id": row["parse_run_id"] if hasattr(row, "keys") else row[2],
+                "chunk_run_id": row["chunk_run_id"] if hasattr(row, "keys") else row[3],
+                "content": (row["content"] if hasattr(row, "keys") else row[4]) or "",
+                "metadata": meta,
+            }
+        except Exception as e:
+            logger.error(f"Error getting chunk record by run and id: {e}")
+            return None
+
     def delete_chunks_by_file_id(self, file_id: int) -> int:
         """
         Delete all chunks for a specific file.

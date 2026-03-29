@@ -738,6 +738,29 @@
   flex-shrink: 0;
 }
 
+.result-chunk-id-btn {
+  margin: 0;
+  padding: 0 2px;
+  border: none;
+  background: linear-gradient(transparent calc(100% - 2px), rgba(9, 105, 218, 0.35) 0);
+  font: inherit;
+  font-weight: 600;
+  color: #0969da;
+  cursor: pointer;
+  border-radius: 2px;
+  text-align: left;
+}
+
+.result-chunk-id-btn:hover {
+  color: #0550ae;
+  background: linear-gradient(transparent calc(100% - 2px), rgba(9, 105, 218, 0.5) 0);
+}
+
+.result-chunk-id-btn:focus-visible {
+  outline: 2px solid #0969da;
+  outline-offset: 1px;
+}
+
 .result-score {
   font-size: 12px;
   font-weight: 600;
@@ -934,6 +957,408 @@
 .error-modal-button:hover {
   background-color: #c82333;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Document retrieval: list vs UMAP toggle */
+.retrieval-view-toggle {
+  display: flex;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f6f8fa;
+}
+
+.retrieval-view-toggle-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #57606a;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.retrieval-view-toggle-btn + .retrieval-view-toggle-btn {
+  border-left: 1px solid #d0d7de;
+}
+
+.retrieval-view-toggle-btn:hover:not(.is-active) {
+  background: #eaeef2;
+  color: #24292f;
+}
+
+.retrieval-view-toggle-btn.is-active {
+  background: #fff;
+  color: #0969da;
+  box-shadow: inset 0 0 0 1px rgba(9, 105, 218, 0.2);
+}
+
+.umap-results-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 12px;
+}
+
+.umap-result-panel {
+  flex: 0 0 auto;
+  width: clamp(300px, 48vw, 720px);
+  min-width: 280px;
+  max-width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+  box-sizing: border-box;
+}
+
+/* Single UMAP: fill the row instead of clamp(48vw, 720px) */
+.umap-results-grid > .umap-result-panel:only-child {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.umap-result-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.umap-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.umap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  font-size: 11px;
+  color: #555;
+}
+
+.umap-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.umap-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.umap-swatch-base {
+  background: rgba(100, 116, 139, 0.55);
+}
+
+.umap-swatch-hit {
+  background: #ea580c;
+}
+
+.umap-swatch-query {
+  width: 0;
+  height: 0;
+  border-radius: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #6366f1;
+  background: transparent;
+}
+
+.umap-method {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+}
+
+.umap-svg-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.umap-svg-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.umap-svg-hint {
+  font-size: 11px;
+  color: #57606a;
+}
+
+.umap-svg-reset {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  color: #0969da;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.umap-svg-reset:hover {
+  background: #f6f8fa;
+}
+
+.umap-svg {
+  width: 100%;
+  max-height: 420px;
+  background: #fff;
+  border: 1px solid #e8eaed;
+  border-radius: 6px;
+}
+
+.umap-svg--pannable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.umap-svg--pannable:active {
+  cursor: grabbing;
+}
+
+.umap-pan-layer {
+  cursor: grab;
+}
+
+.umap-svg--pannable:active .umap-pan-layer {
+  cursor: grabbing;
+}
+
+.umap-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: transparent;
+}
+
+.umap-detail-popover {
+  position: fixed;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+  overflow: hidden;
+}
+
+.umap-detail-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8eaed;
+  background: #f6f8fa;
+  flex-shrink: 0;
+}
+
+.umap-detail-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #24292f;
+  word-break: break-all;
+}
+
+.umap-detail-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  color: #57606a;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.umap-detail-close:hover {
+  background: #eaeef2;
+  color: #24292f;
+}
+
+.umap-detail-popover-body {
+  padding: 12px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.umap-detail-filename {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0969da;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+
+.umap-detail-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #57606a;
+  margin: 12px 0 6px;
+}
+
+.umap-detail-section-label:first-of-type {
+  margin-top: 0;
+}
+
+.umap-detail-content {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #24292f;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px;
+  background: #fafbfc;
+  border-radius: 6px;
+  border: 1px solid #eaeef2;
+}
+
+.umap-detail-meta {
+  margin: 0;
+  font-size: 12px;
+}
+
+.umap-detail-meta-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 34%) 1fr;
+  gap: 8px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.umap-detail-meta-row:last-child {
+  border-bottom: none;
+}
+
+.umap-detail-meta-row dt {
+  margin: 0;
+  font-weight: 600;
+  color: #57606a;
+  word-break: break-word;
+}
+
+.umap-detail-meta-row dd {
+  margin: 0;
+  color: #24292f;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  font-size: 11px;
+}
+
+.umap-detail-loading,
+.umap-detail-error,
+.umap-detail-empty-meta {
+  font-size: 13px;
+  color: #57606a;
+}
+
+.umap-detail-error {
+  color: #b91c1c;
+}
+
+.umap-dot {
+  fill: rgba(100, 116, 139, 0.45);
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 0.5;
+}
+
+.umap-dot-hit {
+  fill: #ea580c;
+  stroke: #fff7ed;
+  stroke-width: 1;
+}
+
+.umap-query-marker {
+  fill: #6366f1;
+  stroke: #312e81;
+  stroke-width: 1;
+}
+
+.umap-label {
+  font-size: 10px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  fill: #64748b;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.umap-label-hit {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  fill: #c2410c;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.umap-label-query {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  fill: #4338ca;
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.umap-panel-loading,
+.umap-panel-empty {
+  font-size: 13px;
+  color: #666;
+  padding: 24px;
+  text-align: center;
+}
+
+.umap-panel-error {
+  font-size: 13px;
+  color: #b91c1c;
+  padding: 16px;
+  background: #fef2f2;
+  border-radius: 6px;
 }
 
 /* Responsive Adjustments */

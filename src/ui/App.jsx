@@ -10,9 +10,28 @@ import RetrievalBrowser from './RetrievalBrowser';
 import Dashboard from './Dashboard';
 import ErrorBoundary from './ErrorBoundary';
 
+function SidebarToggleIcon({ collapsed }) {
+  return (
+    <svg
+      className={`app-sidebar-toggle-icon${collapsed ? ' app-sidebar-toggle-icon--collapsed' : ''}`}
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <path
+        fill="currentColor"
+        d="M11.41 7.41L10 6l-6 6 6 6 1.41-1.41L5.83 12zm4.59 0L15 6l-6 6 6 6 1.41-1.41L10.42 12z"
+      />
+    </svg>
+  );
+}
+
 function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
   const [activeTab, setActiveTab] = useState('knowledgebase'); // 'chunk', 'knowledgebase', or 'retrieval'
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Initialize the app when it loads
   useEffect(() => {
@@ -34,11 +53,31 @@ function App() {
   return (
     <div className={`app-container ${!showSidebar ? 'app-container-no-sidebar' : ''}`}>
       {showSidebar && (
-        <div className="sidebar">
-          {activeTab === 'chunk' && <SplitterSettings />}
-          {activeTab === 'knowledgebase' && <ParserSettings />}
-          {activeTab === 'retrieval' && <EmbeddingSettings />}
-        </div>
+        <aside
+          className={`app-sidebar-shell ${sidebarCollapsed ? 'app-sidebar-shell--collapsed' : ''}`}
+          aria-label="设置侧边栏"
+        >
+          <div className="app-sidebar-header">
+            <button
+              type="button"
+              className="app-sidebar-toggle"
+              onClick={() => setSidebarCollapsed((c) => !c)}
+              aria-expanded={!sidebarCollapsed}
+              aria-controls="app-settings-sidebar-panel"
+              title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            >
+              <span className="app-sidebar-toggle__sr">
+                {sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+              </span>
+              <SidebarToggleIcon collapsed={sidebarCollapsed} />
+            </button>
+          </div>
+          <div id="app-settings-sidebar-panel" className="sidebar app-sidebar-panel">
+            {activeTab === 'chunk' && <SplitterSettings />}
+            {activeTab === 'knowledgebase' && <ParserSettings />}
+            {activeTab === 'retrieval' && <EmbeddingSettings />}
+          </div>
+        </aside>
       )}
       <div className="main-content">
         {/* Tab Navigation */}

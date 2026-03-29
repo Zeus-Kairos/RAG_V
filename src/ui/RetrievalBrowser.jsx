@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from './store';
 import useKnowledgebaseStore from './store';
 import useRetrievalStore from './retrievalStore';
+import UmapScatterPanel from './UmapScatterPanel';
+import ChunkDetailPopover from './ChunkDetailPopover';
 import './RetrievalBrowser.css';
 
 const RetrievalBrowser = () => {
@@ -30,15 +32,22 @@ const RetrievalBrowser = () => {
     clearError,
     setSelectedRuns,
     retrieverType,
-    lastSearchQuery
+    lastSearchQuery,
+    k
   } = useRetrievalStore();
   
   // State for selected index runs
   const [localSelectedRuns, setLocalSelectedRuns] = useState(new Set());
+  const [showUmapView, setShowUmapView] = useState(false);
   
   // State for expanded parameters per run
   const [expandedParams, setExpandedParams] = useState({});
-  
+
+  const [listChunkPopover, setListChunkPopover] = useState(null);
+  const [listChunkDetail, setListChunkDetail] = useState(null);
+  const [listDetailLoading, setListDetailLoading] = useState(false);
+  const [listDetailError, setListDetailError] = useState(null);
+
   // Toggle parameters expansion for a run
   const toggleParams = (runId) => {
     setExpandedParams(prev => ({
@@ -110,7 +119,74 @@ const RetrievalBrowser = () => {
     };
     fetchConfigs();
   }, [fetchIndexRuns, fetchActiveChunkRun, fetchActiveEmbeddingConfig, knowledgebases, activeKnowledgebase]);
-  
+
+  useEffect(() => {
+    if (!listChunkPopover) {
+      setListChunkDetail(null);
+      setListDetailError(null);
+      setListDetailLoading(false);
+      return undefined;
+    }
+    const { indexRunId, chunkId } = listChunkPopover;
+    const kbName = activeKnowledgebase?.name || 'default';
+    let cancelled = false;
+    (async () => {
+      setListDetailLoading(true);
+      setListDetailError(null);
+      setListChunkDetail(null);
+      try {
+        const res = await fetchWithAuth(
+          `/api/retrieve/${encodeURIComponent(kbName)}/${indexRunId}/chunk/${encodeURIComponent(String(chunkId))}`,
+        );
+        const text = await res.text();
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          throw new Error(text || res.statusText);
+        }
+        if (!res.ok) {
+          const d = json.detail;
+          const msg =
+            typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg || JSON.stringify(x)).join('; ') : JSON.stringify(d);
+          throw new Error(msg || json.message || res.statusText);
+        }
+        if (cancelled) return;
+        if (!json.success) {
+          throw new Error(json.message || 'Failed to load');
+        }
+        setListChunkDetail({
+          content: json.content ?? '',
+          metadata: json.metadata ?? {},
+          document_name: json.document_name ?? '',
+        });
+      } catch (e) {
+        if (!cancelled) setListDetailError(e.message || String(e));
+      } finally {
+        if (!cancelled) setListDetailLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listChunkPopover, activeKnowledgebase?.name]);
+
+  const closeListChunkPopover = useCallback(() => {
+    setListChunkPopover(null);
+    setListChunkDetail(null);
+    setListDetailError(null);
+  }, []);
+
+  const openListChunkPopover = useCallback((indexRunId, chunkId, e) => {
+    e?.stopPropagation?.();
+    setListChunkPopover({
+      indexRunId: Number(indexRunId),
+      chunkId: String(chunkId),
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+  }, []);
+
   // Handle query submission
   const handleQuerySubmit = (e) => {
     e.preventDefault();
@@ -123,6 +199,7 @@ const RetrievalBrowser = () => {
   const handleClearQuery = () => {
     setCurrentQuery('');
     clearRetrievalResults();
+    closeListChunkPopover();
   };
   
   // Handle run indexing
@@ -135,22 +212,22 @@ const RetrievalBrowser = () => {
   
   useEffect(() => {
     const syncHeaderHeights = () => {
-      if (resultsContainerRef.current) {
-        const headers = resultsContainerRef.current.querySelectorAll('.result-panel-header');
-        if (headers.length > 0) {
-          let maxHeight = 0;
-          headers.forEach(header => {
-            // Reset height to auto to get the actual content height
-            header.style.height = 'auto';
-            const height = header.offsetHeight;
-            if (height > maxHeight) {
-              maxHeight = height;
-            }
-          });
-          headers.forEach(header => {
-            header.style.height = `${maxHeight}px`;
-          });
-        }
+      if (showUmapView || !resultsContainerRef.current) {
+        return;
+      }
+      const headers = resultsContainerRef.current.querySelectorAll('.result-panel-header');
+      if (headers.length > 0) {
+        let maxHeight = 0;
+        headers.forEach(header => {
+          header.style.height = 'auto';
+          const height = header.offsetHeight;
+          if (height > maxHeight) {
+            maxHeight = height;
+          }
+        });
+        headers.forEach(header => {
+          header.style.height = `${maxHeight}px`;
+        });
       }
     };
     
@@ -164,7 +241,7 @@ const RetrievalBrowser = () => {
     return () => {
       window.removeEventListener('resize', syncHeaderHeights);
     };
-  }, [expandedParams, retrievalResults]);
+  }, [expandedParams, retrievalResults, showUmapView]);
   
   return (
     <div className="retrieval-browser">
@@ -343,7 +420,27 @@ const RetrievalBrowser = () => {
 
           {/* Query and Results */}
           <div className="retrieval-section">
-            <h3>Document Retrieval</h3>
+            <div className="retrieval-section-header">
+              <h3>Document Retrieval</h3>
+              <div className="retrieval-view-toggle" role="group" aria-label="结果展示方式">
+                <button
+                  type="button"
+                  className={`retrieval-view-toggle-btn ${!showUmapView ? 'is-active' : ''}`}
+                  onClick={() => setShowUmapView(false)}
+                  aria-pressed={!showUmapView}
+                >
+                  列表
+                </button>
+                <button
+                  type="button"
+                  className={`retrieval-view-toggle-btn ${showUmapView ? 'is-active' : ''}`}
+                  onClick={() => setShowUmapView(true)}
+                  aria-pressed={showUmapView}
+                >
+                  UMAP 映射
+                </button>
+              </div>
+            </div>
             
             {/* Query Form */}
             <form onSubmit={handleQuerySubmit} className="query-form">
@@ -366,7 +463,7 @@ const RetrievalBrowser = () => {
                   type="button" 
                   className="query-clear-btn"
                   onClick={handleClearQuery}
-                  disabled={!currentQuery.trim() && retrievalResults.length === 0}
+                  disabled={!currentQuery.trim() && Object.keys(retrievalResults).length === 0}
                 >
                   Clear
                 </button>
@@ -375,7 +472,39 @@ const RetrievalBrowser = () => {
             
             {/* Results */}
             <div className="retrieval-results">
-              {Object.keys(retrievalResults).length === 0 ? (
+              {showUmapView ? (
+                (() => {
+                  const retrievalRunIds = Object.keys(retrievalResults);
+                  const displayedRunIds =
+                    retrievalRunIds.length > 0
+                      ? [...retrievalRunIds].sort((a, b) => Number(a) - Number(b))
+                      : [...localSelectedRuns].sort((a, b) => Number(a) - Number(b)).map(String);
+                  if (displayedRunIds.length === 0) {
+                    return (
+                      <div className="no-query">请在左侧勾选至少一个索引以查看映射</div>
+                    );
+                  }
+                  return (
+                    <div className="umap-results-grid">
+                      {displayedRunIds.map((runId) => (
+                        <div key={runId} className="umap-result-panel">
+                          <div className="umap-result-panel-title">Index ID: {runId}</div>
+                          <UmapScatterPanel
+                            kbName={activeKnowledgebase?.name || 'default'}
+                            indexRunId={Number(runId)}
+                            query={retrievalResults[runId] ? lastSearchQuery : ''}
+                            highlightIds={
+                              retrievalResults[runId]?.results
+                                ?.slice(0, k)
+                                .map((r) => String(r.id)) ?? []
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+              ) : Object.keys(retrievalResults).length === 0 ? (
                 lastSearchQuery ? (
                   <div className="no-results">No results found for "{lastSearchQuery}"</div>
                 ) : (
@@ -486,7 +615,17 @@ const RetrievalBrowser = () => {
                             {results.map(result => (
                               <div key={result.id} className="result-item">
                                 <div className="result-meta">
-                                  <span className="result-id">ID: {result.id}</span>
+                                  <span className="result-id">
+                                    ID:{' '}
+                                    <button
+                                      type="button"
+                                      className="result-chunk-id-btn"
+                                      title="Full text and metadata"
+                                      onClick={(e) => openListChunkPopover(runId, result.id, e)}
+                                    >
+                                      {result.id}
+                                    </button>
+                                  </span>
                                   <span className="result-score">
                                     {result.relevance_score.toFixed(2)}
                                   </span>
@@ -508,7 +647,24 @@ const RetrievalBrowser = () => {
           </div>
         </div>
       </div>
-      
+
+      <ChunkDetailPopover
+        popover={
+          listChunkPopover
+            ? {
+                type: 'chunk',
+                chunkId: listChunkPopover.chunkId,
+                clientX: listChunkPopover.clientX,
+                clientY: listChunkPopover.clientY,
+              }
+            : null
+        }
+        onClose={closeListChunkPopover}
+        chunkDetail={listChunkDetail}
+        detailLoading={listDetailLoading}
+        detailError={listDetailError}
+      />
+
       {/* Error Modal */}
       {error && (
         <div className="error-modal-overlay">

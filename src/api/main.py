@@ -17,6 +17,8 @@ from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
 from src.retriever.retrievers import BaseRetriever
 from src.utils.logging_config import get_logger
+from src.utils.umap_projection import project_2d, subsample_for_projection
+import numpy as np
 
 logger = get_logger(__name__)
 
@@ -30,6 +32,11 @@ class ConfigUpdate(BaseModel):
     embedding_model: str
     embedding_api_key: Optional[str] = None 
     embedding_base_url: Optional[str] = None
+
+
+class UmapRetrievalRequest(BaseModel):
+    query: Optional[str] = None
+    highlight_chunk_ids: Optional[List[str]] = None
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
@@ -1320,6 +1327,166 @@ async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
     except Exception as e:
         logger.exception(f"Error retrieving documents: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/retrieve/{kb_name}/{index_run_id}/umap")
+async def umap_retrieval_projection(
+    kb_name: str,
+    index_run_id: int,
+    request_body: UmapRetrievalRequest = Body(),
+):
+    """2D UMAP (or PCA fallback) projection of vectors in the index for visualization."""
+    try:
+        index_run = memory_manager.index_manager.get_index_run_by_id(index_run_id)
+        if not index_run:
+            raise HTTPException(status_code=404, detail="Index run not found")
+
+        chunk_run_id = index_run["chunk_run_id"]
+        embedding_config_id = index_run["embedding_configure_id"]
+
+        indexer = get_indexer(kb_name, chunk_run_id, embedding_config_id)
+        if not indexer:
+            raise HTTPException(status_code=400, detail="Failed to initialize indexer")
+
+        embeddings, ids = indexer.get_all_embeddings_with_ids()
+        highlight_chunk_ids = [str(x) for x in (request_body.highlight_chunk_ids or [])]
+
+        if embeddings.shape[0] == 0:
+            return {
+                "success": True,
+                "method": "none",
+                "points": [],
+                "query_point": None,
+                "highlight_chunk_ids": [],
+                "message": "Index is empty",
+            }
+
+        query_vec = None
+        q = request_body.query
+        if q is not None and str(q).strip():
+            query_vec = np.asarray(
+                indexer._embeddings.embed_query(str(q).strip()),
+                dtype=np.float32,
+            )
+
+        sub_emb, sub_ids, _ = subsample_for_projection(
+            embeddings,
+            ids,
+            must_include_ids=highlight_chunk_ids,
+        )
+
+        xy, qxy, method = project_2d(sub_emb, query_vec)
+
+        highlight_set = set(highlight_chunk_ids)
+        points_out = []
+        label_max = 96
+        for i, cid in enumerate(sub_ids):
+            doc_name = indexer.get_chunk_filename(cid)
+            label_text = indexer.get_chunk_text_preview(cid, max_len=label_max)
+            if not label_text:
+                db_text = memory_manager.chunking_manager.get_chunk_content_by_run_and_id(
+                    chunk_run_id, cid
+                )
+                if db_text:
+                    label_text = Indexer._truncate_preview(db_text, label_max)
+            if not label_text:
+                label_text = Indexer._truncate_preview(doc_name or cid, label_max)
+            points_out.append(
+                {
+                    "id": cid,
+                    "x": float(xy[i, 0]),
+                    "y": float(xy[i, 1]),
+                    "document_name": doc_name,
+                    "label_text": label_text,
+                    "is_hit": cid in highlight_set,
+                }
+            )
+
+        query_point = None
+        if qxy is not None:
+            query_point = {"x": float(qxy[0]), "y": float(qxy[1])}
+
+        query_display = None
+        if q is not None and str(q).strip():
+            query_display = Indexer._truncate_preview(str(q).strip(), label_max)
+
+        return {
+            "success": True,
+            "method": method,
+            "points": points_out,
+            "query_point": query_point,
+            "query_label": query_display,
+            "highlight_chunk_ids": [cid for cid in highlight_chunk_ids if cid in sub_ids],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error building UMAP projection: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/retrieve/{kb_name}/{index_run_id}/chunk/{chunk_id:path}")
+async def get_retrieval_index_chunk_detail(
+    kb_name: str,
+    index_run_id: int,
+    chunk_id: str,
+):
+    """Full chunk text + metadata for a vector in the given index run (UMAP / viewer)."""
+    try:
+        index_run = memory_manager.index_manager.get_index_run_by_id(index_run_id)
+        if not index_run:
+            raise HTTPException(status_code=404, detail="Index run not found")
+
+        chunk_run_id = index_run["chunk_run_id"]
+        embedding_config_id = index_run["embedding_configure_id"]
+
+        indexer = get_indexer(kb_name, chunk_run_id, embedding_config_id)
+        if not indexer:
+            raise HTTPException(status_code=400, detail="Failed to initialize indexer")
+
+        from_index = indexer.get_chunk_detail_from_index(chunk_id)
+        db_rec = memory_manager.chunking_manager.get_chunk_record_by_run_and_id(
+            chunk_run_id, chunk_id
+        )
+
+        content = ""
+        metadata: Dict[str, Any] = {}
+        document_name = ""
+
+        if from_index:
+            content = from_index.get("content") or ""
+            metadata = dict(from_index.get("metadata") or {})
+            document_name = str(from_index.get("document_name") or "")
+
+        if db_rec:
+            db_content = db_rec.get("content") or ""
+            db_meta = dict(db_rec.get("metadata") or {})
+            if not (content or "").strip() and (db_content or "").strip():
+                content = db_content
+            metadata = {**db_meta, **metadata}
+            if not document_name:
+                document_name = str(
+                    metadata.get("filename") or metadata.get("filepath") or ""
+                )
+
+        if from_index is None and db_rec is None:
+            raise HTTPException(status_code=404, detail="Chunk not found for this index")
+
+        safe_meta = json.loads(json.dumps(metadata, default=str))
+
+        return {
+            "success": True,
+            "chunk_id": str(chunk_id),
+            "content": content,
+            "metadata": safe_meta,
+            "document_name": document_name or None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error loading chunk detail: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 # Health check endpoint
 @app.get("/health")

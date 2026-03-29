@@ -3,7 +3,7 @@ import faiss
 import threading
 from langchain_core.documents import Document
 import numpy as np
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_ollama import OllamaEmbeddings
@@ -110,3 +110,90 @@ class Indexer:
             return []
         all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
         return [doc for doc, _ in all_docs_with_scores]
+
+    def get_all_embeddings_with_ids(self) -> tuple[np.ndarray, List[str]]:
+        """Return all vectors in index order and their chunk ids (FAISS row i matches ids[i])."""
+        with self._lock:
+            vs = self.vectorstore
+            n = vs.index.ntotal
+            if n == 0:
+                return np.array([], dtype=np.float32).reshape(0, 0), []
+            dim = int(vs.index.d)
+            mat = np.empty((n, dim), dtype=np.float32)
+            ids: List[str] = []
+            for i in range(n):
+                mat[i] = np.asarray(vs.index.reconstruct(i), dtype=np.float32)
+                ids.append(str(vs.index_to_docstore_id[i]))
+            return mat, ids
+
+    def get_chunk_filename(self, chunk_id: str) -> str:
+        """Best-effort filename for tooltip from docstore."""
+        with self._lock:
+            try:
+                found = self.vectorstore.docstore.search(str(chunk_id))
+                if isinstance(found, Document) and found.metadata:
+                    return str(found.metadata.get("filename") or found.metadata.get("filepath") or "")
+            except Exception:
+                pass
+        return ""
+
+    @staticmethod
+    def _truncate_preview(text: str, max_len: int) -> str:
+        if not text:
+            return ""
+        one_line = " ".join(str(text).split())
+        if len(one_line) <= max_len:
+            return one_line
+        return one_line[: max_len - 1] + "…"
+
+    def get_chunk_text_preview(self, chunk_id: str, max_len: int = 96) -> str:
+        """Single-line chunk text for UMAP labels (truncated).
+
+        Uses FAISS docstore first, then ``all_docs`` (must match chunk_id). Docstore ``search``
+        returns an error string when the id is missing — only ``Document`` instances carry text.
+        """
+        cid = str(chunk_id)
+        with self._lock:
+            try:
+                found = self.vectorstore.docstore.search(cid)
+                if isinstance(found, Document):
+                    raw = (found.page_content or "").strip()
+                    if raw:
+                        return self._truncate_preview(found.page_content, max_len)
+            except Exception:
+                pass
+            for doc in self.all_docs:
+                if str(doc.metadata.get("chunk_id", "")) != cid:
+                    continue
+                raw = (doc.page_content or "").strip()
+                if raw:
+                    return self._truncate_preview(doc.page_content, max_len)
+        return ""
+
+    def get_chunk_detail_from_index(self, chunk_id: str) -> Optional[Dict[str, Any]]:
+        """Full page_content + metadata from FAISS docstore or ``all_docs``."""
+        cid = str(chunk_id)
+        with self._lock:
+            try:
+                found = self.vectorstore.docstore.search(cid)
+                if isinstance(found, Document):
+                    meta = dict(found.metadata or {})
+                    return {
+                        "content": found.page_content or "",
+                        "metadata": meta,
+                        "document_name": str(
+                            meta.get("filename") or meta.get("filepath") or ""
+                        ),
+                    }
+            except Exception:
+                pass
+            for doc in self.all_docs:
+                if str(doc.metadata.get("chunk_id", "")) != cid:
+                    continue
+                meta = dict(doc.metadata or {})
+                return {
+                    "content": doc.page_content or "",
+                    "metadata": meta,
+                    "document_name": str(meta.get("filename") or meta.get("filepath") or ""),
+                }
+        return None
