@@ -195,6 +195,18 @@
   border-color: #2196f3;
 }
 
+/* Index runs that use the knowledgebase’s active chunk run */
+.index-run-item-active-chunk {
+  border-left: 4px solid #047857;
+  background-color: #f0fdf4;
+}
+
+.index-run-item-active-chunk.selected {
+  background-color: #e8f5e9;
+  border-color: #2196f3;
+  border-left: 4px solid #047857;
+}
+
 .index-run-header {
   display: flex;
   justify-content: space-between;

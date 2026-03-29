@@ -227,8 +227,16 @@ const RetrievalBrowser = () => {
               {indexRuns.length === 0 ? (
                 <div className="no-runs">No index runs found</div>
               ) : (
-                indexRuns.map(run => (
-                  <div key={run.id} className={`index-run-item ${localSelectedRuns.has(run.id) ? 'selected' : ''}`}>
+                indexRuns.map(run => {
+                  const activeChunkRunId = activeChunkRun?.id;
+                  const isOnActiveChunkRun =
+                    activeChunkRunId != null &&
+                    Number(run.chunk_run_id) === Number(activeChunkRunId);
+                  return (
+                  <div
+                    key={run.id}
+                    className={`index-run-item ${localSelectedRuns.has(run.id) ? 'selected' : ''} ${isOnActiveChunkRun ? 'index-run-item-active-chunk' : ''}`}
+                  >
                     <div className="index-run-header">
                       <div className="run-checkbox-container">
                         <input
@@ -323,7 +331,8 @@ const RetrievalBrowser = () => {
                       </div>
                     )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

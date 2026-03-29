@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCollide } from 'd3-force';
 import useKnowledgebaseStore, { fetchWithAuth } from './store';
@@ -93,21 +93,19 @@ function isEdgeActive(link) {
   if (link?.type === 'chunk') {
     const parseActive = a.parse_is_active;
     const runActive = a.chunk_run_is_active;
-    const inSync = a.chunk_run_in_sync;
-    // if flags missing, assume active (backward compatible)
+    // Per-edge: this link already ties one file's parse_run to a chunk_run. KB-wide
+    // chunk_run.in_sync is cleared whenever any file's active parse changes, so it
+    // would keep the edge gray even after explicitly activating the matching chunk run.
     const okParse = parseActive === undefined ? true : Boolean(parseActive);
     const okRun = runActive === undefined ? true : Boolean(runActive);
-    const okSync = inSync === undefined ? true : Boolean(inSync);
-    return okParse && okRun && okSync;
+    return okParse && okRun;
   }
   if (link?.type === 'embed') {
     const runActive = a.chunk_run_is_active;
-    const inSync = a.chunk_run_in_sync;
-    const embActive = a.embedding_is_active;
+    // Highlight every index run tied to the active chunk run, not only the edge whose
+    // embedding config is globally "active" (a chunk run can be indexed under multiple models).
     const okRun = runActive === undefined ? true : Boolean(runActive);
-    const okSync = inSync === undefined ? true : Boolean(inSync);
-    const okEmb = embActive === undefined ? true : Boolean(embActive);
-    return okRun && okSync && okEmb;
+    return okRun;
   }
   return true;
 }
@@ -123,6 +121,54 @@ function hash01(str) {
 
 function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
+}
+
+function timeScore(isoOrStr) {
+  if (isoOrStr == null || isoOrStr === '') return 0;
+  const t = new Date(isoOrStr).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Latest chunk run (by run_time, then chunk_run_id) for this file + parse run. */
+function pickLatestChunkLinkForParse(links, fileId, parseRunId) {
+  const candidates = links.filter(
+    (l) =>
+      l.type === 'chunk' &&
+      l.attributes?.file_id === fileId &&
+      l.attributes?.parse_run_id === parseRunId
+  );
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, l) => {
+    const a = l.attributes || {};
+    const b = best.attributes || {};
+    const ta = timeScore(a.run_time);
+    const tb = timeScore(b.run_time);
+    if (ta !== tb) return ta > tb ? l : best;
+    const ida = Number(a.chunk_run_id) || 0;
+    const idb = Number(b.chunk_run_id) || 0;
+    return ida >= idb ? l : best;
+  });
+}
+
+/** Latest parse run (by parse_time, then parse_run_id) among chunk edges for this file + chunk run. */
+function pickLatestParseLinkForChunkRun(links, fileId, chunkRunId) {
+  const candidates = links.filter(
+    (l) =>
+      l.type === 'chunk' &&
+      l.attributes?.file_id === fileId &&
+      l.attributes?.chunk_run_id === chunkRunId
+  );
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, l) => {
+    const a = l.attributes || {};
+    const b = best.attributes || {};
+    const ta = timeScore(a.parse_time);
+    const tb = timeScore(b.parse_time);
+    if (ta !== tb) return ta > tb ? l : best;
+    const ida = Number(a.parse_run_id) || 0;
+    const idb = Number(b.parse_run_id) || 0;
+    return ida >= idb ? l : best;
+  });
 }
 
 function lightenHex(hex, amount01) {
@@ -155,6 +201,22 @@ const GraphView = () => {
   const [filterNodeIds, setFilterNodeIds] = useState([]); // node ids
   const [includeNeighbors, setIncludeNeighbors] = useState(true);
   const [onlyActive, setOnlyActive] = useState(false);
+  const [opBusy, setOpBusy] = useState(false);
+  const [opMessage, setOpMessage] = useState(null);
+  const linkClickRef = useRef({ linkId: null, t: 0 });
+
+  const refetchGraph = useCallback(async () => {
+    if (!activeKB) return;
+    try {
+      const res = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/graph`);
+      const data = await res.json();
+      if (data.success && data.graph) {
+        setRawGraph(data.graph);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to load graph');
+    }
+  }, [activeKB?.id]);
 
   useLayoutEffect(() => {
     const el = canvasWrapRef.current;
@@ -235,6 +297,10 @@ const GraphView = () => {
     fetchGraph();
   }, [activeKB?.id]);
 
+  useEffect(() => {
+    setOpMessage(null);
+  }, [activeKB?.id]);
+
   const baseGraphData = useMemo(() => {
     const nodes = (rawGraph.nodes || []).map(n => {
       const type = n.type || 'unknown';
@@ -296,7 +362,99 @@ const GraphView = () => {
     return { nodes, links };
   }, [rawGraph]);
 
-  /** Parsers / chunkers / embeddings that participate in at least one active edge. */
+  const handleParseEdgeDoubleClick = useCallback(
+    async (link) => {
+      const a = link.attributes || {};
+      const fileId = a.file_id;
+      const parseRunId = a.parse_run_id;
+      if (fileId == null || parseRunId == null) return;
+      setOpMessage(null);
+      setOpBusy(true);
+      try {
+        const res = await fetchWithAuth(`/api/parse-runs/set-active/${fileId}/${parseRunId}`, { method: 'PUT' });
+        const parseBody = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(parseBody.message || parseBody.detail || 'Failed to set active parse run');
+        }
+        if (parseBody.success === false) {
+          throw new Error(parseBody.message || 'Failed to set active parse run');
+        }
+        const latestChunk = pickLatestChunkLinkForParse(baseGraphData.links, fileId, parseRunId);
+        const chunkRunId = latestChunk?.attributes?.chunk_run_id;
+        if (chunkRunId != null && activeKB) {
+          const cr = await fetchWithAuth(`/api/chunk-runs/${chunkRunId}/active`, {
+            method: 'PATCH',
+            body: JSON.stringify({ knowledgebase_id: activeKB.id }),
+          });
+          if (!cr.ok) {
+            const err = await cr.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to set active chunk run');
+          }
+        }
+        await refetchGraph();
+        setOpMessage(
+          chunkRunId != null
+            ? 'Parse run and latest related chunk run set active.'
+            : 'Parse run set active (no chunk run for this parse).'
+        );
+      } catch (e) {
+        setOpMessage(e.message || 'Operation failed');
+      } finally {
+        setOpBusy(false);
+      }
+    },
+    [activeKB, baseGraphData.links, refetchGraph]
+  );
+
+  const handleChunkEdgeDoubleClick = useCallback(
+    async (link) => {
+      const a = link.attributes || {};
+      const fileId = a.file_id;
+      const chunkRunId = a.chunk_run_id;
+      if (chunkRunId == null || !activeKB) return;
+      setOpMessage(null);
+      setOpBusy(true);
+      try {
+        const res = await fetchWithAuth(`/api/chunk-runs/${chunkRunId}/active`, {
+          method: 'PATCH',
+          body: JSON.stringify({ knowledgebase_id: activeKB.id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Failed to set active chunk run');
+        }
+        const best = pickLatestParseLinkForChunkRun(baseGraphData.links, fileId, chunkRunId);
+        const parseRunId = best?.attributes?.parse_run_id;
+        if (fileId != null && parseRunId != null) {
+          const pr = await fetchWithAuth(`/api/parse-runs/set-active/${fileId}/${parseRunId}`, { method: 'PUT' });
+          const prData = await pr.json().catch(() => ({}));
+          if (!pr.ok) {
+            throw new Error(prData.message || prData.detail || 'Failed to set active parse run');
+          }
+          if (prData.success === false) {
+            throw new Error(prData.message || 'Failed to set active parse run');
+          }
+        }
+        await refetchGraph();
+        setOpMessage(
+          parseRunId != null
+            ? 'Chunk run and latest related parse run set active.'
+            : 'Chunk run set active (could not resolve parse run).'
+        );
+      } catch (e) {
+        setOpMessage(e.message || 'Operation failed');
+      } finally {
+        setOpBusy(false);
+      }
+    },
+    [activeKB, baseGraphData.links, refetchGraph]
+  );
+
+  /**
+   * Parser/chunker: from edges that count as active (active parse/chunk/index pipeline).
+   * Embedding node glow: only the globally active embedding config — not every embedding
+   * that has an index run on the active chunk run (embed edges can still draw as active).
+   */
   const { activeParserIds, activeChunkerIds, activeEmbeddingIds } = useMemo(() => {
     const parserIds = new Set();
     const chunkerIds = new Set();
@@ -312,8 +470,14 @@ const GraphView = () => {
         chunkerIds.add(t);
       } else if (l.type === 'embed') {
         chunkerIds.add(s);
-        embeddingIds.add(t);
       }
+    }
+    for (const l of baseGraphData.links) {
+      if (l.type !== 'embed') continue;
+      const a = l.attributes || {};
+      if (!a.embedding_is_active) continue;
+      const { t } = linkEndpointIds(l);
+      if (t) embeddingIds.add(t);
     }
     return { activeParserIds: parserIds, activeChunkerIds: chunkerIds, activeEmbeddingIds: embeddingIds };
   }, [baseGraphData.links]);
@@ -475,6 +639,8 @@ const GraphView = () => {
   return (
     <div className="graph-view">
       {error && <div className="graph-error">{error}</div>}
+      {opMessage && <div className={`graph-op-message ${opBusy ? 'graph-op-message-pending' : ''}`}>{opMessage}</div>}
+      {opBusy && !opMessage && <div className="graph-op-message graph-op-message-pending">Updating active runs…</div>}
 
       {baseGraphData.nodes.length === 0 ? (
         <div className="graph-empty">No graph data (parse some documents and run chunking first).</div>
@@ -736,9 +902,31 @@ const GraphView = () => {
                   // ignore
                 }
               }}
-              onNodeClick={(node) => setSelected({ kind: 'node', data: node })}
-              onLinkClick={(link) => setSelected({ kind: 'edge', data: link })}
-              onBackgroundClick={() => setSelected(null)}
+              onNodeClick={(node) => {
+                linkClickRef.current = { linkId: null, t: 0 };
+                setSelected({ kind: 'node', data: node });
+              }}
+              onLinkClick={(link) => {
+                const now = Date.now();
+                const lid = link.id;
+                const prev = linkClickRef.current;
+                const isDbl = prev.linkId === lid && now - prev.t < 450;
+                if (isDbl) {
+                  linkClickRef.current = { linkId: null, t: 0 };
+                  if (link.type === 'parse') {
+                    void handleParseEdgeDoubleClick(link);
+                  } else if (link.type === 'chunk') {
+                    void handleChunkEdgeDoubleClick(link);
+                  }
+                  return;
+                }
+                linkClickRef.current = { linkId: lid, t: now };
+                setSelected({ kind: 'edge', data: link });
+              }}
+              onBackgroundClick={() => {
+                linkClickRef.current = { linkId: null, t: 0 };
+                setSelected(null);
+              }}
             />
           </div>
 
@@ -751,7 +939,10 @@ const GraphView = () => {
             </div>
 
             {!selected ? (
-              <div className="details-empty">Click a node or an edge to inspect attributes.</div>
+              <div className="details-empty">
+                Click a node or an edge to inspect attributes.
+                <div className="details-hint">Double-click a parse or chunk edge to set that run active (and sync the latest related chunk/parse run).</div>
+              </div>
             ) : selected.kind === 'node' ? (
               <div className="details-content">
                 <Section title="Basic" defaultOpen>

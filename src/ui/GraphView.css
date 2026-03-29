@@ -16,6 +16,20 @@
   margin-bottom: 12px;
 }
 
+.graph-op-message {
+  padding: 10px 12px;
+  background: #e8f0fe;
+  color: #1967d2;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.graph-op-message-pending {
+  background: #f1f3f4;
+  color: #5f6368;
+}
+
 .filter-panel {
   border: 1px solid #e8eaed;
   border-radius: 10px;
@@ -271,6 +285,13 @@
   padding: 12px;
   color: #5f6368;
   font-size: 13px;
+}
+
+.details-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #80868b;
+  line-height: 1.45;
 }
 
 .details-content {
