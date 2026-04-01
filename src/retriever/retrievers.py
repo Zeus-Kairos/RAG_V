@@ -145,10 +145,16 @@ class BM25BasedRetriever(BaseRetriever, retriever_name="bm25"):
             A list of tuples containing Document objects and their relevance scores
         """
         bm25_scorer = BM25Scorer.from_documents(self.indexer.all_docs)
-        bm25_scores = bm25_scorer.get_scores(query)
-        bm25_scores = [score for score in bm25_scores if score > 0]
-        sorted_indices = np.argsort(bm25_scores)[::-1][:k]
-        sorted_results = [(self.indexer.all_docs[i], float(bm25_scores[i])) for i in sorted_indices[:k]]
+        bm25_scores = np.asarray(bm25_scorer.get_scores(query), dtype=float)
+
+        # Keep score->document index alignment intact: filter by index, not by shrinking the score array.
+        positive_indices = np.flatnonzero(bm25_scores > 0)
+        if positive_indices.size == 0:
+            return []
+
+        ranked_positive = positive_indices[np.argsort(bm25_scores[positive_indices])[::-1]]
+        top_indices = ranked_positive[:k]
+        sorted_results = [(self.indexer.all_docs[i], float(bm25_scores[i])) for i in top_indices]
         
         return sorted_results
 
