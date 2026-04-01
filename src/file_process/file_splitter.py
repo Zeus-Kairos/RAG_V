@@ -318,7 +318,7 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
 
         header_levels = self.parser_params.get("header_levels", 3)
         headers_to_split_on = [("#"*i, f"Header {i}") for i in range(1, header_levels + 1)]
-        strip_headers = self.parser_params.get("strip_headers", False)
+        strip_headers = self.parser_params.get("strip_headers", True)
         markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on, strip_headers=strip_headers)
         docs = markdown_splitter.split_text(text)
 
