@@ -1,6 +1,7 @@
 import os
 import shutil
 import json
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from typing import List, Optional, Dict, Any
@@ -258,12 +259,13 @@ async def get_knowledgebase_graph(kb_id: int):
     Nodes:
       - documents: each file (type='file')
       - parsers: each parser name observed in parse runs
-      - chunkers: each chunker observed in chunk runs (may be framework-level for some splitters)
+      - chunkers: one node per splitting *framework* (e.g. chonkie, docling). The concrete
+        implementation (sentence, recursive, …) is not a separate node — it lives on chunk edges.
       - embeddings: each embedding config used by an index run for this knowledgebase
 
     Edges (multi-edges allowed):
       - parse edges: document -> parser, with parse parameters + time_usage + timestamps
-      - chunk edges: parser -> chunker, with chunk parameters + run_time (+ chunks_count)
+      - chunk edges: one per (file, parse_run, parser, framework); full pipeline in run_parameters; optional file_parse_links if re-runs
       - embed edges: chunker -> embedding (from index_run: chunk_run + embedding config)
     """
     try:
@@ -419,130 +421,105 @@ async def get_knowledgebase_graph(kb_id: int):
                 }
             )
 
-        # Chunk edges (parser -> chunker), expanded by chunkers pipeline if present
+        # Chunk edges: exactly one parser→framework edge per (file, parse_run, parser, framework).
+        # Pipeline steps live only in run_parameters.chunkers — never one edge per pipeline item.
+        # If multiple chunk_run rows exist for the same key (e.g. re-run), keep the latest by run_time.
+        def _chunk_row_sort_key(row: tuple) -> tuple:
+            crid = int(row[10])
+            rt = row[15]
+            ts = 0.0
+            if rt is not None:
+                if isinstance(rt, (int, float)):
+                    ts = float(rt)
+                elif isinstance(rt, str):
+                    try:
+                        ts = datetime.fromisoformat(rt.replace("Z", "+00:00")).timestamp()
+                    except Exception:
+                        ts = 0.0
+            return (ts, crid)
+
+        rows_by_chunk_key: Dict[tuple, list] = defaultdict(list)
         for r in chunk_groups:
-            parse_id = int(r[0])
             file_id = int(r[1])
-            filename = r[2]
-            filepath = r[3]
             parse_run_id = int(r[4])
             parser = r[5] or "unknown"
-            parser_parameters = _loads_maybe_json(r[6])
-            parse_time_usage = r[7]
-            parse_time = r[8]
-            parse_is_active = bool(r[9])
-            chunk_run_id = int(r[10])
             framework = r[11] or "unknown"
-            chunk_parameters = _loads_maybe_json(r[12])
-            chunk_run_is_active = bool(r[13])
-            chunk_run_in_sync = bool(r[14])
-            run_time = r[15]
-            chunks_count = int(r[16]) if r[16] is not None else None
+            rows_by_chunk_key[(file_id, parse_run_id, parser, framework)].append(r)
+
+        for (_file_id, _parse_run_id, _parser, _fw), rows in rows_by_chunk_key.items():
+            if not rows:
+                continue
+            sorted_rows = sorted(rows, key=_chunk_row_sort_key, reverse=True)
+            primary = sorted_rows[0]
+
+            parse_id = int(primary[0])
+            file_id = int(primary[1])
+            filename = primary[2]
+            filepath = primary[3]
+            parse_run_id = int(primary[4])
+            parser = primary[5] or "unknown"
+            parser_parameters = _loads_maybe_json(primary[6])
+            parse_time_usage = primary[7]
+            parse_time = primary[8]
+            parse_is_active = bool(primary[9])
+            chunk_run_id = int(primary[10])
+            framework = primary[11] or "unknown"
+            chunk_parameters = _loads_maybe_json(primary[12])
+            chunk_run_is_active = bool(primary[13])
+            chunk_run_in_sync = bool(primary[14])
+            run_time = primary[15]
+            chunks_count = int(primary[16]) if primary[16] is not None else None
+
+            file_parse_links = []
+            for row in sorted_rows:
+                file_parse_links.append(
+                    {
+                        "chunk_run_id": int(row[10]),
+                        "run_time": row[15],
+                        "chunks_count": int(row[16]) if row[16] is not None else 0,
+                        "chunk_run_is_active": bool(row[13]),
+                        "chunk_run_in_sync": bool(row[14]),
+                    }
+                )
 
             parser_node_id = f"parser:{parser}"
             upsert_node(parser_node_id, "parser", parser)
 
-            chunkers = chunk_parameters.get("chunkers")
-            # Special rule: langchain should be a single node (do not expand inner chunkers)
             if framework == "langchain":
                 chunker_node_id = "chunker:langchain"
-                upsert_node(chunker_node_id, "chunker", "langchain", {"framework": "langchain"})
-
-                edges.append(
-                    {
-                        "id": f"chunk:{chunk_run_id}:{file_id}:{parse_run_id}:langchain",
-                        "type": "chunk",
-                        "source": parser_node_id,
-                        "target": chunker_node_id,
-                        "attributes": {
-                            "parse_id": parse_id,
-                            "file_id": file_id,
-                            "filename": filename,
-                            "filepath": filepath,
-                            "parse_run_id": parse_run_id,
-                            "parser": parser,
-                            "parser_parameters": parser_parameters,
-                            "parse_time_usage": parse_time_usage,
-                            "parse_time": parse_time,
-                            "parse_is_active": parse_is_active,
-                            "chunk_run_id": chunk_run_id,
-                            "framework": framework,
-                            "chunk_run_is_active": chunk_run_is_active,
-                            "chunk_run_in_sync": chunk_run_in_sync,
-                            "run_parameters": chunk_parameters,
-                            "run_time": run_time,
-                            "chunks_count": chunks_count,
-                        },
-                    }
-                )
-            elif isinstance(chunkers, list) and len(chunkers) > 0:
-                for idx, ch in enumerate(chunkers):
-                    chunker_name = (ch or {}).get("chunker") or "unknown"
-                    chunker_params = (ch or {}).get("params") or {}
-                    chunker_node_id = f"chunker:{framework}:{chunker_name}"
-                    upsert_node(chunker_node_id, "chunker", f"{framework}/{chunker_name}", {"framework": framework, "chunker": chunker_name})
-
-                    edges.append(
-                        {
-                            "id": f"chunk:{chunk_run_id}:{file_id}:{parse_run_id}:{chunker_name}:{idx}",
-                            "type": "chunk",
-                            "source": parser_node_id,
-                            "target": chunker_node_id,
-                            "attributes": {
-                                "parse_id": parse_id,
-                                "file_id": file_id,
-                                "filename": filename,
-                                "filepath": filepath,
-                                "parse_run_id": parse_run_id,
-                                "parser": parser,
-                                "parser_parameters": parser_parameters,
-                                "parse_time_usage": parse_time_usage,
-                                "parse_time": parse_time,
-                                "parse_is_active": parse_is_active,
-                                "chunk_run_id": chunk_run_id,
-                                "framework": framework,
-                                "chunk_run_is_active": chunk_run_is_active,
-                                "chunk_run_in_sync": chunk_run_in_sync,
-                                "chunker": chunker_name,
-                                "chunker_parameters": chunker_params,
-                                "run_parameters": chunk_parameters,
-                                "run_time": run_time,
-                                "chunks_count": chunks_count,
-                            },
-                        }
-                    )
             else:
-                # Framework-only chunker
                 chunker_node_id = f"chunker:{framework}"
-                upsert_node(chunker_node_id, "chunker", framework, {"framework": framework})
+            chunk_edge_id = f"chunk:{file_id}:{parse_run_id}:{framework}"
 
-                edges.append(
-                    {
-                        "id": f"chunk:{chunk_run_id}:{file_id}:{parse_run_id}",
-                        "type": "chunk",
-                        "source": parser_node_id,
-                        "target": chunker_node_id,
-                        "attributes": {
-                            "parse_id": parse_id,
-                            "file_id": file_id,
-                            "filename": filename,
-                            "filepath": filepath,
-                            "parse_run_id": parse_run_id,
-                            "parser": parser,
-                            "parser_parameters": parser_parameters,
-                            "parse_time_usage": parse_time_usage,
-                            "parse_time": parse_time,
-                            "parse_is_active": parse_is_active,
-                            "chunk_run_id": chunk_run_id,
-                            "framework": framework,
-                            "chunk_run_is_active": chunk_run_is_active,
-                            "chunk_run_in_sync": chunk_run_in_sync,
-                            "run_parameters": chunk_parameters,
-                            "run_time": run_time,
-                            "chunks_count": chunks_count,
-                        },
-                    }
-                )
+            upsert_node(chunker_node_id, "chunker", "langchain" if framework == "langchain" else framework, {"framework": framework})
+            edges.append(
+                {
+                    "id": chunk_edge_id,
+                    "type": "chunk",
+                    "source": parser_node_id,
+                    "target": chunker_node_id,
+                    "attributes": {
+                        "parse_id": parse_id,
+                        "file_id": file_id,
+                        "filename": filename,
+                        "filepath": filepath,
+                        "parse_run_id": parse_run_id,
+                        "parser": parser,
+                        "parser_parameters": parser_parameters,
+                        "parse_time_usage": parse_time_usage,
+                        "parse_time": parse_time,
+                        "parse_is_active": parse_is_active,
+                        "chunk_run_id": chunk_run_id,
+                        "framework": framework,
+                        "chunk_run_is_active": chunk_run_is_active,
+                        "chunk_run_in_sync": chunk_run_in_sync,
+                        "run_parameters": chunk_parameters,
+                        "run_time": run_time,
+                        "chunks_count": chunks_count,
+                        "file_parse_links": file_parse_links,
+                    },
+                }
+            )
 
         # ---- Embed edges: chunker -> embedding (from index runs for this KB) ----
         def _chunker_node_ids_for_run(framework: str, chunk_parameters: dict) -> List[str]:
@@ -551,11 +528,7 @@ async def get_knowledgebase_graph(kb_id: int):
             if fw == "langchain":
                 return ["chunker:langchain"]
             if isinstance(chunkers, list) and len(chunkers) > 0:
-                out = []
-                for ch in chunkers:
-                    chunker_name = (ch or {}).get("chunker") or "unknown"
-                    out.append(f"chunker:{fw}:{chunker_name}")
-                return out
+                return [f"chunker:{fw}"]
             return [f"chunker:{fw}"]
 
         def _ensure_chunker_node(chunker_node_id: str, framework: str) -> None:

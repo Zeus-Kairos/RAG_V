@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCollide } from 'd3-force';
 import useKnowledgebaseStore, { fetchWithAuth } from './store';
+import { openLoadingParsedContentWindow, openParsedContentWindow } from './parsedContentWindow';
+import { openLoadingChunksWindow, openChunksWindow } from './chunksVisualizationWindow';
 import './GraphView.css';
 
 const NODE_COLORS = {
@@ -19,6 +21,11 @@ const EDGE_COLORS = {
   embedActive: 'rgba(217, 119, 6, 0.92)',
   inactive: 'rgba(148, 163, 184, 0.38)',
 };
+
+/** Must stay in sync with link/node double-click window below. */
+const GRAPH_LINK_DBLCLICK_MS = 450;
+/** Show edge View FAB only after this delay so double-click never hits the button. */
+const EDGE_FAB_SHOW_DELAY_MS = GRAPH_LINK_DBLCLICK_MS + 20;
 
 // Node highlights aligned with active edge colors (parser / chunker / embedding).
 const NODE_HIGHLIGHT = {
@@ -85,6 +92,19 @@ function linkEndpointIds(link) {
   const s = typeof link?.source === 'string' ? link.source : link?.source?.id;
   const t = typeof link?.target === 'string' ? link.target : link?.target?.id;
   return { s, t };
+}
+
+/** Chunk edge may list older chunk_run_id values in file_parse_links (same file + parse_run). */
+function chunkEdgeMatchesFileAndChunkRun(link, fileId, chunkRunId) {
+  if (link?.type !== 'chunk') return false;
+  const a = link.attributes || {};
+  if (Number(a.file_id) !== Number(fileId)) return false;
+  if (Number(a.chunk_run_id) === Number(chunkRunId)) return true;
+  const pl = a.file_parse_links;
+  if (Array.isArray(pl)) {
+    return pl.some((e) => Number(e.chunk_run_id) === Number(chunkRunId));
+  }
+  return false;
 }
 
 /**
@@ -312,12 +332,7 @@ function pickLatestChunkLinkForParse(links, fileId, parseRunId) {
 
 /** Latest parse run (by parse_time, then parse_run_id) among chunk edges for this file + chunk run. */
 function pickLatestParseLinkForChunkRun(links, fileId, chunkRunId) {
-  const candidates = links.filter(
-    (l) =>
-      l.type === 'chunk' &&
-      l.attributes?.file_id === fileId &&
-      l.attributes?.chunk_run_id === chunkRunId
-  );
+  const candidates = links.filter((l) => chunkEdgeMatchesFileAndChunkRun(l, fileId, chunkRunId));
   if (candidates.length === 0) return null;
   return candidates.reduce((best, l) => {
     const a = l.attributes || {};
@@ -344,7 +359,7 @@ function lightenHex(hex, amount01) {
   return `rgb(${lr} ${lg} ${lb})`;
 }
 
-export default function GraphView() {
+function GraphView() {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
@@ -363,6 +378,11 @@ export default function GraphView() {
   const [onlyActive, setOnlyActive] = useState(false);
   const linkClickRef = useRef({ linkId: null, t: 0 });
   const nodeClickRef = useRef({ nodeId: null, t: 0 });
+  const selectedRef = useRef(null);
+  const edgeFabLastPx = useRef({ x: NaN, y: NaN });
+  const edgeFabDelayTimerRef = useRef(null);
+  const [edgeFabPos, setEdgeFabPos] = useState(null); // { x, y } screen coords inside canvas host
+  const [edgeFabReady, setEdgeFabReady] = useState(false);
 
   const refetchGraph = useCallback(async () => {
     if (!activeKB) return;
@@ -455,6 +475,118 @@ export default function GraphView() {
     };
     fetchGraph();
   }, [activeKB?.id]);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+
+  const handleGraphEdgeViewClick = useCallback(
+    async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const sel = selectedRef.current;
+      if (!sel || sel.kind !== 'edge') return;
+      const link = sel.data;
+      const a = link.attributes || {};
+
+      if (link.type === 'parse') {
+        const fileId = a.file_id;
+        const parseRunId = a.parse_run_id;
+        const fileName = a.filename || (fileId != null ? `file-${fileId}` : 'document');
+        if (fileId == null || parseRunId == null) return;
+        const loadingWindow = openLoadingParsedContentWindow(fileName);
+        if (!loadingWindow) return;
+        try {
+          const response = await fetchWithAuth(`/api/parsed-content/${fileId}/${parseRunId}`);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Failed to fetch parsed content');
+          }
+          const data = await response.json();
+          if (data.success && data.parsed_content && data.parsed_content.length > 0) {
+            const parsedContent = data.parsed_content[0];
+            const parseRun = {
+              id: parseRunId,
+              parser: parsedContent.parser ?? a.parser ?? '',
+              parameters: parsedContent.parameters ?? a.parameters ?? {},
+              time: parsedContent.time ?? a.time ?? new Date().toISOString(),
+              time_usage: parsedContent.time_usage ?? a.time_usage ?? null,
+            };
+            openParsedContentWindow(parsedContent.parsed_text, fileName, parseRun, loadingWindow);
+          } else {
+            throw new Error('No parsed content found');
+          }
+        } catch (err) {
+          console.error('Graph parse edge view:', err);
+          try {
+            loadingWindow.document.title = `Failed: Parsed Content: ${fileName}`;
+            loadingWindow.document.body.innerHTML = `
+              <div style="font-family: Arial, sans-serif; padding: 24px;">
+                <h2 style="margin-bottom: 12px; color: #b00020;">Failed to load parsed content</h2>
+                <div style="color:#666;">${String(err?.message ?? err)}</div>
+              </div>
+            `;
+          } catch {
+            // ignore
+          }
+        }
+        return;
+      }
+
+      if (link.type === 'chunk') {
+        const fileId = a.file_id;
+        const chunkRunId = a.chunk_run_id;
+        const fileName = a.filename || (fileId != null ? `file-${fileId}` : 'document');
+        if (fileId == null || chunkRunId == null) return;
+        let visualizationWindow = openLoadingChunksWindow(fileName);
+        if (!visualizationWindow) return;
+        try {
+          const fileResponse = await fetchWithAuth(`/api/files/${fileId}`);
+          if (!fileResponse.ok) throw new Error('Failed to fetch file content');
+          const fileData = await fileResponse.json();
+          const parsedText = fileData.success ? fileData.file.parsed_text : '';
+          const parsedTextParser = fileData.success ? fileData.file.parser : '';
+          const parsedTextTime = fileData.success ? fileData.file.time : '';
+          const parsedTextTimeUsage = fileData.success ? fileData.file.time_usage : null;
+          const parsedTextParameters = fileData.success ? fileData.file.parameters : {};
+
+          const chunkRunIds = String(chunkRunId);
+          const chunksResponse = await fetchWithAuth(
+            `/api/chunks?file_id=${fileId}&chunk_run_ids=${encodeURIComponent(chunkRunIds)}`
+          );
+          if (!chunksResponse.ok) throw new Error('Failed to fetch chunks');
+          const chunksData = await chunksResponse.json();
+          const chunks = chunksData.success ? chunksData.chunks : [];
+
+          const runsResponse = await fetchWithAuth(`/api/chunk-runs/by-file/${fileId}`);
+          const runsData = await runsResponse.json();
+          const chunkRuns = runsData.success ? runsData.chunk_runs : [];
+
+          openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow, {
+            parser: parsedTextParser,
+            time: parsedTextTime,
+            parse_run_id: fileData.success ? fileData.file.parse_run_id : '',
+            time_usage: parsedTextTimeUsage,
+            parameters: parsedTextParameters,
+          });
+        } catch (err) {
+          console.error('Graph chunk edge view:', err);
+          try {
+            visualizationWindow.document.title = `Failed: Chunk Visualization: ${fileName}`;
+            visualizationWindow.document.body.innerHTML = `
+              <div style="font-family: Arial, sans-serif; padding: 24px;">
+                <h2 style="margin-bottom: 12px;">Failed to load chunk visualization</h2>
+                <div style="color:#b00020; white-space: pre-wrap;">${String(err?.message ?? err)}</div>
+              </div>
+            `;
+          } catch {
+            // ignore
+          }
+        }
+      }
+    },
+    []
+  );
 
   const baseGraphData = useMemo(() => {
     const nodes = (rawGraph.nodes || []).map(n => {
@@ -678,6 +810,102 @@ export default function GraphView() {
     return { nodes, links };
   }, [baseGraphData, filterNodeIds, includeNeighbors, onlyActive, nodeIndex]);
 
+  const nodeIndexRef = useRef(new Map());
+  useEffect(() => {
+    const byId = new Map();
+    for (const n of filteredGraphData.nodes) byId.set(n.id, n);
+    nodeIndexRef.current = byId;
+  }, [filteredGraphData.nodes]);
+
+  const resolveLinkEndpointNode = useCallback((endpoint) => {
+    if (endpoint && typeof endpoint === 'object' && Number.isFinite(endpoint.x) && Number.isFinite(endpoint.y)) {
+      return endpoint;
+    }
+    const id =
+      typeof endpoint === 'string' || typeof endpoint === 'number'
+        ? endpoint
+        : endpoint?.id != null
+          ? endpoint.id
+          : null;
+    if (id == null) return null;
+    return nodeIndexRef.current.get(id) || null;
+  }, []);
+
+  const syncEdgeFabScreenPos = useCallback(() => {
+    const sel = selectedRef.current;
+    const fg = fgRef.current;
+    if (!fg || !sel || sel.kind !== 'edge') return;
+    const link = sel.data;
+    if (link.type !== 'parse' && link.type !== 'chunk') return;
+    const sNode = resolveLinkEndpointNode(link.source);
+    const tNode = resolveLinkEndpointNode(link.target);
+    const sx = sNode?.x;
+    const sy = sNode?.y;
+    const tx = tNode?.x;
+    const ty = tNode?.y;
+    if (![sx, sy, tx, ty].every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      return;
+    }
+    const mx = (sx + tx) / 2;
+    const my = (sy + ty) / 2;
+    let p;
+    try {
+      p = fg.graph2ScreenCoords(mx, my);
+    } catch {
+      return;
+    }
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+      return;
+    }
+    const xr = Math.round(p.x);
+    const yr = Math.round(p.y);
+    const last = edgeFabLastPx.current;
+    if (last.x === xr && last.y === yr) return;
+    edgeFabLastPx.current = { x: xr, y: yr };
+    setEdgeFabPos({ x: p.x, y: p.y });
+  }, [resolveLinkEndpointNode]);
+
+  useEffect(() => {
+    edgeFabLastPx.current = { x: NaN, y: NaN };
+    setEdgeFabReady(false);
+    if (edgeFabDelayTimerRef.current) {
+      clearTimeout(edgeFabDelayTimerRef.current);
+      edgeFabDelayTimerRef.current = null;
+    }
+    if (!selected || selected.kind !== 'edge') {
+      setEdgeFabPos(null);
+      return undefined;
+    }
+    const edgeType = selected.data?.type;
+    if (edgeType !== 'parse' && edgeType !== 'chunk') {
+      setEdgeFabPos(null);
+      return undefined;
+    }
+    setEdgeFabPos(null);
+    edgeFabDelayTimerRef.current = setTimeout(() => {
+      edgeFabDelayTimerRef.current = null;
+      setEdgeFabReady(true);
+    }, EDGE_FAB_SHOW_DELAY_MS);
+    let raf = 0;
+    let cancelled = false;
+    let frames = 0;
+    const pump = () => {
+      if (cancelled) return;
+      syncEdgeFabScreenPos();
+      frames += 1;
+      if (frames < 16) raf = requestAnimationFrame(pump);
+    };
+    raf = requestAnimationFrame(pump);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      if (edgeFabDelayTimerRef.current) {
+        clearTimeout(edgeFabDelayTimerRef.current);
+        edgeFabDelayTimerRef.current = null;
+      }
+    };
+  }, [selected, syncEdgeFabScreenPos]);
+
   const searchMatches = useMemo(() => {
     const q = filterQuery.trim().toLowerCase();
     if (!q) return [];
@@ -864,6 +1092,20 @@ export default function GraphView() {
 
         <div className="graph-body">
           <div className="graph-canvas" ref={canvasWrapRef}>
+            {edgeFabReady && edgeFabPos && selected?.kind === 'edge' && (selected.data?.type === 'parse' || selected.data?.type === 'chunk') && (
+              <div
+                className="graph-edge-fab"
+                style={{ left: edgeFabPos.x, top: edgeFabPos.y }}
+              >
+                <button
+                  type="button"
+                  className="graph-edge-view-btn"
+                  onClick={handleGraphEdgeViewClick}
+                >
+                  View
+                </button>
+              </div>
+            )}
             <ForceGraph2D
               ref={fgRef}
               graphData={filteredGraphData}
@@ -871,6 +1113,9 @@ export default function GraphView() {
               height={canvasSize.height}
               cooldownTime={12000}
               warmupTicks={80}
+              onEngineTick={syncEdgeFabScreenPos}
+              onZoom={syncEdgeFabScreenPos}
+              onZoomEnd={syncEdgeFabScreenPos}
               nodeRelSize={5}
               nodeId="id"
               nodeLabel={(n) => `${n.label || n.id}\n(${n.type || 'node'})`}
@@ -1034,7 +1279,7 @@ export default function GraphView() {
                 const now = Date.now();
                 const nid = node?.id;
                 const prev = nodeClickRef.current;
-                const isDbl = nid != null && prev.nodeId === nid && now - prev.t < 450;
+                const isDbl = nid != null && prev.nodeId === nid && now - prev.t < GRAPH_LINK_DBLCLICK_MS;
                 linkClickRef.current = { linkId: null, t: 0 };
                 if (isDbl) {
                   nodeClickRef.current = { nodeId: null, t: 0 };
@@ -1049,14 +1294,24 @@ export default function GraphView() {
                 const now = Date.now();
                 const lid = link.id;
                 const prev = linkClickRef.current;
-                const isDbl = prev.linkId === lid && now - prev.t < 450;
+                const isDbl = prev.linkId === lid && now - prev.t < GRAPH_LINK_DBLCLICK_MS;
                 if (isDbl) {
                   linkClickRef.current = { linkId: null, t: 0 };
+                  if (edgeFabDelayTimerRef.current) {
+                    clearTimeout(edgeFabDelayTimerRef.current);
+                    edgeFabDelayTimerRef.current = null;
+                  }
+                  setEdgeFabReady(false);
                   if (link.type === 'parse') {
                     void handleParseEdgeDoubleClick(link);
                   } else if (link.type === 'chunk') {
                     void handleChunkEdgeDoubleClick(link);
                   }
+                  // Selection unchanged; show View again only after the double-click window.
+                  edgeFabDelayTimerRef.current = setTimeout(() => {
+                    edgeFabDelayTimerRef.current = null;
+                    setEdgeFabReady(true);
+                  }, EDGE_FAB_SHOW_DELAY_MS);
                   return;
                 }
                 linkClickRef.current = { linkId: lid, t: now };
@@ -1082,6 +1337,7 @@ export default function GraphView() {
               <div className="details-empty">
                 Click a node or an edge to inspect attributes.
                 <div className="details-hint">
+                  On a document→parser or parser→chunker link, use the floating View button on the canvas to open the parsed text or chunk visualization.
                   Double-click a node to add it to the filter.
                   Double-click a parse or chunk edge to set that run active (and sync the latest related chunk/parse run).
                 </div>
@@ -1204,3 +1460,5 @@ export default function GraphView() {
     </div>
   );
 }
+
+export default GraphView;

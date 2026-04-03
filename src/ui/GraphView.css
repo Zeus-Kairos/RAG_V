@@ -227,6 +227,37 @@
   display: block;
 }
 
+/* Floating “View” on selected parse/chunk links (mid-edge, graph screen coords). */
+.graph-edge-fab {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.graph-edge-view-btn {
+  pointer-events: auto;
+  border: 1px solid rgba(109, 40, 217, 0.35);
+  background: #fff;
+  color: #4c1d95;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+
+.graph-edge-view-btn:hover {
+  background: #f5f3ff;
+  border-color: rgba(109, 40, 217, 0.55);
+}
+
+.graph-edge-view-btn:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
 .graph-details {
   width: 360px;
   flex: 0 0 360px;
