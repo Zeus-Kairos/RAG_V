@@ -1,10 +1,33 @@
 import React from 'react';
 import { fetchWithAuth } from './store';
-import { openLoadingParsedContentWindow as openLoadingWindow, openParsedContentWindow } from './parsedContentWindow';
+import {
+  openLoadingParsedContentWindow as openLoadingWindow,
+  openParsedContentWindow,
+  buildParsedContentDocumentHtml,
+} from './parsedContentWindow';
 
-const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoading, 
-  setIsLoading, setError, knowledgebases, fetchDirectoryContents, currentPath, refreshFileBrowser, 
-  setSelectedFileId, setSelectedFileName, setShowChunkRunPanel, directoryCache, setDirectoryCache, directoryCacheRef }) => {
+const ParseRunPopup = ({
+  show,
+  parseRun,
+  item,
+  onClose,
+  onDelete,
+  onView,
+  isLoading,
+  setIsLoading,
+  setError,
+  knowledgebases,
+  fetchDirectoryContents,
+  currentPath,
+  refreshFileBrowser,
+  setSelectedFileId,
+  setSelectedFileName,
+  setShowChunkRunPanel,
+  directoryCache,
+  setDirectoryCache,
+  directoryCacheRef,
+  mainViewApi = null,
+}) => {
   const formatTimeUsage = (seconds) => {
     if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
       return 'N/A';
@@ -120,51 +143,64 @@ const ParseRunPopup = ({ show, parseRun, item, onClose, onDelete, onView, isLoad
 
   // View parsed content for a parse run
   const handleViewParseRun = async (parseRunId, item) => {
-    if (item.type === 'file') {
-      // Close the popup
-      onClose();
-      
-      // Open loading window
-      const loadingWindow = openLoadingWindow(item.name);
-      if (!loadingWindow) return;
-      
+    if (item.type !== 'file') return;
+    onClose();
+
+    const fetchParsedPayload = async () => {
+      const response = await fetchWithAuth(`/api/parsed-content/${item.id}/${parseRunId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to fetch parsed content');
+      }
+      const data = await response.json();
+      if (data.success && data.parsed_content && data.parsed_content.length > 0) {
+        const parsedContent = data.parsed_content[0];
+        const parseRunWithContentData = {
+          ...parseRun,
+          id: parseRunId,
+          parser: parsedContent.parser ?? parseRun.parser,
+          parameters: parsedContent.parameters ?? parseRun.parameters ?? {},
+          time: parsedContent.time ?? parseRun.time,
+          time_usage: parsedContent.time_usage ?? parseRun.time_usage,
+        };
+        return { parsedText: parsedContent.parsed_text, parseRunWithContentData };
+      }
+      throw new Error('No parsed content found');
+    };
+
+    if (mainViewApi) {
+      mainViewApi.beginParsedMainView(item.name);
       try {
-        // Fetch parsed content from the new API endpoint
-        const response = await fetchWithAuth(`/api/parsed-content/${item.id}/${parseRunId}`);
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Failed to fetch parsed content');
-        }
-        
-        const data = await response.json();
-        if (data.success && data.parsed_content && data.parsed_content.length > 0) {
-          // Use the first parsed content item (assuming one per file/run)
-          const parsedContent = data.parsed_content[0];
-          const parseRunWithContentData = {
-            ...parseRun,
-            parser: parsedContent.parser ?? parseRun.parser,
-            parameters: parsedContent.parameters ?? parseRun.parameters,
-            time: parsedContent.time ?? parseRun.time,
-            time_usage: parsedContent.time_usage ?? parseRun.time_usage
-          };
-          // Open the parsed content window with the fetched data
-          openParsedContentWindow(parsedContent.parsed_text, item.name, parseRunWithContentData, loadingWindow);
-        } else {
-          throw new Error('No parsed content found');
-        }
+        const { parsedText, parseRunWithContentData } = await fetchParsedPayload();
+        const html = buildParsedContentDocumentHtml(parsedText, item.name, parseRunWithContentData, {
+          controlsInParent: true,
+        });
+        mainViewApi.setMainViewReady(html, item.name, 'parsed');
       } catch (err) {
         console.error('Error viewing parsed content:', err);
-        try {
-          loadingWindow.document.title = `Failed: Parsed Content: ${item.name}`;
-          loadingWindow.document.body.innerHTML = `
+        mainViewApi.setMainViewError(item.name, String(err?.message ?? err));
+      }
+      return;
+    }
+
+    const loadingWindow = openLoadingWindow(item.name);
+    if (!loadingWindow) return;
+
+    try {
+      const { parsedText, parseRunWithContentData } = await fetchParsedPayload();
+      openParsedContentWindow(parsedText, item.name, parseRunWithContentData, loadingWindow);
+    } catch (err) {
+      console.error('Error viewing parsed content:', err);
+      try {
+        loadingWindow.document.title = `Failed: Parsed Content: ${item.name}`;
+        loadingWindow.document.body.innerHTML = `
             <div style="font-family: Arial, sans-serif; padding: 24px;">
               <h2 style="margin-bottom: 12px; color: #b00020;">Failed to load parsed content</h2>
               <div style="color:#666;">${String(err?.message ?? err)}</div>
             </div>
           `;
-        } catch (e) {
-          // ignore
-        }
+      } catch (e) {
+        // ignore
       }
     }
   };

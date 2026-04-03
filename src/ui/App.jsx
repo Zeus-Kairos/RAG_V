@@ -1,5 +1,5 @@
 import './index.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import useKnowledgebaseStore from './store';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import EmbeddingSettings from './EmbeddingSettings';
@@ -8,6 +8,7 @@ import ParserSettings from './ParserSettings';
 import ChunkBrowser from './ChunkBrowser';
 import RetrievalBrowser from './RetrievalBrowser';
 import Dashboard from './Dashboard';
+import MainViewTab from './MainViewTab';
 import ErrorBoundary from './ErrorBoundary';
 
 function SidebarToggleIcon({ collapsed }) {
@@ -32,6 +33,62 @@ function App() {
   const { initializeApp, authChecked } = useKnowledgebaseStore();
   const [activeTab, setActiveTab] = useState('knowledgebase'); // 'chunk', 'knowledgebase', or 'retrieval'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  /** Inline visualization (parsed text / chunk viz) opened from Dashboard graph — top-level tab after Dashboard. */
+  const [mainView, setMainView] = useState(null);
+
+  const beginParsedMainView = useCallback((fileName) => {
+    setMainView({
+      phase: 'loading',
+      headline: fileName,
+      hint: 'Fetching parsed text…',
+    });
+    setActiveTab('view');
+  }, []);
+
+  const beginChunksMainView = useCallback((fileName) => {
+    setMainView({
+      phase: 'loading',
+      headline: fileName,
+      hint: 'Fetching file text and chunk runs…',
+    });
+    setActiveTab('view');
+  }, []);
+
+  const setMainViewReady = useCallback((html, headline, viewKind, options = {}) => {
+    setMainView({
+      phase: 'ready',
+      html,
+      headline,
+      htmlKey: Date.now(),
+      viewKind,
+      showChunkOnlyToggle: options.showChunkOnlyToggle === true,
+    });
+  }, []);
+
+  const setMainViewError = useCallback((headline, message) => {
+    setMainView({
+      phase: 'error',
+      headline,
+      message,
+    });
+    setActiveTab('view');
+  }, []);
+
+  const closeMainView = useCallback(() => {
+    setMainView(null);
+    setActiveTab((t) => (t === 'view' ? 'dashboard' : t));
+  }, []);
+
+  const mainViewApi = useMemo(
+    () => ({
+      beginParsedMainView,
+      beginChunksMainView,
+      setMainViewReady,
+      setMainViewError,
+      closeMainView,
+    }),
+    [beginParsedMainView, beginChunksMainView, setMainViewReady, setMainViewError, closeMainView]
+  );
 
   // Initialize the app when it loads
   useEffect(() => {
@@ -47,7 +104,7 @@ function App() {
     return <div className="loading">Loading...</div>;
   }
 
-  const showSidebar = activeTab !== 'dashboard';
+  const showSidebar = activeTab !== 'dashboard' && activeTab !== 'view';
 
   // Show main app with sidebar layout
   return (
@@ -106,19 +163,31 @@ function App() {
           >
             Dashboard
           </button>
+          {mainView && (
+            <button
+              type="button"
+              className={`tab-btn ${activeTab === 'view' ? 'active' : ''}`}
+              onClick={() => setActiveTab('view')}
+            >
+              View
+            </button>
+          )}
         </div>
         
         {/* Tab Content */}
         <div className="tab-content">
           {activeTab === 'dashboard' && (
             <ErrorBoundary>
-              <Dashboard />
+              <Dashboard mainViewApi={mainViewApi} />
             </ErrorBoundary>
+          )}
+          {activeTab === 'view' && mainView && (
+            <MainViewTab mainView={mainView} onClose={closeMainView} />
           )}
           {activeTab === 'chunk' && <ChunkBrowser />}
           {activeTab === 'knowledgebase' && (
             <ErrorBoundary>
-              <KnowledgebaseBrowser />
+              <KnowledgebaseBrowser mainViewApi={mainViewApi} />
             </ErrorBoundary>
           )}
           {activeTab === 'retrieval' && (

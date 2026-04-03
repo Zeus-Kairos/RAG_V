@@ -262,25 +262,25 @@ class ChunkingManager:
     
     def get_chunks_by_file_id(self, file_id: int, chunk_run_ids: List[int] = None) -> List[Dict[str, Any]]:
         """
-        Get all chunks for a specific file with active parse_run_id.
-        
-        Args:
-            file_id: ID of the file
-            
-        Returns:
-            List of chunk records with active parse_run_id
+        Get chunks for a file. When chunk_run_ids is set, returns chunks for those runs
+        for any matching parse run (not only the active parse). When chunk_run_ids is
+        omitted, returns chunks tied to the active parse only (current pipeline view).
         """
         try:
             cur = self.conn.cursor()
             if chunk_run_ids:
+                # Explicit chunk runs (e.g. graph edge / history): include non-active parses.
                 cur.execute(
-                    "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata FROM chunks c JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id AND p.is_active = 1 WHERE c.file_id = ? AND c.chunk_run_id IN ({}) ".format(','.join('?'*len(chunk_run_ids))),
-                    (file_id, *chunk_run_ids)
+                    "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata "
+                    "FROM chunks c "
+                    "JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id "
+                    "WHERE c.file_id = ? AND c.chunk_run_id IN ({}) ".format(','.join('?' * len(chunk_run_ids))),
+                    (file_id, *chunk_run_ids),
                 )
             else:
                 cur.execute(
                     "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata FROM chunks c JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id AND p.is_active = 1 WHERE c.file_id = ?",
-                    (file_id,)
+                    (file_id,),
                 )
             
             chunks = []

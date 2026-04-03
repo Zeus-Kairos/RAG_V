@@ -20,7 +20,7 @@ const PARSER_ORDER = (() => {
   return order;
 })();
 
-const Dashboard = () => {
+const Dashboard = ({ mainViewApi = null }) => {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
@@ -91,7 +91,6 @@ const Dashboard = () => {
   if (!activeKB) {
     return (
       <div className="dashboard">
-        <h2 className="dashboard-title">Dashboard</h2>
         <div className="dashboard-empty">No active knowledgebase. Select or create one first.</div>
       </div>
     );
@@ -101,7 +100,6 @@ const Dashboard = () => {
     <div className="dashboard">
       <div className="dashboard-header">
         <div>
-          <h2 className="dashboard-title">Dashboard</h2>
           <p className="dashboard-subtitle">Knowledgebase: {activeKB.name}</p>
         </div>
         <div className="dashboard-view-tabs">
@@ -112,16 +110,16 @@ const Dashboard = () => {
             Graph View
           </button>
           <button
-            className={`view-tab ${activeView === 'parse' ? 'active' : ''}`}
-            onClick={() => setActiveView('parse')}
-          >
-            Parse Duration
-          </button>
-          <button
             className={`view-tab ${activeView === 'playground' ? 'active' : ''}`}
             onClick={() => setActiveView('playground')}
           >
             Playground
+          </button>
+          <button
+            className={`view-tab ${activeView === 'parse' ? 'active' : ''}`}
+            onClick={() => setActiveView('parse')}
+          >
+            Parse Duration
           </button>
         </div>
       </div>
@@ -131,7 +129,7 @@ const Dashboard = () => {
       {activeView === 'playground' ? (
         <Playground />
       ) : activeView === 'graph' ? (
-        <GraphView />
+        <GraphView mainViewApi={mainViewApi} />
       ) : isLoading ? (
         <div className="dashboard-loading">Loading parse duration...</div>
       ) : rows.length === 0 ? (

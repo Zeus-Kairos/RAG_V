@@ -2,8 +2,16 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCollide } from 'd3-force';
 import useKnowledgebaseStore, { fetchWithAuth } from './store';
-import { openLoadingParsedContentWindow, openParsedContentWindow } from './parsedContentWindow';
-import { openLoadingChunksWindow, openChunksWindow } from './chunksVisualizationWindow';
+import {
+  openLoadingParsedContentWindow,
+  openParsedContentWindow,
+  buildParsedContentDocumentHtml,
+} from './parsedContentWindow';
+import {
+  openLoadingChunksWindow,
+  openChunksWindow,
+  buildChunksVisualizationDocumentHtml,
+} from './chunksVisualizationWindow';
 import './GraphView.css';
 
 const NODE_COLORS = {
@@ -410,7 +418,11 @@ function lightenHex(hex, amount01) {
   return `rgb(${lr} ${lg} ${lb})`;
 }
 
-function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } = {}) {
+function GraphView({
+  hideNodeTypeDropdowns = false,
+  hideDetailsPanel = false,
+  mainViewApi = null,
+} = {}) {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
@@ -545,6 +557,39 @@ function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } =
         const parseRunId = a.parse_run_id;
         const fileName = a.filename || (fileId != null ? `file-${fileId}` : 'document');
         if (fileId == null || parseRunId == null) return;
+
+        if (mainViewApi) {
+          mainViewApi.beginParsedMainView(fileName);
+          try {
+            const response = await fetchWithAuth(`/api/parsed-content/${fileId}/${parseRunId}`);
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.message || 'Failed to fetch parsed content');
+            }
+            const data = await response.json();
+            if (data.success && data.parsed_content && data.parsed_content.length > 0) {
+              const parsedContent = data.parsed_content[0];
+              const parseRun = {
+                id: parseRunId,
+                parser: parsedContent.parser ?? a.parser ?? '',
+                parameters: parsedContent.parameters ?? a.parameters ?? {},
+                time: parsedContent.time ?? a.time ?? new Date().toISOString(),
+                time_usage: parsedContent.time_usage ?? a.time_usage ?? null,
+              };
+              const html = buildParsedContentDocumentHtml(parsedContent.parsed_text, fileName, parseRun, {
+                controlsInParent: true,
+              });
+              mainViewApi.setMainViewReady(html, fileName, 'parsed');
+            } else {
+              throw new Error('No parsed content found');
+            }
+          } catch (err) {
+            console.error('Graph parse edge view:', err);
+            mainViewApi.setMainViewError(fileName, String(err?.message ?? err));
+          }
+          return;
+        }
+
         const loadingWindow = openLoadingParsedContentWindow(fileName);
         if (!loadingWindow) return;
         try {
@@ -589,17 +634,103 @@ function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } =
         const chunkRunId = a.chunk_run_id;
         const fileName = a.filename || (fileId != null ? `file-${fileId}` : 'document');
         if (fileId == null || chunkRunId == null) return;
-        let visualizationWindow = openLoadingChunksWindow(fileName);
-        if (!visualizationWindow) return;
-        try {
+
+        /** Parsed text + metadata for the parse run on this edge (not necessarily KB-active). */
+        const loadParsedSnapshotForChunkEdge = async () => {
+          const parseRunIdForEdge = a.parse_run_id;
+          if (parseRunIdForEdge != null) {
+            const response = await fetchWithAuth(`/api/parsed-content/${fileId}/${parseRunIdForEdge}`);
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.message || 'Failed to fetch parsed content for this parse run');
+            }
+            const data = await response.json();
+            if (data.success && Array.isArray(data.parsed_content) && data.parsed_content.length > 0) {
+              const pc = data.parsed_content[0];
+              return {
+                parsedText: pc.parsed_text ?? '',
+                parsedTextParser: pc.parser ?? '',
+                parsedTextTime: pc.time ?? '',
+                parsedTextTimeUsage: pc.time_usage ?? null,
+                parsedTextParameters: pc.parameters ?? {},
+                parse_run_id: pc.parse_run_id ?? parseRunIdForEdge,
+              };
+            }
+            throw new Error('No parsed content for this parse run');
+          }
           const fileResponse = await fetchWithAuth(`/api/files/${fileId}`);
           if (!fileResponse.ok) throw new Error('Failed to fetch file content');
           const fileData = await fileResponse.json();
-          const parsedText = fileData.success ? fileData.file.parsed_text : '';
-          const parsedTextParser = fileData.success ? fileData.file.parser : '';
-          const parsedTextTime = fileData.success ? fileData.file.time : '';
-          const parsedTextTimeUsage = fileData.success ? fileData.file.time_usage : null;
-          const parsedTextParameters = fileData.success ? fileData.file.parameters : {};
+          if (!fileData.success) throw new Error('Failed to fetch file content');
+          return {
+            parsedText: fileData.file.parsed_text ?? '',
+            parsedTextParser: fileData.file.parser ?? '',
+            parsedTextTime: fileData.file.time ?? '',
+            parsedTextTimeUsage: fileData.file.time_usage ?? null,
+            parsedTextParameters: fileData.file.parameters ?? {},
+            parse_run_id: fileData.file.parse_run_id ?? '',
+          };
+        };
+
+        if (mainViewApi) {
+          mainViewApi.beginChunksMainView(fileName);
+          try {
+            const {
+              parsedText,
+              parsedTextParser,
+              parsedTextTime,
+              parsedTextTimeUsage,
+              parsedTextParameters,
+              parse_run_id: metaParseRunId,
+            } = await loadParsedSnapshotForChunkEdge();
+
+            const chunkRunIds = String(chunkRunId);
+            const chunksResponse = await fetchWithAuth(
+              `/api/chunks?file_id=${fileId}&chunk_run_ids=${encodeURIComponent(chunkRunIds)}`
+            );
+            if (!chunksResponse.ok) throw new Error('Failed to fetch chunks');
+            const chunksData = await chunksResponse.json();
+            const chunks = chunksData.success ? chunksData.chunks : [];
+
+            const runsResponse = await fetchWithAuth(`/api/chunk-runs/by-file/${fileId}`);
+            const runsData = await runsResponse.json();
+            const chunkRuns = runsData.success ? runsData.chunk_runs : [];
+
+            const html = buildChunksVisualizationDocumentHtml(
+              parsedText,
+              chunks,
+              fileName,
+              chunkRuns,
+              {
+                parser: parsedTextParser,
+                time: parsedTextTime,
+                parse_run_id: metaParseRunId,
+                time_usage: parsedTextTimeUsage,
+                parameters: parsedTextParameters,
+              },
+              { controlsInParent: true }
+            );
+            mainViewApi.setMainViewReady(html, fileName, 'chunks', {
+              showChunkOnlyToggle: chunks.length > 0,
+            });
+          } catch (err) {
+            console.error('Graph chunk edge view:', err);
+            mainViewApi.setMainViewError(fileName, String(err?.message ?? err));
+          }
+          return;
+        }
+
+        let visualizationWindow = openLoadingChunksWindow(fileName);
+        if (!visualizationWindow) return;
+        try {
+          const {
+            parsedText,
+            parsedTextParser,
+            parsedTextTime,
+            parsedTextTimeUsage,
+            parsedTextParameters,
+            parse_run_id: metaParseRunId,
+          } = await loadParsedSnapshotForChunkEdge();
 
           const chunkRunIds = String(chunkRunId);
           const chunksResponse = await fetchWithAuth(
@@ -616,7 +747,7 @@ function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } =
           openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow, {
             parser: parsedTextParser,
             time: parsedTextTime,
-            parse_run_id: fileData.success ? fileData.file.parse_run_id : '',
+            parse_run_id: metaParseRunId,
             time_usage: parsedTextTimeUsage,
             parameters: parsedTextParameters,
           });
@@ -636,7 +767,7 @@ function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } =
         }
       }
     },
-    []
+    [mainViewApi]
   );
 
   const baseGraphData = useMemo(() => {

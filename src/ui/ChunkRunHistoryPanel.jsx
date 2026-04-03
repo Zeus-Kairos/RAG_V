@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './ChunkBrowser.css'; // Reuse existing styles
-import { openLoadingChunksWindow, openChunksWindow } from './chunksVisualizationWindow';
+import { fetchWithAuth } from './store';
+import {
+  openLoadingChunksWindow,
+  openChunksWindow,
+  buildChunksVisualizationDocumentHtml,
+} from './chunksVisualizationWindow';
 
-const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
+const ChunkRunHistoryPanel = ({ fileId, fileName, onClose, mainViewApi = null }) => {
   const [chunkRuns, setChunkRuns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -42,44 +47,34 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
   };
 
   const handleOpenChunks = async () => {
-    // Open the visualization window immediately (better UX + avoids popup blockers),
-    // render a loading skeleton, then populate it once the data is ready.
-    const visualizationWindow = openLoadingChunksWindow(fileName);
-    if (!visualizationWindow) return;
-
-    try {
-      setIsLoading(true);
-      // Step 1: Get file data with parsed content
-      const fileResponse = await fetch(`http://localhost:8000/api/files/${fileId}`);
+    const runLoad = async () => {
+      const fileResponse = await fetchWithAuth(`/api/files/${fileId}`);
       if (!fileResponse.ok) {
         throw new Error('Failed to fetch file content');
       }
       const fileData = await fileResponse.json();
-      
-      // Step 2: Extract parsed content directly from file response
+
       const parsedText = fileData.success ? fileData.file.parsed_text : '';
       const parsedTextParser = fileData.success ? fileData.file.parser : '';
       const parsedTextTime = fileData.success ? fileData.file.time : '';
       const parsedTextRunId = fileData.success ? fileData.file.parse_run_id : '';
       const parsedTextTimeUsage = fileData.success ? fileData.file.time_usage : null;
       const parsedTextParameters = fileData.success ? fileData.file.parameters : {};
-      
-      // Update component state for consistency
+
       setParsedTextMetadata({
         parser: parsedTextParser,
         time: parsedTextTime,
         parse_run_id: parsedTextRunId,
         time_usage: parsedTextTimeUsage,
-        parameters: parsedTextParameters
+        parameters: parsedTextParameters,
       });
-      
-      // Step 3: Get chunks for selected runs if any are selected
+
       let chunks = [];
       if (selectedChunkRuns.size > 0) {
-        const selectedRunIds = Array.from(selectedChunkRuns);
-        const chunkRunIds = selectedRunIds.join(',');
-        
-        const chunksResponse = await fetch(`http://localhost:8000/api/chunks?file_id=${fileId}&chunk_run_ids=${chunkRunIds}`);
+        const chunkRunIds = Array.from(selectedChunkRuns).join(',');
+        const chunksResponse = await fetchWithAuth(
+          `/api/chunks?file_id=${fileId}&chunk_run_ids=${encodeURIComponent(chunkRunIds)}`
+        );
         if (!chunksResponse.ok) {
           throw new Error('Failed to fetch chunks');
         }
@@ -87,17 +82,45 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
         chunks = chunksData.success ? chunksData.chunks : [];
       }
 
-      // Step 4: Populate the already-open window
-      setIsLoading(false);
-      
-      // Step 5: Open new window with parsed_text, chunks, fileName, chunkRuns, visualizationWindow, and parsed text metadata
-      openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow, {
+      const meta = {
         parser: parsedTextParser,
         time: parsedTextTime,
         parse_run_id: fileData.success ? fileData.file.parse_run_id : '',
         time_usage: fileData.success ? fileData.file.time_usage : null,
-        parameters: fileData.success ? fileData.file.parameters : {}
-      });
+        parameters: fileData.success ? fileData.file.parameters : {},
+      };
+
+      return { parsedText, chunks, meta };
+    };
+
+    if (mainViewApi) {
+      mainViewApi.beginChunksMainView(fileName);
+      setIsLoading(true);
+      try {
+        const { parsedText, chunks, meta } = await runLoad();
+        const html = buildChunksVisualizationDocumentHtml(parsedText, chunks, fileName, chunkRuns, meta, {
+          controlsInParent: true,
+        });
+        mainViewApi.setMainViewReady(html, fileName, 'chunks', {
+          showChunkOnlyToggle: selectedChunkRuns.size > 0,
+        });
+      } catch (err) {
+        console.error('Error opening chunks:', err);
+        mainViewApi.setMainViewError(fileName, String(err?.message ?? err));
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    const visualizationWindow = openLoadingChunksWindow(fileName);
+    if (!visualizationWindow) return;
+
+    try {
+      setIsLoading(true);
+      const { parsedText, chunks, meta } = await runLoad();
+      setIsLoading(false);
+      openChunksWindow(parsedText, chunks, fileName, chunkRuns, visualizationWindow, meta);
     } catch (err) {
       console.error('Error opening chunks:', err);
       alert(`Failed to open chunks: ${err.message}`);
@@ -128,7 +151,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`http://localhost:8000/api/chunk-runs/by-file/${id}`);
+      const response = await fetchWithAuth(`/api/chunk-runs/by-file/${id}`);
       const data = await response.json();
       if (data.success) {
         setChunkRuns(data.chunk_runs);
@@ -145,7 +168,7 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose }) => {
 
   const fetchParsedTextMetadata = async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/files/${id}`);
+      const response = await fetchWithAuth(`/api/files/${id}`);
       if (response.ok) {
         const data = await response.json();
         console.log('File data response:', data); // Debug log

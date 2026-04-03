@@ -59,25 +59,9 @@ export function openLoadingParsedContentWindow(fileName) {
   return newWindow;
 }
 
-// Helper function to open the parsed content window
-export function openParsedContentWindow(parsedText, fileName, parseRun, existingWindow = null) {
-  // Use existing window if provided; otherwise open a new one
-  const newWindow = existingWindow || window.open('', '_blank', 'width=1200,height=800');
-  if (!newWindow) {
-    alert('Could not open new window. Please check your popup blocker settings.');
-    return;
-  }
-
-  // If we opened a new one here, attempt to maximize (best effort)
-  if (!existingWindow) {
-    try {
-      newWindow.moveTo(0, 0);
-      newWindow.resizeTo(screen.availWidth, screen.availHeight);
-    } catch (e) {
-      console.warn('Unable to resize visualization window:', e);
-    }
-  }
-
+/** Full HTML document for parsed content (popup or embedded iframe). */
+export function buildParsedContentDocumentHtml(parsedText, fileName, parseRun, options = {}) {
+  const controlsInParent = options.controlsInParent === true;
   // Escape raw text before injecting into HTML
   const escapeHtml = (text) =>
     text
@@ -110,8 +94,7 @@ export function openParsedContentWindow(parsedText, fileName, parseRun, existing
     return paramStrings.join(', ');
   };
 
-  // Generate HTML for the new window
-  let html = `
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -144,11 +127,11 @@ export function openParsedContentWindow(parsedText, fileName, parseRun, existing
           flex-direction: column;
         }
         
-        h1 {
-          margin-bottom: 20px;
+        .parsed-view-toolbar {
+          margin-bottom: 16px;
           display: flex;
           align-items: center;
-          justify-content: space-between;
+          justify-content: flex-end;
         }
         
         /* Single grid container for perfect alignment */
@@ -437,8 +420,10 @@ export function openParsedContentWindow(parsedText, fileName, parseRun, existing
       </style>
     </head>
     <body>
-      <h1>
-        <span>Parsed Content: ${escapeHtml(fileName)}</span>
+      ${
+        controlsInParent
+          ? `<input type="checkbox" id="mdToggle" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;" />`
+          : `<div class="parsed-view-toolbar">
         <div class="toggle-bar">
           <label class="toggle-label" for="mdToggle">Render Markdown</label>
           <label class="toggle-switch">
@@ -446,7 +431,8 @@ export function openParsedContentWindow(parsedText, fileName, parseRun, existing
             <span class="toggle-slider"></span>
           </label>
         </div>
-      </h1>
+      </div>`
+      }
       <div class="main-container">
         <div class="run-info concise">
           <h2>Parse Run Details</h2>
@@ -486,6 +472,7 @@ export function openParsedContentWindow(parsedText, fileName, parseRun, existing
           var mdView  = document.getElementById('mdView');
           var rawView = document.getElementById('rawView');
           var toggle  = document.getElementById('mdToggle');
+          if (!toggle) return;
 
           // Pre-render markdown once the library loads
           function renderMd() {
@@ -522,8 +509,25 @@ export function openParsedContentWindow(parsedText, fileName, parseRun, existing
     </body>
     </html>
   `;
-  
-  // Write HTML to the new window
+}
+
+export function openParsedContentWindow(parsedText, fileName, parseRun, existingWindow = null) {
+  const html = buildParsedContentDocumentHtml(parsedText, fileName, parseRun);
+  const newWindow = existingWindow || window.open('', '_blank', 'width=1200,height=800');
+  if (!newWindow) {
+    alert('Could not open new window. Please check your popup blocker settings.');
+    return;
+  }
+
+  if (!existingWindow) {
+    try {
+      newWindow.moveTo(0, 0);
+      newWindow.resizeTo(screen.availWidth, screen.availHeight);
+    } catch (e) {
+      console.warn('Unable to resize visualization window:', e);
+    }
+  }
+
   newWindow.document.open();
   newWindow.document.write(html);
   newWindow.document.close();

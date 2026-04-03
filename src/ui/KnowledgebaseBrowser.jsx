@@ -5,7 +5,7 @@ import ChunkRunHistoryPanel from './ChunkRunHistoryPanel';
 import ParseRunPopup from './ParseRunPopup';
 import './KnowledgebaseBrowser.css';
 
-const KnowledgebaseBrowser = () => {
+const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
   const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser, parserSettings } = useKnowledgebaseStore();
   const [currentKnowledgebase, setCurrentKnowledgebase] = useState(knowledgebases.find(kb => kb.is_active)?.name || 'default');
   const [currentPath, setCurrentPath] = useState(['']);
@@ -1896,6 +1896,7 @@ const KnowledgebaseBrowser = () => {
         directoryCache={directoryCache}
         setDirectoryCache={setDirectoryCache}
         directoryCacheRef={directoryCacheRef}
+        mainViewApi={mainViewApi}
       />
 
       {/* Create Knowledgebase Modal */}
@@ -2178,10 +2179,11 @@ const KnowledgebaseBrowser = () => {
       {showChunkRunPanel && (
         <>
           <div className="chunk-run-history-overlay" onClick={() => setShowChunkRunPanel(false)} />
-          <ChunkRunHistoryPanel 
-            fileId={selectedFileId} 
-            fileName={selectedFileName} 
-            onClose={() => setShowChunkRunPanel(false)} 
+          <ChunkRunHistoryPanel
+            fileId={selectedFileId}
+            fileName={selectedFileName}
+            onClose={() => setShowChunkRunPanel(false)}
+            mainViewApi={mainViewApi}
           />
         </>
       )}

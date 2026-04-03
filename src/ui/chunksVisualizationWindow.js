@@ -57,7 +57,15 @@ export function openLoadingChunksWindow(fileName) {
   return newWindow;
 }
 
-export function openChunksWindow(parsedText, chunks, fileName, chunkRuns, existingWindow = null, parsedTextMetadata = {}) {
+export function buildChunksVisualizationDocumentHtml(
+  parsedText,
+  chunks,
+  fileName,
+  chunkRuns,
+  parsedTextMetadata = {},
+  viewOptions = {}
+) {
+  const controlsInParent = viewOptions.controlsInParent === true;
   // Group chunks by chunk_run_id if any chunks exist
   const chunksByRunId = chunks.length > 0 ? chunks.reduce((acc, chunk) => {
     const runId = chunk.chunk_run_id;
@@ -335,24 +343,7 @@ export function openChunksWindow(parsedText, chunks, fileName, chunkRuns, existi
     return result;
   };
 
-  // Use existing window if provided; otherwise open a new one
-  const newWindow = existingWindow || window.open('', '_blank', 'width=1200,height=800');
-  if (!newWindow) {
-    alert('Could not open new window. Please check your popup blocker settings.');
-    return;
-  }
-
-  // If we opened a new one here, attempt to maximize (best effort)
-  if (!existingWindow) {
-    try {
-      newWindow.moveTo(0, 0);
-      newWindow.resizeTo(screen.availWidth, screen.availHeight);
-    } catch (e) {
-      console.warn('Unable to resize visualization window:', e);
-    }
-  }
-
-  // Generate HTML for the new window
+  // Generate HTML for popup or embedded iframe
   const numColumns = runIds.length;
   const gridTemplateColumns = numColumns > 0 ? `repeat(${numColumns}, minmax(300px, 1fr))` : '1fr';
   
@@ -669,8 +660,8 @@ export function openChunksWindow(parsedText, chunks, fileName, chunkRuns, existi
           width: 100%;
         }
 
-        .viz-page-head h1 {
-          margin-bottom: 0;
+        .viz-page-head-row--end {
+          justify-content: flex-end;
         }
 
         .chunk-meta-float-root {
@@ -889,16 +880,15 @@ export function openChunksWindow(parsedText, chunks, fileName, chunkRuns, existi
     </head>
     <body>
       ${
-        hasChunkRuns
+        hasChunkRuns && !controlsInParent
           ? `<div class="viz-page-head">
-        <div class="viz-page-head-row">
-          <h1>Chunk Visualization: ${fileName}</h1>
+        <div class="viz-page-head-row viz-page-head-row--end">
           <div class="viz-toolbar">
             <button type="button" class="viz-toggle-chunk-only" id="toggle-chunk-only" aria-pressed="false">Chunk only</button>
           </div>
         </div>
       </div>`
-          : `<h1>Chunk Visualization: ${fileName}</h1>`
+          : ''
       }
       ${
         hasChunkRuns
@@ -1332,8 +1322,27 @@ export function openChunksWindow(parsedText, chunks, fileName, chunkRuns, existi
     </body>
     </html>
   `;
-  
-  // Write HTML to the new window
+
+  return html;
+}
+
+export function openChunksWindow(parsedText, chunks, fileName, chunkRuns, existingWindow = null, parsedTextMetadata = {}) {
+  const newWindow = existingWindow || window.open('', '_blank', 'width=1200,height=800');
+  if (!newWindow) {
+    alert('Could not open new window. Please check your popup blocker settings.');
+    return;
+  }
+
+  if (!existingWindow) {
+    try {
+      newWindow.moveTo(0, 0);
+      newWindow.resizeTo(screen.availWidth, screen.availHeight);
+    } catch (e) {
+      console.warn('Unable to resize visualization window:', e);
+    }
+  }
+
+  const html = buildChunksVisualizationDocumentHtml(parsedText, chunks, fileName, chunkRuns, parsedTextMetadata, {});
   newWindow.document.open();
   newWindow.document.write(html);
   newWindow.document.close();

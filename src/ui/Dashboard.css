@@ -44,17 +44,11 @@
   background: #e8f0fe;
 }
 
-.dashboard-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #202124;
-}
-
 .dashboard-subtitle {
-  font-size: 0.9rem;
-  color: #5f6368;
-  margin-bottom: 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 16px;
+  color: #202124;
 }
 
 .dashboard-error {
