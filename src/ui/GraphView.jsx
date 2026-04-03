@@ -12,6 +12,7 @@ import {
   openChunksWindow,
   buildChunksVisualizationDocumentHtml,
 } from './chunksVisualizationWindow';
+import { isEdgeActive } from './graphEdgeActive';
 import './GraphView.css';
 
 const NODE_COLORS = {
@@ -286,30 +287,6 @@ function expandPipelineFilterClosure(seedIds, links, nodeById) {
   return keep;
 }
 
-function isEdgeActive(link) {
-  const a = link?.attributes || {};
-  if (link?.type === 'parse') return Boolean(a.is_active);
-  if (link?.type === 'chunk') {
-    const parseActive = a.parse_is_active;
-    const runActive = a.chunk_run_is_active;
-    // Per-edge: this link already ties one file's parse_run to a chunk_run. KB-wide
-    // chunk_run.in_sync is cleared whenever any file's active parse changes, so it
-    // would keep the edge gray even after explicitly activating the matching chunk run.
-    const okParse = parseActive === undefined ? true : Boolean(parseActive);
-    const okRun = runActive === undefined ? true : Boolean(runActive);
-    return okParse && okRun;
-  }
-  if (link?.type === 'embed') {
-    const runActive = a.chunk_run_is_active;
-    const okRun = runActive === undefined ? true : Boolean(runActive);
-    // Only highlight the edge between the globally active embedding config and the active chunker.
-    // Previously we highlighted *all* embedding edges tied to the active chunk run.
-    const okEmbedding = a.embedding_is_active === undefined ? true : Boolean(a.embedding_is_active);
-    return okRun && okEmbedding;
-  }
-  return true;
-}
-
 function hash01(str) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i += 1) {
@@ -401,6 +378,37 @@ function pickLatestEmbedLinkForChunkerEmbedding(links, chunkerId, embeddingId) {
     if (ta !== tb) return ta > tb ? l : best;
     const ida = Number(a.chunk_run_id) || 0;
     const idb = Number(b.chunk_run_id) || 0;
+    return ida >= idb ? l : best;
+  });
+}
+
+/**
+ * Latest embed/index edge for this chunk_run (optional: same chunker node as the chunk edge target).
+ * Prefer chunker-scoped edges so activating parser→chunker also lights the matching chunker→embedding link.
+ */
+function pickLatestEmbedLinkForChunkRun(links, chunkRunId, chunkerNodeId = null) {
+  if (chunkRunId == null) return null;
+  const cr = Number(chunkRunId);
+  let candidates = links.filter(
+    (l) => l.type === 'embed' && Number(l?.attributes?.chunk_run_id) === cr,
+  );
+  if (chunkerNodeId) {
+    const cid = String(chunkerNodeId);
+    const scoped = candidates.filter((l) => {
+      const { s } = linkEndpointIds(l);
+      return String(s) === cid;
+    });
+    if (scoped.length > 0) candidates = scoped;
+  }
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, l) => {
+    const a = l.attributes || {};
+    const b = best.attributes || {};
+    const ta = timeScore(a.run_time);
+    const tb = timeScore(b.run_time);
+    if (ta !== tb) return ta > tb ? l : best;
+    const ida = Number(a.index_run_id) || 0;
+    const idb = Number(b.index_run_id) || 0;
     return ida >= idb ? l : best;
   });
 }
@@ -893,6 +901,28 @@ function GraphView({
             throw new Error(prData.message || 'Failed to set active parse run');
           }
         }
+
+        const chunkerNodeId =
+          typeof link.target === 'string' ? link.target : link.target?.id ?? link.target;
+        const latestEmbed = pickLatestEmbedLinkForChunkRun(
+          baseGraphData.links,
+          chunkRunId,
+          chunkerNodeId || null,
+        );
+        const embKey = latestEmbed?.attributes?.embedding_configure_id;
+        if (embKey != null) {
+          const encodedConfigId = encodeURIComponent(String(embKey));
+          const er = await fetchWithAuth(`/api/embedding_config/${encodedConfigId}/active`, {
+            method: 'PATCH',
+          });
+          const erBody = await er.json().catch(() => ({}));
+          if (!er.ok || erBody?.success === false) {
+            throw new Error(
+              erBody?.detail || erBody?.message || 'Failed to set active embedding config',
+            );
+          }
+        }
+
         await refetchGraph();
       } catch (e) {
         console.error(e);
@@ -962,11 +992,12 @@ function GraphView({
    * that has an index run on the active chunk run (embed edges can still draw as active).
    */
   const { activeParserIds, activeChunkerIds, activeEmbeddingIds } = useMemo(() => {
+    const links = baseGraphData.links;
     const parserIds = new Set();
     const chunkerIds = new Set();
     const embeddingIds = new Set();
-    for (const l of baseGraphData.links) {
-      if (!isEdgeActive(l)) continue;
+    for (const l of links) {
+      if (!isEdgeActive(l, links)) continue;
       const { s, t } = linkEndpointIds(l);
       if (!s || !t) continue;
       if (l.type === 'parse') {
@@ -978,10 +1009,11 @@ function GraphView({
         chunkerIds.add(s);
       }
     }
-    for (const l of baseGraphData.links) {
+    for (const l of links) {
       if (l.type !== 'embed') continue;
       const a = l.attributes || {};
       if (!a.embedding_is_active) continue;
+      if (!isEdgeActive(l, links)) continue;
       const { t } = linkEndpointIds(l);
       if (t) embeddingIds.add(t);
     }
@@ -1006,7 +1038,8 @@ function GraphView({
   }, [baseGraphData.nodes]);
 
   const filteredGraphData = useMemo(() => {
-    const baseLinks = onlyActive ? baseGraphData.links.filter(isEdgeActive) : baseGraphData.links;
+    const allLinks = baseGraphData.links;
+    const baseLinks = onlyActive ? allLinks.filter((l) => isEdgeActive(l, allLinks)) : allLinks;
 
     // No node filter: optionally still filter by active links
     if (!filterNodeIds || filterNodeIds.length === 0) {
@@ -1474,25 +1507,25 @@ function GraphView({
                 }
               }}
               linkWidth={(l) => {
-                if (!isEdgeActive(l)) return 0.85;
+                if (!isEdgeActive(l, baseGraphData.links)) return 0.85;
                 if (l.type === 'parse') return 2.6;
                 return 2.1;
               }}
               linkColor={(l) => {
-                const active = isEdgeActive(l);
+                const active = isEdgeActive(l, baseGraphData.links);
                 if (!active) return EDGE_COLORS.inactive;
                 if (l.type === 'parse') return EDGE_COLORS.parseActive;
                 if (l.type === 'embed') return EDGE_COLORS.embedActive;
                 return EDGE_COLORS.chunkActive;
               }}
               linkDirectionalParticles={(l) => {
-                if (!isEdgeActive(l)) return 0;
+                if (!isEdgeActive(l, baseGraphData.links)) return 0;
                 if (l.type === 'parse') return 4;
                 return 3;
               }}
-              linkDirectionalParticleWidth={(l) => (isEdgeActive(l) ? 2.8 : 0)}
-              linkDirectionalParticleSpeed={(l) => (isEdgeActive(l) ? 0.014 : 0)}
-              linkDirectionalArrowLength={(l) => (isEdgeActive(l) ? 8 : 3)}
+              linkDirectionalParticleWidth={(l) => (isEdgeActive(l, baseGraphData.links) ? 2.8 : 0)}
+              linkDirectionalParticleSpeed={(l) => (isEdgeActive(l, baseGraphData.links) ? 0.014 : 0)}
+              linkDirectionalArrowLength={(l) => (isEdgeActive(l, baseGraphData.links) ? 8 : 3)}
               linkDirectionalArrowRelPos={1}
               linkCurvature={(l) => l.curvature || 0}
               onNodeDrag={() => {

@@ -4,6 +4,7 @@ import useKnowledgebaseStore, { fetchWithAuth } from './store';
 import useRetrievalStore from './retrievalStore';
 import ChunkDetailPopover from './ChunkDetailPopover';
 import GraphView from './GraphView';
+import { isEdgeActive } from './graphEdgeActive';
 import './Playground.css';
 
 function uniqSortedNums(arr) {
@@ -192,6 +193,21 @@ export default function Playground() {
     setMessages([{ role: 'user', content: query }]);
 
     try {
+      const graphRes = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/graph`);
+      const graphJson = await graphRes.json().catch(() => null);
+      if (!graphRes.ok || !graphJson?.success || !graphJson?.graph) {
+        throw new Error('Failed to load the knowledgebase graph; cannot verify index edges.');
+      }
+      const graphLinks = Array.isArray(graphJson.graph.edges) ? graphJson.graph.edges : [];
+      const hasActiveEmbedEdge = graphLinks.some(
+        (l) => l.type === 'embed' && isEdgeActive(l, graphLinks),
+      );
+      if (!hasActiveEmbedEdge) {
+        throw new Error(
+          'No active index (embed) edge: the parse → chunk → embed chain is not aligned for retrieval. Activate the full pipeline in the graph on the left and run indexing before sending.',
+        );
+      }
+
       const { kbName, indexRunId } = await resolveIndexRunId();
       setLastIndexCtx({ kbName, indexRunId });
 
@@ -281,7 +297,7 @@ export default function Playground() {
     } finally {
       setLoading(false);
     }
-  }, [draft, k, resolveIndexRunId, retrieverType]);
+  }, [activeKB?.id, draft, k, resolveIndexRunId, retrieverType]);
 
   if (!activeKB) {
     return <div className="playground-error">No active knowledgebase. Select or create one first.</div>;
@@ -330,7 +346,7 @@ export default function Playground() {
             <div className="playground-panel-title">Chat (single turn)</div>
             <div className="playground-messages" role="log" aria-label="Chat messages">
               {messages.length === 0 ? (
-                <div className="playground-msg">输入 query 后发送。回答将仅基于右侧 chunks，并用 `[n]` 引用。</div>
+                <div className="playground-msg">Enter a query and send. Answers use only the chunks on the right; cite with `[n]`.</div>
               ) : (
                 messages.map((m, idx) => (
                   <div
@@ -359,7 +375,7 @@ export default function Playground() {
             <div className="playground-panel-title">Top-k chunks</div>
             <div className="playground-chunk-list" aria-label="Top-k chunks list">
               {topKChunks.length === 0 ? (
-                <div className="playground-msg">尚无结果。发送 query 后会在此显示 top-k chunks。</div>
+                <div className="playground-msg">No results yet. Top-k chunks will appear here after you send a query.</div>
               ) : (
                 topKChunks.map((c) => {
                   const isHl = highlightedSet.has(Number(c.chunkIndex));
