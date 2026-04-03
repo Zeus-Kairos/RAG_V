@@ -359,7 +359,7 @@ function lightenHex(hex, amount01) {
   return `rgb(${lr} ${lg} ${lb})`;
 }
 
-function GraphView() {
+function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } = {}) {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
@@ -1029,33 +1029,37 @@ function GraphView() {
                 )}
               </div>
 
-              <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
-                <option value="" disabled>+ Document</option>
-                {nodeOptions.filter(n => n.type === 'document').map(n => (
-                  <option key={n.id} value={n.id}>{n.label || n.id}</option>
-                ))}
-              </select>
+              {!hideNodeTypeDropdowns ? (
+                <>
+                  <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
+                    <option value="" disabled>+ Document</option>
+                    {nodeOptions.filter(n => n.type === 'document').map(n => (
+                      <option key={n.id} value={n.id}>{n.label || n.id}</option>
+                    ))}
+                  </select>
 
-              <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
-                <option value="" disabled>+ Parser</option>
-                {nodeOptions.filter(n => n.type === 'parser').map(n => (
-                  <option key={n.id} value={n.id}>{n.label || n.id}</option>
-                ))}
-              </select>
+                  <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
+                    <option value="" disabled>+ Parser</option>
+                    {nodeOptions.filter(n => n.type === 'parser').map(n => (
+                      <option key={n.id} value={n.id}>{n.label || n.id}</option>
+                    ))}
+                  </select>
 
-              <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
-                <option value="" disabled>+ Chunker</option>
-                {nodeOptions.filter(n => n.type === 'chunker').map(n => (
-                  <option key={n.id} value={n.id}>{n.label || n.id}</option>
-                ))}
-              </select>
+                  <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
+                    <option value="" disabled>+ Chunker</option>
+                    {nodeOptions.filter(n => n.type === 'chunker').map(n => (
+                      <option key={n.id} value={n.id}>{n.label || n.id}</option>
+                    ))}
+                  </select>
 
-              <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
-                <option value="" disabled>+ Embedding</option>
-                {nodeOptions.filter(n => n.type === 'embedding').map(n => (
-                  <option key={n.id} value={n.id}>{n.label || n.id}</option>
-                ))}
-              </select>
+                  <select className="filter-select" defaultValue="" onChange={(e) => { addFilterNode(e.target.value); e.target.value = ''; }}>
+                    <option value="" disabled>+ Embedding</option>
+                    {nodeOptions.filter(n => n.type === 'embedding').map(n => (
+                      <option key={n.id} value={n.id}>{n.label || n.id}</option>
+                    ))}
+                  </select>
+                </>
+              ) : null}
 
               <label className="filter-toggle">
                 <input type="checkbox" checked={includeNeighbors} onChange={(e) => setIncludeNeighbors(e.target.checked)} />
@@ -1325,135 +1329,137 @@ function GraphView() {
             />
           </div>
 
-          <div className="graph-details">
-            <div className="details-header">
-              <div className="details-title">Details</div>
-              {selected && (
-                <button className="details-clear" onClick={() => setSelected(null)}>Clear</button>
+          {!hideDetailsPanel ? (
+            <div className="graph-details">
+              <div className="details-header">
+                <div className="details-title">Details</div>
+                {selected && (
+                  <button className="details-clear" onClick={() => setSelected(null)}>Clear</button>
+                )}
+              </div>
+
+              {!selected ? (
+                <div className="details-empty">
+                  Click a node or an edge to inspect attributes.
+                  <div className="details-hint">
+                    On a document→parser or parser→chunker link, use the floating View button on the canvas to open the parsed text or chunk visualization.
+                    Double-click a node to add it to the filter.
+                    Double-click a parse or chunk edge to set that run active (and sync the latest related chunk/parse run).
+                  </div>
+                </div>
+              ) : selected.kind === 'node' ? (
+                <div className="details-content">
+                  <Section title="Basic" defaultOpen>
+                    <Kv k="Type" v={selected.data.type} />
+                    <Kv k="Label" v={selected.data.label} />
+                    <Kv k="ID" v={selected.data.id} />
+                  </Section>
+
+                  {selected.data.type === 'document' && (
+                    <Section title="Document" defaultOpen>
+                      <Kv k="file_id" v={selected.data.file_id} />
+                      <Kv k="filepath" v={selected.data.filepath} />
+                    </Section>
+                  )}
+
+                  {selected.data.type === 'chunker' && (
+                    <Section title="Chunker" defaultOpen>
+                      <Kv k="framework" v={selected.data.framework} />
+                      <Kv k="chunker" v={selected.data.chunker} />
+                    </Section>
+                  )}
+
+                  {selected.data.type === 'embedding' && (
+                    <Section title="Embedding" defaultOpen>
+                      <Kv k="embedding_config_id" v={selected.data.embedding_config_id} />
+                      <Kv k="embedding_provider" v={selected.data.embedding_provider} />
+                      <Kv k="embedding_model" v={selected.data.embedding_model} />
+                    </Section>
+                  )}
+
+                  <JsonBlock title="Raw JSON" value={selected.data} defaultOpen={false} />
+                </div>
+              ) : (
+                <div className="details-content">
+                  <Section title="Basic" defaultOpen>
+                    <Kv k="Edge Type" v={selected.data.type} />
+                    <Kv k="Edge ID" v={selected.data.id} />
+                    <Kv k="From" v={selected.data.source?.id || selected.data.source} />
+                    <Kv k="To" v={selected.data.target?.id || selected.data.target} />
+                  </Section>
+
+                  {selected.data.type === 'parse' && (
+                    <>
+                      <Section title="Document" defaultOpen>
+                        <Kv k="file_id" v={selected.data.attributes?.file_id} />
+                        <Kv k="filename" v={selected.data.attributes?.filename} />
+                        <Kv k="filepath" v={selected.data.attributes?.filepath} />
+                      </Section>
+                      <Section title="Parser" defaultOpen>
+                        <Kv k="parser" v={selected.data.attributes?.parser} />
+                        <Kv k="parse_run_id" v={selected.data.attributes?.parse_run_id} />
+                        <Kv k="parse_id" v={selected.data.attributes?.parse_id} />
+                        <Kv k="is_active" v={String(selected.data.attributes?.is_active ?? '–')} />
+                      </Section>
+                      <Section title="Timing" defaultOpen>
+                        <Kv k="time_usage" v={formatTimeUsage(selected.data.attributes?.time_usage)} />
+                        <Kv k="time" v={selected.data.attributes?.time} />
+                      </Section>
+                      <JsonBlock title="Parser parameters" value={selected.data.attributes?.parameters || {}} defaultOpen />
+                    </>
+                  )}
+
+                  {selected.data.type === 'chunk' && (
+                    <>
+                      <Section title="Link context" defaultOpen>
+                        <Kv k="parser" v={selected.data.attributes?.parser} />
+                        <Kv k="framework" v={selected.data.attributes?.framework} />
+                        <Kv k="chunker" v={selected.data.attributes?.chunker} />
+                      </Section>
+                      <Section title="Run" defaultOpen>
+                        <Kv k="chunk_run_id" v={selected.data.attributes?.chunk_run_id} />
+                        <Kv k="run_time" v={selected.data.attributes?.run_time} />
+                        <Kv k="chunks_count" v={selected.data.attributes?.chunks_count} />
+                      </Section>
+                      <Section title="Document/parse" defaultOpen={false}>
+                        <Kv k="file_id" v={selected.data.attributes?.file_id} />
+                        <Kv k="filename" v={selected.data.attributes?.filename} />
+                        <Kv k="filepath" v={selected.data.attributes?.filepath} />
+                        <Kv k="parse_run_id" v={selected.data.attributes?.parse_run_id} />
+                        <Kv k="parse_time_usage" v={formatTimeUsage(selected.data.attributes?.parse_time_usage)} />
+                        <Kv k="parse_time" v={selected.data.attributes?.parse_time} />
+                      </Section>
+                      <JsonBlock title="Chunker parameters" value={selected.data.attributes?.chunker_parameters || {}} defaultOpen />
+                      <JsonBlock title="Chunk run parameters" value={selected.data.attributes?.run_parameters || {}} defaultOpen={false} />
+                      <JsonBlock title="Parser parameters (from parse run)" value={selected.data.attributes?.parser_parameters || {}} defaultOpen={false} />
+                    </>
+                  )}
+
+                  {selected.data.type === 'embed' && (
+                    <>
+                      <Section title="Index run" defaultOpen>
+                        <Kv k="index_run_id" v={selected.data.attributes?.index_run_id} />
+                        <Kv k="chunk_run_id" v={selected.data.attributes?.chunk_run_id} />
+                        <Kv k="embedding_configure_id" v={selected.data.attributes?.embedding_configure_id} />
+                        <Kv k="run_time" v={selected.data.attributes?.run_time} />
+                      </Section>
+                      <Section title="Active flags" defaultOpen>
+                        <Kv k="chunk_run_is_active" v={String(selected.data.attributes?.chunk_run_is_active ?? '–')} />
+                        <Kv k="chunk_run_in_sync" v={String(selected.data.attributes?.chunk_run_in_sync ?? '–')} />
+                        <Kv k="embedding_is_active" v={String(selected.data.attributes?.embedding_is_active ?? '–')} />
+                      </Section>
+                    </>
+                  )}
+
+                  <JsonBlock
+                    title="Raw JSON"
+                    value={{ ...selected.data, source: selected.data.source?.id || selected.data.source, target: selected.data.target?.id || selected.data.target }}
+                    defaultOpen={false}
+                  />
+                </div>
               )}
             </div>
-
-            {!selected ? (
-              <div className="details-empty">
-                Click a node or an edge to inspect attributes.
-                <div className="details-hint">
-                  On a document→parser or parser→chunker link, use the floating View button on the canvas to open the parsed text or chunk visualization.
-                  Double-click a node to add it to the filter.
-                  Double-click a parse or chunk edge to set that run active (and sync the latest related chunk/parse run).
-                </div>
-              </div>
-            ) : selected.kind === 'node' ? (
-              <div className="details-content">
-                <Section title="Basic" defaultOpen>
-                  <Kv k="Type" v={selected.data.type} />
-                  <Kv k="Label" v={selected.data.label} />
-                  <Kv k="ID" v={selected.data.id} />
-                </Section>
-
-                {selected.data.type === 'document' && (
-                  <Section title="Document" defaultOpen>
-                    <Kv k="file_id" v={selected.data.file_id} />
-                    <Kv k="filepath" v={selected.data.filepath} />
-                  </Section>
-                )}
-
-                {selected.data.type === 'chunker' && (
-                  <Section title="Chunker" defaultOpen>
-                    <Kv k="framework" v={selected.data.framework} />
-                    <Kv k="chunker" v={selected.data.chunker} />
-                  </Section>
-                )}
-
-                {selected.data.type === 'embedding' && (
-                  <Section title="Embedding" defaultOpen>
-                    <Kv k="embedding_config_id" v={selected.data.embedding_config_id} />
-                    <Kv k="embedding_provider" v={selected.data.embedding_provider} />
-                    <Kv k="embedding_model" v={selected.data.embedding_model} />
-                  </Section>
-                )}
-
-                <JsonBlock title="Raw JSON" value={selected.data} defaultOpen={false} />
-              </div>
-            ) : (
-              <div className="details-content">
-                <Section title="Basic" defaultOpen>
-                  <Kv k="Edge Type" v={selected.data.type} />
-                  <Kv k="Edge ID" v={selected.data.id} />
-                  <Kv k="From" v={selected.data.source?.id || selected.data.source} />
-                  <Kv k="To" v={selected.data.target?.id || selected.data.target} />
-                </Section>
-
-                {selected.data.type === 'parse' && (
-                  <>
-                    <Section title="Document" defaultOpen>
-                      <Kv k="file_id" v={selected.data.attributes?.file_id} />
-                      <Kv k="filename" v={selected.data.attributes?.filename} />
-                      <Kv k="filepath" v={selected.data.attributes?.filepath} />
-                    </Section>
-                    <Section title="Parser" defaultOpen>
-                      <Kv k="parser" v={selected.data.attributes?.parser} />
-                      <Kv k="parse_run_id" v={selected.data.attributes?.parse_run_id} />
-                      <Kv k="parse_id" v={selected.data.attributes?.parse_id} />
-                      <Kv k="is_active" v={String(selected.data.attributes?.is_active ?? '–')} />
-                    </Section>
-                    <Section title="Timing" defaultOpen>
-                      <Kv k="time_usage" v={formatTimeUsage(selected.data.attributes?.time_usage)} />
-                      <Kv k="time" v={selected.data.attributes?.time} />
-                    </Section>
-                    <JsonBlock title="Parser parameters" value={selected.data.attributes?.parameters || {}} defaultOpen />
-                  </>
-                )}
-
-                {selected.data.type === 'chunk' && (
-                  <>
-                    <Section title="Link context" defaultOpen>
-                      <Kv k="parser" v={selected.data.attributes?.parser} />
-                      <Kv k="framework" v={selected.data.attributes?.framework} />
-                      <Kv k="chunker" v={selected.data.attributes?.chunker} />
-                    </Section>
-                    <Section title="Run" defaultOpen>
-                      <Kv k="chunk_run_id" v={selected.data.attributes?.chunk_run_id} />
-                      <Kv k="run_time" v={selected.data.attributes?.run_time} />
-                      <Kv k="chunks_count" v={selected.data.attributes?.chunks_count} />
-                    </Section>
-                    <Section title="Document/parse" defaultOpen={false}>
-                      <Kv k="file_id" v={selected.data.attributes?.file_id} />
-                      <Kv k="filename" v={selected.data.attributes?.filename} />
-                      <Kv k="filepath" v={selected.data.attributes?.filepath} />
-                      <Kv k="parse_run_id" v={selected.data.attributes?.parse_run_id} />
-                      <Kv k="parse_time_usage" v={formatTimeUsage(selected.data.attributes?.parse_time_usage)} />
-                      <Kv k="parse_time" v={selected.data.attributes?.parse_time} />
-                    </Section>
-                    <JsonBlock title="Chunker parameters" value={selected.data.attributes?.chunker_parameters || {}} defaultOpen />
-                    <JsonBlock title="Chunk run parameters" value={selected.data.attributes?.run_parameters || {}} defaultOpen={false} />
-                    <JsonBlock title="Parser parameters (from parse run)" value={selected.data.attributes?.parser_parameters || {}} defaultOpen={false} />
-                  </>
-                )}
-
-                {selected.data.type === 'embed' && (
-                  <>
-                    <Section title="Index run" defaultOpen>
-                      <Kv k="index_run_id" v={selected.data.attributes?.index_run_id} />
-                      <Kv k="chunk_run_id" v={selected.data.attributes?.chunk_run_id} />
-                      <Kv k="embedding_configure_id" v={selected.data.attributes?.embedding_configure_id} />
-                      <Kv k="run_time" v={selected.data.attributes?.run_time} />
-                    </Section>
-                    <Section title="Active flags" defaultOpen>
-                      <Kv k="chunk_run_is_active" v={String(selected.data.attributes?.chunk_run_is_active ?? '–')} />
-                      <Kv k="chunk_run_in_sync" v={String(selected.data.attributes?.chunk_run_in_sync ?? '–')} />
-                      <Kv k="embedding_is_active" v={String(selected.data.attributes?.embedding_is_active ?? '–')} />
-                    </Section>
-                  </>
-                )}
-
-                <JsonBlock
-                  title="Raw JSON"
-                  value={{ ...selected.data, source: selected.data.source?.id || selected.data.source, target: selected.data.target?.id || selected.data.target }}
-                  defaultOpen={false}
-                />
-              </div>
-            )}
-          </div>
+          ) : null}
         </div>
         </>
       )}

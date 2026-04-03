@@ -3,6 +3,7 @@ import useKnowledgebaseStore, { fetchWithAuth } from './store';
 import parserConfig from './parserConfig.json';
 import './Dashboard.css';
 import GraphView from './GraphView';
+import Playground from './Playground';
 
 // Parser order from parser settings (first occurrence across file types)
 const PARSER_ORDER = (() => {
@@ -23,7 +24,7 @@ const Dashboard = () => {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find(kb => kb.is_active) || knowledgebases[0];
 
-  const [activeView, setActiveView] = useState('graph'); // 'parse' | 'graph'
+  const [activeView, setActiveView] = useState('graph'); // 'parse' | 'graph' | 'playground'
   const [parseDuration, setParseDuration] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -116,12 +117,20 @@ const Dashboard = () => {
           >
             Parse Duration
           </button>
+          <button
+            className={`view-tab ${activeView === 'playground' ? 'active' : ''}`}
+            onClick={() => setActiveView('playground')}
+          >
+            Playground
+          </button>
         </div>
       </div>
 
       {activeView === 'parse' && error && <div className="dashboard-error">{error}</div>}
 
-      {activeView === 'graph' ? (
+      {activeView === 'playground' ? (
+        <Playground />
+      ) : activeView === 'graph' ? (
         <GraphView />
       ) : isLoading ? (
         <div className="dashboard-loading">Loading parse duration...</div>

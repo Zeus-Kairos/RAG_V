@@ -1,0 +1,253 @@
+.playground {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.playground-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.playground-left {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  min-height: 0;
+}
+
+.playground-right {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  min-height: 0;
+}
+
+.playground-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8eaed;
+  background: #fff;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.playground-toolbar label {
+  font-size: 12px;
+  color: #5f6368;
+  font-weight: 600;
+}
+
+.playground-toolbar select,
+.playground-toolbar input[type="number"] {
+  border: 1px solid #dadce0;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.playground-toolbar .k-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playground-bottom {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.playground-chat {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e8eaed;
+}
+
+.playground-chunks {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.playground-panel-title {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8eaed;
+  background: #f8f9fa;
+  font-size: 12px;
+  font-weight: 700;
+  color: #202124;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.playground-messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+}
+
+.playground-msg {
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.playground-msg--user {
+  border-color: rgba(9, 105, 218, 0.25);
+  background: rgba(9, 105, 218, 0.06);
+}
+
+.playground-msg--assistant {
+  border-color: rgba(4, 120, 87, 0.22);
+  background: rgba(4, 120, 87, 0.06);
+}
+
+.playground-composer {
+  border-top: 1px solid #e8eaed;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.playground-composer textarea {
+  flex: 1;
+  min-height: 42px;
+  max-height: 120px;
+  resize: vertical;
+  border: 1px solid #dadce0;
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.playground-composer button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.playground-composer button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.playground-chunk-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+}
+
+.playground-chunk-item {
+  border: 1px solid #e0e0e0;
+  border-left: 3px solid #2196f3;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafbfc;
+}
+
+.playground-chunk-item--highlighted {
+  border-color: rgba(234, 88, 12, 0.55);
+  border-left-color: #ea580c;
+  background: #fff7ed;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.playground-chunk-meta {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.playground-chunk-idx {
+  font-weight: 800;
+  color: #0969da;
+}
+
+.playground-chunk-title {
+  font-weight: 700;
+  color: #333;
+  margin-left: auto;
+  text-align: right;
+  flex: 1;
+}
+
+.playground-chunk-snippet {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.playground-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2196f3;
+  background-color: #e3f2fd;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.playground-chunk-id {
+  flex-shrink: 0;
+}
+
+.playground-error {
+  margin: 10px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fce8e6;
+  color: #c5221f;
+  border: 1px solid rgba(197, 34, 31, 0.2);
+}
+

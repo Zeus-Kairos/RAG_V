@@ -20,6 +20,7 @@ from src.retriever.retrievers import BaseRetriever
 from src.utils.logging_config import get_logger
 from src.utils.umap_projection import project_2d, subsample_for_projection
 import numpy as np
+import requests
 
 logger = get_logger(__name__)
 
@@ -38,6 +39,16 @@ class ConfigUpdate(BaseModel):
 class UmapRetrievalRequest(BaseModel):
     query: Optional[str] = None
     highlight_chunk_ids: Optional[List[str]] = None
+
+
+class PlaygroundChatChunk(BaseModel):
+    index: int
+    content: str
+
+
+class PlaygroundChatRequest(BaseModel):
+    query: str
+    chunks: List[PlaygroundChatChunk]
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
@@ -202,6 +213,84 @@ async def get_retrievers():
         }
     except Exception as e:
         logger.error(f"Error getting retrievers: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/chat/playground")
+async def playground_chat(request_body: PlaygroundChatRequest):
+    """Single-turn chat grounded only on provided chunks (Playground)."""
+    try:
+        query = (request_body.query or "").strip()
+        chunks = request_body.chunks or []
+        if not query:
+            raise HTTPException(status_code=400, detail="query is required")
+        if not chunks:
+            raise HTTPException(status_code=400, detail="chunks is required")
+
+        ollama_base_url = (os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434") or "").rstrip("/")
+        ollama_model = (os.getenv("OLLAMA_MODEL") or "").strip()
+        ollama_api_key = (os.getenv("OLLAMA_API_KEY") or "").strip()
+
+        if not ollama_model:
+            raise HTTPException(status_code=400, detail="OLLAMA_MODEL is required (set it in .env)")
+
+        chunks_sorted = sorted(
+            [
+                {"index": int(c.index), "content": str(c.content or "")}
+                for c in chunks
+                if c is not None and c.index is not None
+            ],
+            key=lambda x: x["index"],
+        )
+        if not chunks_sorted:
+            raise HTTPException(status_code=400, detail="chunks must include at least one item with a valid index")
+
+        chunk_block = "\n\n".join([f"[{c['index']}]\n{c['content']}" for c in chunks_sorted])
+
+        prompt = (
+            "You are a retrieval-grounded assistant.\n"
+            "Answer the user's question using ONLY the information provided in the CHUNKS.\n"
+            "If the CHUNKS do not contain enough information, say: Can't answer this question.\n"
+            "When you use a chunk, cite it inline using square brackets with the chunk number, e.g. [1] [3].\n\n"
+            f"QUESTION:\n{query}\n\n"
+            f"CHUNKS:\n{chunk_block}\n\n"
+            "ANSWER (with citations):\n"
+        )
+
+        headers: Dict[str, str] = {"Content-Type": "application/json"}
+        if ollama_api_key:
+            headers["Authorization"] = f"Bearer {ollama_api_key}"
+            headers["X-API-Key"] = ollama_api_key
+
+        url = f"{ollama_base_url}/api/generate"
+        resp = requests.post(
+            url,
+            headers=headers,
+            json={
+                "model": ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0},
+            },
+            timeout=180,
+        )
+        try:
+            data = resp.json()
+        except Exception:
+            raise HTTPException(status_code=502, detail=f"Ollama error: {resp.status_code}: {resp.text}")
+        if not resp.ok:
+            raise HTTPException(status_code=502, detail=f"Ollama error: {resp.status_code}: {data}")
+
+        answer = data.get("response") or ""
+
+        import re
+
+        refs = sorted({int(m.group(1)) for m in re.finditer(r"\[(\d+)\]", str(answer))})
+        return {"success": True, "answer": answer, "referenced_chunk_indices": refs}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in playground chat: {e}", stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for creating a knowledge base
