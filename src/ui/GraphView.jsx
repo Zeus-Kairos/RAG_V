@@ -107,6 +107,17 @@ function chunkEdgeMatchesFileAndChunkRun(link, fileId, chunkRunId) {
   return false;
 }
 
+function chunkEdgeMatchesChunkRun(link, chunkRunId) {
+  if (link?.type !== 'chunk') return false;
+  const a = link.attributes || {};
+  if (Number(a.chunk_run_id) === Number(chunkRunId)) return true;
+  const pl = a.file_parse_links;
+  if (Array.isArray(pl)) {
+    return pl.some((e) => Number(e.chunk_run_id) === Number(chunkRunId));
+  }
+  return false;
+}
+
 /**
  * Pipeline direction: document → parser → chunker → embedding.
  * No undirected hops (e.g. chunker → parser → unrelated chunker).
@@ -282,10 +293,11 @@ function isEdgeActive(link) {
   }
   if (link?.type === 'embed') {
     const runActive = a.chunk_run_is_active;
-    // Highlight every index run tied to the active chunk run, not only the edge whose
-    // embedding config is globally "active" (a chunk run can be indexed under multiple models).
     const okRun = runActive === undefined ? true : Boolean(runActive);
-    return okRun;
+    // Only highlight the edge between the globally active embedding config and the active chunker.
+    // Previously we highlighted *all* embedding edges tied to the active chunk run.
+    const okEmbedding = a.embedding_is_active === undefined ? true : Boolean(a.embedding_is_active);
+    return okRun && okEmbedding;
   }
   return true;
 }
@@ -342,6 +354,45 @@ function pickLatestParseLinkForChunkRun(links, fileId, chunkRunId) {
     if (ta !== tb) return ta > tb ? l : best;
     const ida = Number(a.parse_run_id) || 0;
     const idb = Number(b.parse_run_id) || 0;
+    return ida >= idb ? l : best;
+  });
+}
+
+/** Latest chunk edge (by parse_time, then parse_run_id) that references this chunk_run across the graph. */
+function pickLatestChunkLinkForChunkRun(links, chunkRunId) {
+  const candidates = links.filter((l) => chunkEdgeMatchesChunkRun(l, chunkRunId));
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, l) => {
+    const a = l.attributes || {};
+    const b = best.attributes || {};
+    const ta = timeScore(a.parse_time);
+    const tb = timeScore(b.parse_time);
+    if (ta !== tb) return ta > tb ? l : best;
+    const ida = Number(a.parse_run_id) || 0;
+    const idb = Number(b.parse_run_id) || 0;
+    return ida >= idb ? l : best;
+  });
+}
+
+/** Latest embed/index edge (by run_time, then chunk_run_id) for a chunker + embedding config pair. */
+function pickLatestEmbedLinkForChunkerEmbedding(links, chunkerId, embeddingId) {
+  const sid = String(chunkerId ?? '');
+  const tid = String(embeddingId ?? '');
+  if (!sid || !tid) return null;
+  const candidates = links.filter((l) => {
+    if (l.type !== 'embed') return false;
+    const { s, t } = linkEndpointIds(l);
+    return String(s) === sid && String(t) === tid;
+  });
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, l) => {
+    const a = l.attributes || {};
+    const b = best.attributes || {};
+    const ta = timeScore(a.run_time);
+    const tb = timeScore(b.run_time);
+    if (ta !== tb) return ta > tb ? l : best;
+    const ida = Number(a.chunk_run_id) || 0;
+    const idb = Number(b.chunk_run_id) || 0;
     return ida >= idb ? l : best;
   });
 }
@@ -711,6 +762,61 @@ function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } =
             throw new Error(prData.message || 'Failed to set active parse run');
           }
         }
+        await refetchGraph();
+      } catch (e) {
+        console.error(e);
+      }
+    },
+    [activeKB, baseGraphData.links, refetchGraph]
+  );
+
+  const handleEmbedEdgeDoubleClick = useCallback(
+    async (link) => {
+      if (!activeKB) return;
+      const { s, t } = linkEndpointIds(link);
+      // The graph node id may be namespaced like "embedding:<config_id>", but the API expects raw config_id.
+      // Prefer the edge attribute (embedding_configure_id) which is sourced from the DB.
+      const rawEmbeddingId = link?.attributes?.embedding_configure_id ?? t;
+      const embeddingId = String(rawEmbeddingId ?? '').startsWith('embedding:')
+        ? String(rawEmbeddingId).slice('embedding:'.length)
+        : String(rawEmbeddingId ?? '');
+      const chunkerId = s;
+      if (!chunkerId || !embeddingId) return;
+      try {
+        // 1) Set embedding config active
+        const encodedConfigId = encodeURIComponent(String(embeddingId));
+        const er = await fetchWithAuth(`/api/embedding_config/${encodedConfigId}/active`, { method: 'PATCH' });
+        const erBody = await er.json().catch(() => ({}));
+        if (!er.ok || erBody?.success === false) {
+          throw new Error(erBody?.detail || erBody?.message || 'Failed to set active embedding config');
+        }
+
+        // 2) Set the most recent related chunk run active for that chunker+embedding pair
+        const latest = pickLatestEmbedLinkForChunkerEmbedding(baseGraphData.links, chunkerId, embeddingId);
+        const chunkRunId = latest?.attributes?.chunk_run_id ?? link?.attributes?.chunk_run_id;
+        if (chunkRunId != null) {
+          const cr = await fetchWithAuth(`/api/chunk-runs/${chunkRunId}/active`, {
+            method: 'PATCH',
+            body: JSON.stringify({ knowledgebase_id: activeKB.id }),
+          });
+          if (!cr.ok) {
+            const err = await cr.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to set active chunk run');
+          }
+
+          // 3) Sync the most relevant parse run active so chunk edges light up (chunk edges require parse_is_active too).
+          const bestChunk = pickLatestChunkLinkForChunkRun(baseGraphData.links, chunkRunId);
+          const fileId = bestChunk?.attributes?.file_id;
+          const parseRunId = bestChunk?.attributes?.parse_run_id;
+          if (fileId != null && parseRunId != null) {
+            const pr = await fetchWithAuth(`/api/parse-runs/set-active/${fileId}/${parseRunId}`, { method: 'PUT' });
+            const prBody = await pr.json().catch(() => ({}));
+            if (!pr.ok || prBody?.success === false) {
+              throw new Error(prBody?.message || prBody?.detail || 'Failed to set active parse run');
+            }
+          }
+        }
+
         await refetchGraph();
       } catch (e) {
         console.error(e);
@@ -1310,6 +1416,8 @@ function GraphView({ hideNodeTypeDropdowns = false, hideDetailsPanel = false } =
                     void handleParseEdgeDoubleClick(link);
                   } else if (link.type === 'chunk') {
                     void handleChunkEdgeDoubleClick(link);
+                  } else if (link.type === 'embed') {
+                    void handleEmbedEdgeDoubleClick(link);
                   }
                   // Selection unchanged; show View again only after the double-click window.
                   edgeFabDelayTimerRef.current = setTimeout(() => {
