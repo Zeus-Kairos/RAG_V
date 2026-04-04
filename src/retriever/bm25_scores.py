@@ -1,16 +1,16 @@
+from __future__ import annotations
+
 from typing import Any, Iterable, List
-from langchain_core.documents import Document
-from rank_bm25 import BM25Okapi
 
 
 class BM25Scorer():
-    def __init__(self, vectorizer: BM25Okapi = None):
+    def __init__(self, vectorizer: Any = None):
         self.vectorizer = vectorizer
     
     @classmethod
     def from_documents(
         cls,
-        documents: Iterable[Document],
+        documents: Iterable[Any],
     ) -> "BM25Scorer":
         """
         Create a BM25 scorers from a list of documents.
@@ -19,6 +19,8 @@ class BM25Scorer():
             documents (List[Document]): The list of documents.
             **kwargs: Additional keyword arguments to pass to the BM25Scorer.
         """
+        from rank_bm25 import BM25Okapi
+
         tokenized_docs = [doc.page_content.split() for doc in documents]
         return cls(BM25Okapi(tokenized_docs))
 

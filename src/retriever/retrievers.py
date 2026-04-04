@@ -1,7 +1,5 @@
-import numpy as np
 from typing import List, Tuple, Optional, Dict
 from langchain_core.documents import Document
-from src.retriever.reranker import JinaReRanker
 from src.retriever.bm25_scores import BM25Scorer
 from src.file_process.indexer import Indexer
 from src.utils.logging_config import get_logger
@@ -144,6 +142,8 @@ class BM25BasedRetriever(BaseRetriever, retriever_name="bm25"):
         Returns:
             A list of tuples containing Document objects and their relevance scores
         """
+        import numpy as np
+
         bm25_scorer = BM25Scorer.from_documents(self.indexer.all_docs)
         bm25_scores = np.asarray(bm25_scorer.get_scores(query), dtype=float)
 
@@ -175,6 +175,8 @@ class FusionRetriever(BaseRetriever, retriever_name="fusion"):
         Returns:
             A list of tuples containing Document objects and their relevance scores
         """
+        import numpy as np
+
         # Get vector scores and BM25 scores
         all_docs_with_scores = self.indexer.vectorstore.similarity_search_with_relevance_scores("", k=self.indexer.vectorstore.index.ntotal)
         vector_scores = [score for _, score in all_docs_with_scores]
@@ -211,6 +213,8 @@ class RerankRetriever(BaseRetriever, retriever_name="rerank"):
             A list of tuples containing Document objects and their relevance scores
         """
         results = self.indexer.vectorstore.similarity_search(query, k=k*2)
+
+        from src.retriever.reranker import JinaReRanker
 
         reranker = JinaReRanker()
         reranked_results = reranker.rerank(query, results)

@@ -2,17 +2,6 @@ import os
 import shutil
 import tempfile
 from typing import Any, Dict
-from docling.datamodel.base_models import InputFormat
-from markitdown import MarkItDown
-from unstructured.partition.pdf import partition_pdf
-from unstructured.partition.auto import partition
-import pymupdf
-import pymupdf.layout
-import pymupdf4llm
-from pypdf import PdfReader, PdfWriter
-import pdfplumber
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.pipeline_options import PdfPipelineOptions
 
 from src.utils.logging_config import get_logger
 
@@ -74,13 +63,8 @@ class PymuPdfParser(BaseParser):
         Returns:
             Parsed markdown content as string
         """                           
-        # Extract directory from file path
-        # file_dir = os.path.dirname(file_path)
-        # file_name = os.path.basename(file_path)
-        # # Create images directory in the same directory as the file, using file name as subdirectory
-        # image_dir = os.path.join(file_dir, f"{os.path.splitext(file_name)[0]}_images")
-        # os.makedirs(image_dir, exist_ok=True)
-        
+        import pymupdf4llm
+
         md_text = pymupdf4llm.to_markdown(
             doc=file_path,  # The file, either as a file path or a PyMuPDF Document.
             headers=False,  # Optional, disables header detection logic.
@@ -119,6 +103,8 @@ class MarkitdownParser(BaseParser):
         Returns:
             Parsed markdown content as string
         """
+        from markitdown import MarkItDown
+
         md = MarkItDown(enable_plugins=False) # Set to True to enable plugins
         result = md.convert(file_path)
         return result.markdown
@@ -136,11 +122,14 @@ class UnstructuredParser(BaseParser):
         Parse a file and return the markdown content.
         
         Args:
-            file_path: Path to the file to parse
+            file_path: Path to the PDF file to parse
             
         Returns:
             Parsed markdown content as string
         """
+        from unstructured.partition.pdf import partition_pdf
+        from unstructured.partition.auto import partition
+
         if file_path.endswith(".pdf"):
             elements = partition_pdf(file_path, strategy="auto")
         else:
@@ -165,6 +154,8 @@ class PyMuPdfTextParser(BaseParser):
         Returns:
             Extracted text content as string
         """
+        import pymupdf
+
         page_texts = []
         with pymupdf.open(file_path) as doc:
             for page in doc:
@@ -190,6 +181,8 @@ class PyPdfParser(BaseParser):
         Returns:
             Parsed text content as string
         """
+        from pypdf import PdfReader
+
         reader = PdfReader(file_path)
         if "keep_layout" in self.parser_params and self.parser_params["keep_layout"]:
             extraction_mode = "layout"
@@ -215,6 +208,8 @@ class PdfPlumberParser(BaseParser):
         Returns:
             Parsed text content as string
         """
+        import pdfplumber
+
         with pdfplumber.open(file_path) as pdf:
                 text = "\n".join([page.extract_text(**self.parser_params) for page in pdf.pages])
         return text
@@ -237,6 +232,10 @@ class DoclingParser(BaseParser):
         Returns:
             Parsed text content as string
         """
+        from docling.datamodel.base_models import InputFormat
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+
         if file_path.endswith(".pdf"):
             pipeline_options = PdfPipelineOptions()
             pipeline_options.do_ocr = self.parser_params.get("ocr_enable", False)
@@ -271,6 +270,8 @@ class DoclingParser(BaseParser):
 
     def _repair_pdf_for_docling(self, file_path: str) -> str:
         """Rewrite PDF pages to normalize page boxes so Docling can read dimensions."""
+        from pypdf import PdfReader, PdfWriter
+
         fd, repaired_path = tempfile.mkstemp(suffix=".pdf", prefix="docling_repaired_")
         os.close(fd)
 

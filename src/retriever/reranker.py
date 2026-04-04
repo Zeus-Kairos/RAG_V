@@ -2,7 +2,6 @@ from typing import List
 import os
 import requests
 import json
-from transformers import AutoModel
 from langchain_core.documents import Document
 from src.utils.logging_config import get_logger
 
@@ -10,6 +9,8 @@ logger = get_logger(__name__)
 
 class JinaReRanker:
     def __init__(self, model_name='jinaai/jina-reranker-v3'):
+        from transformers import AutoModel
+
         # Initialize the reranker model; use_fp16=True speeds up computation with slight performance loss
         self.reranker = AutoModel.from_pretrained(
             'jinaai/jina-reranker-v3',

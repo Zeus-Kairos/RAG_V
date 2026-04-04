@@ -1,22 +1,8 @@
+from __future__ import annotations
+
 import re
 from dataclasses import asdict
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
-from chonkie import Pipeline
-
-try:
-    from docling.document_converter import DocumentConverter
-    from docling.datamodel.base_models import InputFormat
-    from docling.chunking import HybridChunker
-except Exception:  # pragma: no cover
-    DocumentConverter = None
-    InputFormat = None
-    HybridChunker = None
-
-try:
-    from chonkie import TableChunker
-except Exception:  # pragma: no cover
-    TableChunker = None
+from typing import Any
 
 
 class BaseFileSplitter:
@@ -99,6 +85,8 @@ class LangchainFileSplitter(BaseFileSplitter, splitter_name="langchain"):
     """Splitter that uses Langchain's text splitters."""
     
     def __init__(self, **kwargs):
+        from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
         # Use chunkers parameter similar to ChonkieFileSplitter
         self.chunkers = kwargs.get("chunkers", [
             {"chunker": "markdown_header", "params": {"header_levels": 3, "strip_headers": False}},
@@ -128,7 +116,9 @@ class LangchainFileSplitter(BaseFileSplitter, splitter_name="langchain"):
                         strip_whitespace=False)
                 })
     
-    def split_text(self, text: str, metadata: dict = None) -> list[Document]:
+    def split_text(self, text: str, metadata: dict = None) -> list[Any]:
+        from langchain_core.documents import Document
+
         # Fix mutable default argument issue
         if metadata is None:
             metadata = {}
@@ -178,7 +168,10 @@ class ChonkieFileSplitter(BaseFileSplitter, splitter_name="chonkie"):
         if self.chef not in ["markdown", "text", "table"]:
             raise ValueError(f"Invalid chef parameter: {self.chef}. Must be one of: markdown, text, table")
     
-    def split_text(self, text: str, metadata: dict = None) -> list[Document]:     
+    def split_text(self, text: str, metadata: dict = None) -> list[Any]:
+        from chonkie import Pipeline
+        from langchain_core.documents import Document
+
         pipeline = Pipeline().process_with(self.chef)
         for chunker in self.chunkers:
             pipeline = pipeline.chunk_with(chunker["chunker"], **chunker["params"])
@@ -257,12 +250,19 @@ class DoclingSplitter(BaseFileSplitter, splitter_name="docling"):
     def __init__(self, **kwargs):
         self.parser_params = kwargs
 
-    def split_text(self, text: str, metadata: dict = None) -> list[Document]:
-        if DocumentConverter is None or InputFormat is None or HybridChunker is None:
+    def split_text(self, text: str, metadata: dict = None) -> list[Any]:
+        try:
+            from docling.chunking import HybridChunker
+            from docling.datamodel.base_models import InputFormat
+            from docling.document_converter import DocumentConverter
+        except Exception as exc:  # pragma: no cover
             raise ImportError(
                 "DoclingSplitter requires 'docling' and its dependencies. "
                 "Install the docling extra/deps (e.g. numpy/pandas) or use a different splitter."
-            )
+            ) from exc
+
+        from langchain_core.documents import Document
+
         filename = metadata.get("filename", None)
         masked = _mask_latex_double_backslash_in_math(text)
         converter = DocumentConverter()
@@ -291,7 +291,7 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         self.parser_params = kwargs
         self._table_chunker = None
 
-    def split_text(self, text: str, metadata: dict = None) -> list[Document]:
+    def split_text(self, text: str, metadata: dict = None) -> list[Any]:
         """Split text into chunks.
         
         Args:
@@ -301,6 +301,10 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         Returns:
             List of Document objects
         """
+        from chonkie import Pipeline
+        from langchain_core.documents import Document
+        from langchain_text_splitters import MarkdownHeaderTextSplitter
+
         # Initialize TableChunker only when explicitly enabled (UI sends table_chunk_enabled).
         # If table_chunk_enabled is absent, keep legacy behavior: default size 3 when flag not used.
         self._table_chunker = None
@@ -310,11 +314,12 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         else:
             table_chunk_size = self.parser_params.get("table_chunk_size", 3)
             table_tokenizer = self.parser_params.get("table_tokenizer", "row")
-            if TableChunker is not None:
-                try:
-                    self._table_chunker = TableChunker(tokenizer=table_tokenizer, chunk_size=table_chunk_size)
-                except Exception:
-                    pass    
+            try:
+                from chonkie import TableChunker
+
+                self._table_chunker = TableChunker(tokenizer=table_tokenizer, chunk_size=table_chunk_size)
+            except Exception:
+                pass
 
         header_levels = self.parser_params.get("header_levels", 3)
         headers_to_split_on = [("#"*i, f"Header {i}") for i in range(1, header_levels + 1)]
@@ -332,7 +337,7 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
             documents.extend(splits)
         return documents
 
-    def _split_pipeline(self, pipeline: Pipeline, doc: Document, chunk_index: int, metadata: dict) -> list[Document]:
+    def _split_pipeline(self, pipeline: Any, doc: Any, chunk_index: int, metadata: dict) -> tuple[list[Any], int]:
         """Split document into recursive chunks with Chonkie pipeline.
         
         Args:
@@ -344,6 +349,8 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         Returns:
             List of Document objects and updated chunk_index
         """
+        from langchain_core.documents import Document
+
         document = pipeline.run(doc.page_content)
         chunks = getattr(document, 'chunks', [])
         images = getattr(document, 'images', [])
