@@ -23,7 +23,7 @@ function extractBracketRefs(answerText) {
   return uniqSortedNums(out);
 }
 
-export default function Playground() {
+export default function Playground({ mainViewApi = null }) {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find((kb) => kb.is_active) || knowledgebases[0];
 
@@ -306,7 +306,7 @@ export default function Playground() {
   return (
     <div className="playground">
       <div className="playground-pane playground-left">
-        <GraphView hideNodeTypeDropdowns hideDetailsPanel />
+        <GraphView hideNodeTypeDropdowns hideDetailsPanel mainViewApi={mainViewApi} />
       </div>
 
       <div className="playground-pane playground-right">

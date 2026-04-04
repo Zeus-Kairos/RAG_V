@@ -127,7 +127,7 @@ const Dashboard = ({ mainViewApi = null }) => {
       {activeView === 'parse' && error && <div className="dashboard-error">{error}</div>}
 
       {activeView === 'playground' ? (
-        <Playground />
+        <Playground mainViewApi={mainViewApi} />
       ) : activeView === 'graph' ? (
         <GraphView mainViewApi={mainViewApi} />
       ) : isLoading ? (
