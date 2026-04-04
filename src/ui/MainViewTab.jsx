@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import './MainViewTab.css';
 
-export default function MainViewTab({ mainView, onClose }) {
+export default function MainViewTab({ mainView }) {
   const iframeRef = useRef(null);
   const [renderMd, setRenderMd] = useState(false);
   const [chunkOnly, setChunkOnly] = useState(false);
@@ -93,9 +93,6 @@ export default function MainViewTab({ mainView, onClose }) {
               {chunkOnly ? 'Full document' : 'Chunk only'}
             </button>
           )}
-          <button type="button" className="main-view-tab__close" onClick={onClose}>
-            Close
-          </button>
         </div>
       </div>
       <div className="main-view-tab__body">

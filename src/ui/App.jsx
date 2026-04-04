@@ -1,5 +1,5 @@
 import './index.css';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import useKnowledgebaseStore from './store';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import EmbeddingSettings from './EmbeddingSettings';
@@ -35,6 +35,8 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   /** Inline visualization (parsed text / chunk viz) opened from Dashboard graph — top-level tab after Dashboard. */
   const [mainView, setMainView] = useState(null);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
 
   const beginParsedMainView = useCallback((fileName) => {
     setMainView({
@@ -55,6 +57,7 @@ function App() {
   }, []);
 
   const setMainViewReady = useCallback((html, headline, viewKind, options = {}) => {
+    if (activeTabRef.current !== 'view') return;
     setMainView({
       phase: 'ready',
       html,
@@ -66,6 +69,7 @@ function App() {
   }, []);
 
   const setMainViewError = useCallback((headline, message) => {
+    if (activeTabRef.current !== 'view') return;
     setMainView({
       phase: 'error',
       headline,
@@ -74,21 +78,22 @@ function App() {
     setActiveTab('view');
   }, []);
 
-  const closeMainView = useCallback(() => {
-    setMainView(null);
-    setActiveTab((t) => (t === 'view' ? 'dashboard' : t));
-  }, []);
-
   const mainViewApi = useMemo(
     () => ({
       beginParsedMainView,
       beginChunksMainView,
       setMainViewReady,
       setMainViewError,
-      closeMainView,
     }),
-    [beginParsedMainView, beginChunksMainView, setMainViewReady, setMainViewError, closeMainView]
+    [beginParsedMainView, beginChunksMainView, setMainViewReady, setMainViewError]
   );
+
+  /** Leaving View clears inline visualization so the View tab disappears. */
+  useEffect(() => {
+    if (activeTab !== 'view') {
+      setMainView(null);
+    }
+  }, [activeTab]);
 
   // Initialize the app when it loads
   useEffect(() => {
@@ -181,9 +186,7 @@ function App() {
               <Dashboard mainViewApi={mainViewApi} />
             </ErrorBoundary>
           )}
-          {activeTab === 'view' && mainView && (
-            <MainViewTab mainView={mainView} onClose={closeMainView} />
-          )}
+          {activeTab === 'view' && mainView && <MainViewTab mainView={mainView} />}
           {activeTab === 'chunk' && <ChunkBrowser />}
           {activeTab === 'knowledgebase' && (
             <ErrorBoundary>

@@ -118,22 +118,6 @@
   border-color: #333;
 }
 
-.main-view-tab__close {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
-  background: #fff;
-  color: #202124;
-}
-
-.main-view-tab__close:hover {
-  background: #f1f3f4;
-}
-
 .main-view-tab__body {
   flex: 1;
   min-height: 0;
