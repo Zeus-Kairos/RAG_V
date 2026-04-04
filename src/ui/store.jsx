@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 import parserConfig from './parserConfig.json';
+import {
+  applyChonkieOverlapCaps,
+  getDefaultChonkieParamsForType,
+  getFallbackNewChonkieChunkerParams,
+  getFlatFrameworkStoreGroup,
+  getInitialSplitterSettingsFromConfig,
+  getKnownChonkieTypes,
+  mergeFlatFrameworkSettingsPatch,
+} from './splitterUtils';
 
 // Helper function to get default parameters for a framework
 const getDefaultParamsForFramework = (fileType, framework) => {
@@ -86,50 +95,7 @@ const useKnowledgebaseStore = create((set, get) => {
     // Active framework state for synchronization between components
     activeFramework: 'langchain',
     
-    // Splitter settings state
-    splitterSettings: {
-      isMarkdownEnabled: true,
-      isRecursiveEnabled: true,
-      markdownSettings: {
-        headerLevels: 3,
-        stripHeaders: false
-      },
-      recursiveSettings: {
-        chunkSize: 1000,
-        chunkOverlap: 100
-      },
-      // Chonkie splitter settings
-      chonkieSettings: {
-        chef: "markdown", // Default chef parameter
-        chunkers: [
-          {
-            type: "Sentence",
-            params: {
-              chunkSize: 1000,
-              chunkOverlap: 100
-            }
-          }
-        ] // Array of chunker objects with their own parameters
-      },
-      // Docling splitter settings
-      doclingSettings: {
-        tokenizer: "sentence-transformers/all-MiniLM-L6-v2",
-        maxTokens: 1000,
-        useDefaultMaxTokens: true,
-        mergePeers: true
-      },
-      // Hybrid splitter settings
-      hybridSettings: {
-        headerLevels: 3,
-        chunkSize: 1000,
-        // Table chunker settings (Chonkie TableChunker)
-        tableChunkEnabled: false,
-        tableTokenizer: "row",
-        // Keep per-tokenizer values so switching modes preserves settings
-        tableChunkSizeRow: 3,
-        tableChunkSizeCharacter: 200
-      }
-    },
+    splitterSettings: getInitialSplitterSettingsFromConfig(),
     
     // Parser settings state
     parserSettings: {
@@ -484,28 +450,23 @@ const useKnowledgebaseStore = create((set, get) => {
       });
     },
     
-    updateDoclingSettings: (settings) => {
-      set(prev => ({
-        splitterSettings: {
-          ...prev.splitterSettings,
-          doclingSettings: {
-            ...prev.splitterSettings.doclingSettings,
-            ...settings
-          }
-        }
-      }));
-    },
-    
-    updateHybridSettings: (settings) => {
-      set(prev => ({
-        splitterSettings: {
-          ...prev.splitterSettings,
-          hybridSettings: {
-            ...prev.splitterSettings.hybridSettings,
-            ...settings
-          }
-        }
-      }));
+    /**
+     * Update any flat splitter framework (storeGroup + fields in splitterConfig): docling, hybrid, and new ones.
+     * Langchain / chonkie keep their dedicated actions.
+     */
+    updateSplitterFlatFramework: (frameworkId, partial) => {
+      set((prev) => {
+        const storeGroup = getFlatFrameworkStoreGroup(frameworkId);
+        if (!storeGroup) return prev;
+        const prevGroup = prev.splitterSettings[storeGroup] || {};
+        const nextGroup = mergeFlatFrameworkSettingsPatch(frameworkId, prevGroup, partial);
+        return {
+          splitterSettings: {
+            ...prev.splitterSettings,
+            [storeGroup]: nextGroup,
+          },
+        };
+      });
     },
     
     updateChonkieSettings: (settings) => {
@@ -532,46 +493,14 @@ const useKnowledgebaseStore = create((set, get) => {
             // Remove chunker if it's already in the array
             updatedChunkers.splice(existingIndex, 1);
           } else {
-            // Add new chunker with default params based on type
-            let newChunker;
-            switch (chunkerType) {
-              case "Sentence":
-                newChunker = {
-                  type: chunkerType,
-                  params: {
-                    chunkSize: 1000,
-                    chunkOverlap: 100
-                  }
-                };
-                break;
-              case "Recursive":
-                newChunker = {
-                  type: chunkerType,
-                  params: {
-                    chunkSize: 1000
-                  }
-                };
-                break;
-              case "Semantic":
-                newChunker = {
-                  type: chunkerType,
-                  params: {
-                    chunkSize: 1000,
-                    threshold: 0.8,
-                    similarityWindow: 3
-                  }
-                };
-                break;
-              default:
-                // Default chunker params
-                newChunker = {
-                  type: chunkerType,
-                  params: {
-                    chunkSize: 1000
-                  }
-                };
-            }
-            updatedChunkers.push(newChunker);
+            const known = getKnownChonkieTypes();
+            const params = known.includes(chunkerType)
+              ? getDefaultChonkieParamsForType(chunkerType)
+              : getFallbackNewChonkieChunkerParams();
+            updatedChunkers.push({
+              type: chunkerType,
+              params,
+            });
           }
           
           updatedChonkieSettings.chunkers = updatedChunkers;
@@ -581,30 +510,16 @@ const useKnowledgebaseStore = create((set, get) => {
         if (settings.chunkerIndex !== undefined && settings.params !== undefined) {
           const updatedChunkers = [...prev.splitterSettings.chonkieSettings.chunkers];
           if (updatedChunkers[settings.chunkerIndex]) {
-            // Create updated params
-            const updatedParams = {
+            const chunkerType = updatedChunkers[settings.chunkerIndex].type;
+            let updatedParams = {
               ...updatedChunkers[settings.chunkerIndex].params,
-              ...settings.params
+              ...settings.params,
             };
-            
-            // Ensure chunkOverlap doesn't exceed half of chunkSize for Sentence chunker
-            if (updatedChunkers[settings.chunkerIndex].type === "Sentence") {
-              if (settings.params.chunkSize !== undefined) {
-                updatedParams.chunkOverlap = Math.min(
-                  updatedParams.chunkOverlap,
-                  Math.floor(updatedParams.chunkSize / 2)
-                );
-              } else if (settings.params.chunkOverlap !== undefined) {
-                updatedParams.chunkOverlap = Math.min(
-                  updatedParams.chunkOverlap,
-                  Math.floor(updatedChunkers[settings.chunkerIndex].params.chunkSize / 2)
-                );
-              }
-            }
-            
+            updatedParams = applyChonkieOverlapCaps(chunkerType, updatedParams);
+
             updatedChunkers[settings.chunkerIndex] = {
               ...updatedChunkers[settings.chunkerIndex],
-              params: updatedParams
+              params: updatedParams,
             };
             
             updatedChonkieSettings.chunkers = updatedChunkers;
@@ -690,39 +605,7 @@ const useKnowledgebaseStore = create((set, get) => {
         embeddingConfigs: [],
         activeEmbeddingConfig: null,
         activeFramework: 'langchain',
-        splitterSettings: {
-          isMarkdownEnabled: true,
-          isRecursiveEnabled: true,
-          markdownSettings: {
-            headerLevels: 3,
-            stripHeaders: false
-          },
-          recursiveSettings: {
-            chunkSize: 1000,
-            chunkOverlap: 100
-          },
-          chonkieSettings: {
-            chunkers: [
-              {
-                type: "Sentence",
-                params: {
-                  chunkSize: 1000,
-                  chunkOverlap: 100
-                }
-              }
-            ]
-          },
-          doclingSettings: {
-            tokenizer: "sentence-transformers/all-MiniLM-L6-v2",
-            maxTokens: 1000,
-            useDefaultMaxTokens: true,
-            mergePeers: true
-          },
-          hybridSettings: {
-            headerLevels: 3,
-            chunkSize: 1000
-          }
-        },
+        splitterSettings: getInitialSplitterSettingsFromConfig(),
         parserSettings: {
           pdf: {
             framework: parserConfig.parsers.pdf.defaultFramework,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useKnowledgebaseStore from './store';
+import { buildChunkingFormData } from './splitterUtils';
 import './ChunkBrowser.css';
 
 const ChunkBrowser = () => {
@@ -16,9 +17,6 @@ const ChunkBrowser = () => {
   
   // Get active knowledgebase
   const activeKnowledgebase = knowledgebases.find(kb => kb.is_active === 1) || knowledgebases[0];
-  
-  // Destructure doclingSettings from splitterSettings
-  const { doclingSettings } = splitterSettings;
   
   // Fetch chunk runs when component mounts or active knowledgebase changes
   useEffect(() => {
@@ -59,108 +57,7 @@ const ChunkBrowser = () => {
       setShowChunkingModal(true);
       setChunkingResults([]);
       
-      // Prepare form data with splitter settings
-      const formData = new FormData();
-      
-      if (activeFramework === 'langchain') {
-        // Langchain framework settings
-        formData.append('framework', 'langchain');
-        
-        // Prepare chunkers array from Langchain settings
-        const chunkers = [];
-        
-        // Add markdown_header chunker if enabled
-        if (splitterSettings.isMarkdownEnabled) {
-          chunkers.push({
-            "chunker": "markdown_header",
-            "params": {
-              "header_levels": splitterSettings.markdownSettings.headerLevels,
-              "strip_headers": splitterSettings.markdownSettings.stripHeaders
-            }
-          });
-        }
-        
-        // Add recursive chunker if enabled
-        if (splitterSettings.isRecursiveEnabled) {
-          chunkers.push({
-            "chunker": "recursive",
-            "params": {
-              "chunk_size": splitterSettings.recursiveSettings.chunkSize,
-              "chunk_overlap": splitterSettings.recursiveSettings.chunkOverlap
-            }
-          });
-        }
-        
-        // Add chunkers as JSON string
-        formData.append('chunkers', JSON.stringify(chunkers));
-      } else if (activeFramework === 'chonkie') {
-        // Chonkie framework settings
-        formData.append('framework', 'chonkie');
-        formData.append('chef', splitterSettings.chonkieSettings.chef);
-        
-        // Prepare chunkers array from the selected chunkers with their individual parameters
-        const chunkers = splitterSettings.chonkieSettings.chunkers.map(chunker => {
-          // Convert chunker type to lowercase for the backend
-          const chunkerType = chunker.type.toLowerCase();
-          
-          // Prepare params object based on chunker type
-          let params = {
-            "chunk_size": chunker.params.chunkSize
-          };
-          
-          // Add Sentence-specific params
-          if (chunker.type === "Sentence" && chunker.params.chunkOverlap !== undefined) {
-            params["chunk_overlap"] = chunker.params.chunkOverlap;
-          }
-          // Add Semantic-specific params
-          if (chunker.type === "Semantic") {
-            if (chunker.params.threshold !== undefined) {
-              params["threshold"] = chunker.params.threshold;
-            }
-            if (chunker.params.similarityWindow !== undefined) {
-              params["similarity_window"] = chunker.params.similarityWindow;
-            }
-          }
-          
-          return {
-            "chunker": chunkerType,
-            "params": params
-          };
-        });
-        
-        // Add chunkers as JSON string
-        formData.append('chunkers', JSON.stringify(chunkers));
-      } else if (activeFramework === 'docling') {
-        // Docling framework settings
-        formData.append('framework', 'docling');
-        
-        // Add Docling-specific parameters
-        if (doclingSettings.tokenizer) {
-          formData.append('tokenizer', doclingSettings.tokenizer);
-        }
-        if (!doclingSettings.useDefaultMaxTokens) {
-          formData.append('max_tokens', doclingSettings.maxTokens.toString());
-        }
-        formData.append('merge_peers', doclingSettings.mergePeers.toString());
-      } else if (activeFramework === 'hybrid') {
-        // Hybrid framework settings
-        formData.append('framework', 'hybrid');
-        
-        // Add Hybrid-specific parameters
-        formData.append('header_levels', splitterSettings.hybridSettings.headerLevels.toString());
-        formData.append('chunk_size', splitterSettings.hybridSettings.chunkSize.toString());
-        const tableChunkOn = splitterSettings.hybridSettings.tableChunkEnabled === true;
-        formData.append('table_chunk_enabled', tableChunkOn ? 'true' : 'false');
-        const tableTokenizer = splitterSettings.hybridSettings.tableTokenizer || "row";
-        const tableChunkSize =
-          tableTokenizer === 'character'
-            ? (splitterSettings.hybridSettings.tableChunkSizeCharacter ?? 200)
-            : (splitterSettings.hybridSettings.tableChunkSizeRow ?? 3);
-        if (tableChunkOn && tableChunkSize > 0) {
-          formData.append('table_chunk_size', tableChunkSize.toString());
-          formData.append('table_tokenizer', tableTokenizer);
-        }
-      }
+      const formData = buildChunkingFormData(activeFramework, splitterSettings);
       
       // Send request to chunk-files endpoint
       const response = await fetch(`http://localhost:8000/api/chunk-files/${activeKnowledgebase.id}`, {

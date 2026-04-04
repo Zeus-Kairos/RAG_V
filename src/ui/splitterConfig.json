@@ -1,0 +1,234 @@
+{
+  "frameworkOrder": ["langchain", "chonkie", "docling", "hybrid"],
+  "frameworks": {
+    "langchain": {
+      "label": "Langchain",
+      "pipeline": [
+        {
+          "apiChunker": "markdown_header",
+          "sectionLabel": "Markdown Splitter",
+          "toggleKey": "isMarkdownEnabled",
+          "storeGroup": "markdownSettings",
+          "defaultEnabled": true,
+          "fields": {
+            "headerLevels": {
+              "type": "int",
+              "label": "Header Levels",
+              "ui": "slider",
+              "min": 1,
+              "max": 10,
+              "default": 3
+            },
+            "stripHeaders": {
+              "type": "boolean",
+              "label": "Strip Headers",
+              "default": false
+            }
+          }
+        },
+        {
+          "apiChunker": "recursive",
+          "sectionLabel": "Recursive Character Splitter",
+          "toggleKey": "isRecursiveEnabled",
+          "storeGroup": "recursiveSettings",
+          "defaultEnabled": true,
+          "fields": {
+            "chunkSize": {
+              "type": "int",
+              "label": "Chunk Size",
+              "ui": "sliderWithInput",
+              "min": 50,
+              "max": 10000,
+              "default": 1000
+            },
+            "chunkOverlap": {
+              "type": "int",
+              "label": "Chunk Overlap",
+              "ui": "sliderWithInput",
+              "min": 0,
+              "maxFromHalfOf": "chunkSize",
+              "default": 100
+            }
+          }
+        }
+      ]
+    },
+    "chonkie": {
+      "label": "Chonkie",
+      "chef": {
+        "storePath": "chef",
+        "label": "Chef",
+        "type": "enum",
+        "default": "markdown",
+        "options": [
+          { "value": "markdown", "label": "Markdown" },
+          { "value": "text", "label": "Text" },
+          { "value": "table", "label": "Table" }
+        ]
+      },
+      "chunkerCatalog": [
+        {
+          "type": "Sentence",
+          "label": "Sentence",
+          "fields": {
+            "chunkSize": {
+              "type": "int",
+              "label": "Chunk Size",
+              "ui": "sliderWithInput",
+              "min": 50,
+              "max": 10000,
+              "default": 1000
+            },
+            "chunkOverlap": {
+              "type": "int",
+              "label": "Chunk Overlap",
+              "ui": "sliderWithInput",
+              "min": 0,
+              "maxFromHalfOf": "chunkSize",
+              "default": 100
+            }
+          }
+        },
+        {
+          "type": "Recursive",
+          "label": "Recursive",
+          "fields": {
+            "chunkSize": {
+              "type": "int",
+              "label": "Chunk Size",
+              "ui": "sliderWithInput",
+              "min": 50,
+              "max": 10000,
+              "default": 1000
+            }
+          }
+        },
+        {
+          "type": "Semantic",
+          "label": "Semantic",
+          "fields": {
+            "chunkSize": {
+              "type": "int",
+              "label": "Chunk Size",
+              "ui": "sliderWithInput",
+              "min": 50,
+              "max": 10000,
+              "default": 1000
+            },
+            "threshold": {
+              "type": "float",
+              "label": "Threshold",
+              "ui": "sliderWithInput",
+              "min": 0,
+              "max": 1,
+              "step": 0.1,
+              "default": 0.8
+            },
+            "similarityWindow": {
+              "type": "int",
+              "label": "Similarity Window",
+              "ui": "sliderWithInput",
+              "min": 1,
+              "max": 10,
+              "default": 3
+            }
+          }
+        }
+      ],
+      "initialChunkerTypes": ["Sentence"]
+    },
+    "docling": {
+      "label": "Docling",
+      "storeGroup": "doclingSettings",
+      "fields": {
+        "tokenizer": {
+          "type": "string",
+          "label": "Tokenizer",
+          "ui": "text",
+          "placeholder": "Name or path of Hugging Face pretrained model",
+          "description": "name or path of HuggingFace pretrained model",
+          "default": "sentence-transformers/all-MiniLM-L6-v2",
+          "formSkipWhenEmpty": true
+        },
+        "useDefaultMaxTokens": {
+          "type": "boolean",
+          "label": "Use Default (Max Tokens)",
+          "default": true
+        },
+        "maxTokens": {
+          "type": "int",
+          "label": "Max Tokens",
+          "ui": "sliderWithInput",
+          "min": 100,
+          "max": 5000,
+          "default": 1000,
+          "disabledWhen": { "field": "useDefaultMaxTokens", "equals": true },
+          "formSkipWhen": { "field": "useDefaultMaxTokens", "equals": true },
+          "description": "The maximum number of tokens per chunk. If use default, limit is resolved from the tokenizer"
+        },
+        "mergePeers": {
+          "type": "boolean",
+          "label": "Merge Peers",
+          "default": true
+        }
+      }
+    },
+    "hybrid": {
+      "label": "Hybrid",
+      "storeGroup": "hybridSettings",
+      "fields": {
+        "headerLevels": {
+          "type": "int",
+          "label": "Header Levels",
+          "ui": "slider",
+          "min": 1,
+          "max": 10,
+          "default": 3
+        },
+        "stripHeaders": {
+              "type": "boolean",
+              "label": "Strip Headers",
+              "default": true
+        },
+        "chunkSize": {
+          "type": "int",
+          "label": "Chunk Size",
+          "ui": "sliderWithInput",
+          "min": 50,
+          "max": 10000,
+          "default": 1000
+        },
+        "tableChunkEnabled": {
+          "type": "boolean",
+          "label": "Enable Table Chunker",
+          "default": false
+        },
+        "tableTokenizer": {
+          "type": "enum",
+          "label": "Table Tokenizer",
+          "options": [
+            { "value": "row", "label": "row" },
+            { "value": "character", "label": "character" }
+          ],
+          "default": "row",
+          "disabledWhen": { "field": "tableChunkEnabled", "equals": false },
+          "formSkipWhen": { "field": "tableChunkEnabled", "equals": false }
+        },
+        "tableChunkSize": {
+          "type": "int",
+          "label": "Table Chunk Size",
+          "ui": "sliderWithInput",
+          "hybridTableSize": true,
+          "defaultRow": 3,
+          "defaultCharacter": 200,
+          "maxInputRow": 1000,
+          "sliderMaxRow": 50,
+          "maxInputCharacter": 20000,
+          "sliderMaxCharacter": 2000,
+          "disabledWhen": { "field": "tableChunkEnabled", "equals": false },
+          "description": "Defaults: row=3 (rows), character=200 (chars). Chunking preserves table headers."
+        }
+      }
+    }
+  }
+}
