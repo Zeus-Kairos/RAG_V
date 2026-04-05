@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
 from src.file_process.indexer import Indexer
-from src.utils.paths import get_index_path, get_upload_dir
+from src.utils.paths import get_upload_dir
 from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
 from src.retriever.retrievers import BaseRetriever
@@ -77,7 +77,12 @@ def get_indexer(knowledge_base: str, chunk_run_id: int = None, embedding_config_
 
     indexer_key = f"{knowledge_base}_{chunk_run_id}_{embedding_config_id}"
     if indexer_key not in indexers:
-        indexers[indexer_key] = Indexer(embedding_config_id, get_index_path(knowledge_base, chunk_run_id, embedding_config_id))
+        indexers[indexer_key] = Indexer(
+            embedding_config_id,
+            memory_manager.conn,
+            chunk_run_id,
+            memory_manager.chunking_manager,
+        )
     return indexers[indexer_key]
 
 @asynccontextmanager

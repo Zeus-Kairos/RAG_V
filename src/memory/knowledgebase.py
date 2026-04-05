@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
 
+from src.memory.vector_store import delete_vectors_for_chunk_pks
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -436,7 +437,11 @@ class KnowledgebaseManager:
                 return False
             
             knowledgebase_id = file[0]
-            
+
+            cur.execute("SELECT id FROM chunks WHERE file_id = ?", (file_id,))
+            chunk_pks = [int(r[0]) for r in cur.fetchall()]
+            delete_vectors_for_chunk_pks(self.conn, chunk_pks)
+
             # Delete the file
             cur.execute(
                 "DELETE FROM files WHERE file_id = ?",
@@ -538,7 +543,15 @@ class KnowledgebaseManager:
                 (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
             )
             knowledgebase_ids = [row[0] for row in cur.fetchall()]
-            
+
+            cur.execute(
+                "SELECT c.id FROM chunks c INNER JOIN files f ON c.file_id = f.file_id "
+                "WHERE f.filepath LIKE ? ESCAPE '\\' OR f.filepath LIKE ? ESCAPE '\\'",
+                (f"{path_prefix_windows}%", f"{path_prefix_unix}%"),
+            )
+            chunk_pks = [int(r[0]) for r in cur.fetchall()]
+            delete_vectors_for_chunk_pks(self.conn, chunk_pks)
+
             # Delete the files
             cur.execute(
                 "DELETE FROM files WHERE filepath LIKE ? ESCAPE '\\' OR filepath LIKE ? ESCAPE '\\'",
@@ -581,6 +594,9 @@ class KnowledgebaseManager:
             
             if file_info:
                 file_id, knowledgebase_id = file_info
+                cur.execute("SELECT id FROM chunks WHERE file_id = ?", (file_id,))
+                chunk_pks = [int(r[0]) for r in cur.fetchall()]
+                delete_vectors_for_chunk_pks(self.conn, chunk_pks)
                 # Delete the file
                 cur.execute(
                     "DELETE FROM files WHERE filepath = ?",

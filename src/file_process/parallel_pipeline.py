@@ -5,8 +5,8 @@ from typing import List, Dict, Any, AsyncGenerator
 from fastapi import UploadFile
 from langchain_core.documents import Document
 from src.file_process.utils import SUPPORTED_FORMATS
-from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
+from src.utils.paths import get_upload_dir
 from src.file_process.file_splitter import BaseFileSplitter
 from src.file_process.multimodal_splitter_helpers import multimodal_chunk_run_warning
 from src.file_process.file_upload import FileUploader
@@ -23,7 +23,6 @@ class ParallelFileProcessingPipeline:
         self.file_uploader = None
         self.file_parser = None
         self.file_splitter = None
-        self.indexer = None
         self.memory_manager = memory_manager or MemoryManager()     
     
     async def process_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> AsyncGenerator[Dict[str, Any], None]:
@@ -50,9 +49,6 @@ class ParallelFileProcessingPipeline:
             self.file_parser = FileParser()
         if not self.file_splitter:
             self.file_splitter = BaseFileSplitter.create("langchain")  # Default to LangchainFileSplitter
-        if not self.indexer:
-            self.indexer = Indexer()  # Initialize indexer if not provided in constructor
-        
         # Create tasks for parallel processing of each file
         tasks = []
         for file in files:
@@ -72,8 +68,6 @@ class ParallelFileProcessingPipeline:
                 logger.error(f"Unexpected error in parallel processing: {e}")
                 # This shouldn't happen as _process_single_file handles exceptions internally
 
-        self.indexer.save_index()
-    
     async def _process_single_file(self, knowledge_base: str, file: UploadFile, upload_dir: str) -> Dict[str, Any]:
         """Process a single file through upload, parsing, database insertion, splitting, and indexing.
         
@@ -141,11 +135,7 @@ class ParallelFileProcessingPipeline:
                 }
                 documents = await asyncio.to_thread(self.file_splitter.split_text, content, metadata)
                 logger.info(f"File split into {len(documents)} documents: {filename}")
-                
-                # Step 5: Index chunks (run sync method in thread pool)
-                vectorstore = await asyncio.to_thread(self.indexer.index_chunks, {file_id: documents})
                 file_result["chunks_count"] = len(documents)
-                logger.info(f"File indexed successfully: {filename}, chunks: {len(documents)}")
             else:
                 file_result["status"] = "failed"
                 file_result["parsed"] = False
@@ -452,7 +442,8 @@ class ParallelFileProcessingPipeline:
                 })
             
             # Save chunks to the chunks table
-            chunks_added = self.memory_manager.chunking_manager.add_chunks(chunks_to_insert)
+            chunk_row_ids = self.memory_manager.chunking_manager.add_chunks(chunks_to_insert)
+            chunks_added = len(chunk_row_ids)
             
             logger.info(f"Chunked file: {filename}, chunks: {len(documents)}")
 
@@ -643,7 +634,14 @@ class ParallelFileProcessingPipeline:
             Dict containing indexing results for the batch
         """
         try:
-            docs = [Document(page_content=chunk["content"], id=chunk["chunk_id"], metadata=chunk["metadata"]) for chunk in batch]
+            docs = [
+                Document(
+                    page_content=chunk["content"],
+                    id=str(chunk["chunk_id"]),
+                    metadata={**chunk["metadata"], "chunk_pk": chunk["id"]},
+                )
+                for chunk in batch
+            ]
             # Index the batch of chunks
             self.indexer.index_chunks(docs)
             

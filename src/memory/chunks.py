@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
 
+from src.memory.vector_store import delete_vectors_for_chunk_pks
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -220,42 +221,36 @@ class ChunkingManager:
             logger.error(f"Error getting active chunk processing config: {e}")
             raise
     
-    def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:
+    def add_chunks(self, chunks: List[Dict[str, Any]]) -> List[int]:
         """
         Add chunks to the chunks table.
-        
-        Args:
-            chunks: List of chunk dictionaries, each containing chunk_id, file_id, chunk_run_id, content, and optional metadata
-            
+
         Returns:
-            The number of chunks added or updated
+            Primary key ``id`` for each inserted row, in input order.
         """
         try:
             cur = self.conn.cursor()
-            
-            # Prepare data for insertion
-            chunk_data = []
+            ids: List[int] = []
             for chunk in chunks:
-                chunk_data.append((
-                    chunk["chunk_id"],
-                    chunk["file_id"],
-                    chunk["parse_run_id"],
-                    chunk["chunk_run_id"],
-                    chunk["content"],
-                    json.dumps(chunk.get("metadata", {}))
-                ))
-            
-            # Insert chunks with UPSERT (update if chunk_id exists)
-            cur.executemany(
-                """
-                INSERT INTO chunks (chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata) 
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                chunk_data
-            )
-            
+                cur.execute(
+                    """
+                    INSERT INTO chunks (chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    RETURNING id
+                    """,
+                    (
+                        chunk["chunk_id"],
+                        chunk["file_id"],
+                        chunk["parse_run_id"],
+                        chunk["chunk_run_id"],
+                        chunk["content"],
+                        json.dumps(chunk.get("metadata", {})),
+                    ),
+                )
+                row = cur.fetchone()
+                ids.append(int(row[0]))
             self.conn.commit()
-            return cur.rowcount
+            return ids
         except Exception as e:
             logger.error(f"Error adding chunks: {e}")
             raise
@@ -271,7 +266,7 @@ class ChunkingManager:
             if chunk_run_ids:
                 # Explicit chunk runs (e.g. graph edge / history): include non-active parses.
                 cur.execute(
-                    "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata "
+                    "SELECT c.id, c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata "
                     "FROM chunks c "
                     "JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id "
                     "WHERE c.file_id = ? AND c.chunk_run_id IN ({}) ".format(','.join('?' * len(chunk_run_ids))),
@@ -279,19 +274,20 @@ class ChunkingManager:
                 )
             else:
                 cur.execute(
-                    "SELECT c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata FROM chunks c JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id AND p.is_active = 1 WHERE c.file_id = ?",
+                    "SELECT c.id, c.chunk_id, c.file_id, c.parse_run_id, c.chunk_run_id, c.content, c.metadata FROM chunks c JOIN parsed p ON c.parse_run_id = p.parse_run_id AND c.file_id = p.file_id AND p.is_active = 1 WHERE c.file_id = ?",
                     (file_id,),
                 )
             
             chunks = []
             for row in cur.fetchall():
                 chunks.append({
-                    "chunk_id": row[0],
-                    "file_id": row[1],
-                    "parse_run_id": row[2],
-                    "chunk_run_id": row[3],
-                    "content": row[4],
-                    "metadata": json.loads(row[5])
+                    "id": int(row[0]),
+                    "chunk_id": row[1],
+                    "file_id": row[2],
+                    "parse_run_id": row[3],
+                    "chunk_run_id": row[4],
+                    "content": row[5],
+                    "metadata": json.loads(row[6])
                 })
             
             return chunks
@@ -312,19 +308,20 @@ class ChunkingManager:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata FROM chunks WHERE chunk_run_id = ?",
+                "SELECT id, chunk_id, file_id, parse_run_id, chunk_run_id, content, metadata FROM chunks WHERE chunk_run_id = ? ORDER BY id ASC",
                 (chunk_run_id,)
             )
             
             chunks = []
             for row in cur.fetchall():
                 chunks.append({
-                    "chunk_id": row[0],
-                    "file_id": row[1],
-                    "parse_run_id": row[2],
-                    "chunk_run_id": row[3],
-                    "content": row[4],
-                    "metadata": json.loads(row[5])
+                    "id": int(row[0]),
+                    "chunk_id": row[1],
+                    "file_id": row[2],
+                    "parse_run_id": row[3],
+                    "chunk_run_id": row[4],
+                    "content": row[5],
+                    "metadata": json.loads(row[6])
                 })
             
             return chunks
@@ -333,7 +330,7 @@ class ChunkingManager:
             raise
 
     def get_chunk_content_by_run_and_id(self, chunk_run_id: int, chunk_id: str) -> Optional[str]:
-        """Return stored chunk text for a chunk_run + chunk_id (canonical source when FAISS docstore lacks text)."""
+        """Return stored chunk text for a chunk_run + chunk_id (canonical source for viewer / UMAP labels)."""
         try:
             cur = self.conn.cursor()
             cur.execute(
@@ -392,6 +389,9 @@ class ChunkingManager:
         """
         try:
             cur = self.conn.cursor()
+            cur.execute("SELECT id FROM chunks WHERE file_id = ?", (file_id,))
+            pks = [int(r[0]) for r in cur.fetchall()]
+            delete_vectors_for_chunk_pks(self.conn, pks)
             cur.execute(
                 "DELETE FROM chunks WHERE file_id = ?",
                 (file_id,)
@@ -422,6 +422,9 @@ class ChunkingManager:
             # if the active chunk run is the one to be deleted, set the latest chunk run in the same knowledgebase as active
             chunk_run_to_delete = self.get_chunk_run_config(chunk_run_id)
             knowledgebase_id = chunk_run_to_delete["knowledgebase_id"]
+            cur.execute("SELECT id FROM chunks WHERE chunk_run_id = ?", (chunk_run_id,))
+            chunk_pks = [int(r[0]) for r in cur.fetchall()]
+            delete_vectors_for_chunk_pks(self.conn, chunk_pks)
             cur.execute(
                 "DELETE FROM chunk_run WHERE id = ?",
                 (chunk_run_id,)

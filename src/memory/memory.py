@@ -46,6 +46,16 @@ class MemoryManager:
         
         # Enable foreign key constraints for SQLite
         self.conn.execute("PRAGMA foreign_keys = ON")
+
+        try:
+            self.conn.enable_load_extension(True)
+            import sqlite_vec
+
+            sqlite_vec.load(self.conn)
+            self.conn.enable_load_extension(False)
+            logger.info("sqlite-vec extension loaded")
+        except Exception as e:
+            logger.warning("sqlite-vec could not be loaded: %s", e)
         
         # Initialize knowledgebase manager
         self.knowledgebase_manager = KnowledgebaseManager(self.conn)

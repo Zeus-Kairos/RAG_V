@@ -52,7 +52,8 @@ docstring_parser==0.17.0
 effdet==0.4.1
 emoji==2.15.0
 et_xmlfile==2.0.0
-faiss-cpu==1.13.2
+# Embeddings stored in sqlite-vec (main DB); install binary wheel, then re-run indexing (old ./index FAISS data is unused).
+sqlite-vec>=0.1.0
 Faker==40.11.0
 fast-langdetect==0.2.5
 fastapi==0.135.1

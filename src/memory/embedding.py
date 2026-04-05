@@ -3,9 +3,23 @@ import json
 import sqlite3
 from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime, timezone, timedelta
+from src.memory.vector_store import drop_vec_table
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+def _embedding_config_dict(row: sqlite3.Row) -> dict:
+    keys = row.keys()
+    return {
+        "id": row["id"],
+        "embedding_base_url": row["embedding_base_url"],
+        "embedding_provider": row["embedding_provider"],
+        "embedding_api_key": row["embedding_api_key"],
+        "embedding_model": row["embedding_model"],
+        "is_active": row["is_active"],
+        "embedding_dim": row["embedding_dim"] if "embedding_dim" in keys else None,
+    }
 
 class EmbeddingManager:
     """Manages embedding configurations using SQLite database"""
@@ -38,7 +52,13 @@ class EmbeddingManager:
                     is_active INTEGER DEFAULT 0
                 )
             """)
-            
+            cur.execute("PRAGMA table_info(embedding_configure)")
+            cols = {row[1] for row in cur.fetchall()}
+            if "embedding_dim" not in cols:
+                cur.execute(
+                    "ALTER TABLE embedding_configure ADD COLUMN embedding_dim INTEGER"
+                )
+
             self.conn.commit()
         except Exception as e:
             logger.error(f"Error initializing database tables: {e}")
@@ -112,25 +132,17 @@ class EmbeddingManager:
             self.conn.commit()           
             
             if config:
-                return {
-                    "id": config[0],
-                    "embedding_base_url": config[1],
-                    "embedding_provider": config[2],
-                    "embedding_api_key": config[3],
-                    "embedding_model": config[4]
-                }
+                d = _embedding_config_dict(config)
+                del d["is_active"]
+                return d
             else:
                 # If no active config found, fetch the one we just tried to activate
                 cur.execute("SELECT * FROM embedding_configure WHERE id = ?", (id,))
                 config = cur.fetchone()
                 if config:
-                    return {
-                        "id": config[0],
-                        "embedding_base_url": config[1],
-                        "embedding_provider": config[2],
-                        "embedding_api_key": config[3],
-                        "embedding_model": config[4]
-                    }
+                    d = _embedding_config_dict(config)
+                    del d["is_active"]
+                    return d
                 raise ValueError(f"Configuration with id {id} not found")
 
         except Exception as e:
@@ -151,13 +163,9 @@ class EmbeddingManager:
             cur.execute("SELECT * FROM embedding_configure WHERE is_active = 1")
             config = cur.fetchone()
             if config:
-                return {
-                    "id": config[0],
-                    "embedding_base_url": config[1],
-                    "embedding_provider": config[2],
-                    "embedding_api_key": config[3],
-                    "embedding_model": config[4]
-                }
+                d = _embedding_config_dict(config)
+                del d["is_active"]
+                return d
             return None
         except Exception as e:
             logger.error(f"Error getting active configuration: {e}")
@@ -178,13 +186,9 @@ class EmbeddingManager:
             cur.execute("SELECT * FROM embedding_configure WHERE id = ?", (id,))
             config = cur.fetchone()
             if config:
-                return {
-                    "id": config[0],
-                    "embedding_base_url": config[1],
-                    "embedding_provider": config[2],
-                    "embedding_api_key": config[3],
-                    "embedding_model": config[4]
-                }
+                d = _embedding_config_dict(config)
+                del d["is_active"]
+                return d
             return None
         except Exception as e:
             logger.error(f"Error getting configuration: {e}")
@@ -201,17 +205,7 @@ class EmbeddingManager:
             cur = self.conn.cursor()
             cur.execute("SELECT * FROM embedding_configure")
             configs = cur.fetchall()
-            return [
-                {
-                    "id": config[0],
-                    "embedding_base_url": config[1],
-                    "embedding_provider": config[2],
-                    "embedding_api_key": config[3],
-                    "embedding_model": config[4],
-                    "is_active": config[5]
-                }
-                for config in configs
-            ]
+            return [_embedding_config_dict(config) for config in configs]
         except Exception as e:
             logger.error(f"Error getting all configurations: {e}")
             return []
@@ -228,7 +222,8 @@ class EmbeddingManager:
         """
         try:
             cur = self.conn.cursor()
-            
+            drop_vec_table(self.conn, id)
+
             # Check if the record being deleted is active
             cur.execute("SELECT is_active FROM embedding_configure WHERE id = ?", (id,))
             record = cur.fetchone()
