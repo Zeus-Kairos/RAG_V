@@ -118,6 +118,29 @@
   border-color: #333;
 }
 
+.main-view-tab__chunk-type-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 12px;
+  color: #5f6368;
+}
+
+.main-view-tab__chunk-type-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+
+.main-view-tab__chunk-type-label input {
+  margin: 0;
+  cursor: pointer;
+}
+
 .main-view-tab__body {
   flex: 1;
   min-height: 0;

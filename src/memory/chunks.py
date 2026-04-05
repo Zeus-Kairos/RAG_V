@@ -524,13 +524,10 @@ class ChunkingManager:
 
     def get_chunk_runs_by_file_id(self, file_id: int) -> List[Dict[str, Any]]:
         """
-        Get all chunk runs that have chunks with the designated file_id, ordered by run_time descending.
-        
-        Args:
-            file_id: ID of the file
-            
-        Returns:
-            List of chunk run records with active parse_run_id
+        Get all chunk runs that have at least one chunk row for this file_id, ordered by run_time descending.
+
+        Includes runs tied to non-active parse snapshots so graph/history views can resolve framework
+        and parameters for any chunk run that still has stored chunks.
         """
         try:
             cur = self.conn.cursor()
@@ -538,7 +535,6 @@ class ChunkingManager:
                 "SELECT DISTINCT chunk_run.id, chunk_run.knowledgebase_id, chunk_run.framework, chunk_run.parameters, chunk_run.is_active, chunk_run.in_sync, chunk_run.run_time "
                 "FROM chunk_run "
                 "JOIN chunks ON chunk_run.id = chunks.chunk_run_id "
-                "JOIN parsed ON chunks.parse_run_id = parsed.parse_run_id AND chunks.file_id = parsed.file_id AND parsed.is_active = 1 "
                 "WHERE chunks.file_id = ? "
                 "ORDER BY chunk_run.run_time DESC",
                 (file_id,)

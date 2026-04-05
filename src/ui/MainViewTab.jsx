@@ -1,15 +1,31 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import './MainViewTab.css';
 
+const CHUNK_VIS_TYPE_ORDER = ['text', 'image', 'table', 'code'];
+
+function defaultChunkTypeFilters() {
+  return { text: true, image: true, table: true, code: true };
+}
+
+function applyChunkTypeFiltersInDoc(doc, filters) {
+  if (!doc) return;
+  doc.querySelectorAll('.chunk-only-block[data-chunk-type]').forEach((el) => {
+    const t = el.getAttribute('data-chunk-type') || 'text';
+    el.classList.toggle('chunk-only-block--type-hidden', !filters[t]);
+  });
+}
+
 export default function MainViewTab({ mainView }) {
   const iframeRef = useRef(null);
   const [renderMd, setRenderMd] = useState(false);
   const [chunkOnly, setChunkOnly] = useState(false);
+  const [chunkTypeFilters, setChunkTypeFilters] = useState(defaultChunkTypeFilters);
 
   useEffect(() => {
     if (mainView?.phase !== 'ready') return;
     setRenderMd(false);
     setChunkOnly(false);
+    setChunkTypeFilters(defaultChunkTypeFilters());
   }, [mainView?.htmlKey, mainView?.phase]);
 
   const handleIframeLoad = useCallback(() => {
@@ -52,6 +68,12 @@ export default function MainViewTab({ mainView }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (mainView?.phase !== 'ready' || mainView?.viewKind !== 'chunks' || !chunkOnly) return;
+    const doc = iframeRef.current?.contentDocument;
+    applyChunkTypeFiltersInDoc(doc, chunkTypeFilters);
+  }, [mainView?.phase, mainView?.viewKind, mainView?.htmlKey, chunkOnly, chunkTypeFilters]);
+
   if (!mainView) return null;
 
   const showParsedMd = mainView.phase === 'ready' && mainView.viewKind === 'parsed';
@@ -84,14 +106,36 @@ export default function MainViewTab({ mainView }) {
             </label>
           )}
           {showChunkBtn && (
-            <button
-              type="button"
-              className="main-view-tab__chunk-toggle"
-              onClick={onChunkToggle}
-              aria-pressed={chunkOnly}
-            >
-              {chunkOnly ? 'Full document' : 'Chunk only'}
-            </button>
+            <>
+              {chunkOnly && (
+                <div
+                  className="main-view-tab__chunk-type-filters"
+                  role="group"
+                  aria-label="Chunk type filters"
+                >
+                  {CHUNK_VIS_TYPE_ORDER.map((t) => (
+                    <label key={t} className="main-view-tab__chunk-type-label">
+                      <input
+                        type="checkbox"
+                        checked={chunkTypeFilters[t]}
+                        onChange={() =>
+                          setChunkTypeFilters((prev) => ({ ...prev, [t]: !prev[t] }))
+                        }
+                      />
+                      <span>{t}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                className="main-view-tab__chunk-toggle"
+                onClick={onChunkToggle}
+                aria-pressed={chunkOnly}
+              >
+                {chunkOnly ? 'Full document' : 'Chunk only'}
+              </button>
+            </>
           )}
         </div>
       </div>

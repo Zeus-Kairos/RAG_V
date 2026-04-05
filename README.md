@@ -159,6 +159,11 @@ The system implements multiple retrieval strategies:
 - Add your own parser class that inherits from [BaseParser](src/file_process/parsers.py) with decorator `@register_parser`.
 - Add your parser parameters to JSON config file [parserConfig.json](src/ui/parserConfig.json).
 
+### Add Your Own Chunkers / Splitters (flat settings)
+
+- Add a subclass of [`BaseFileSplitter`](src/file_process/file_splitter.py) with `splitter_name="your_id"`, implement `__init__(**kwargs)` from form fields and `split_text` returning LangChain `Document` objects whose `metadata` includes `chunk_id`. Import the module from `file_splitter.py` (or another startup import) if it lives outside that file.
+- Add a **flat** framework entry in [`splitterConfig.json`](src/ui/splitterConfig.json): append `your_id` to `frameworkOrder`, then under `frameworks` use only `label`, `storeGroup`, and `fields` (same shape as `docling` / `hybrid`). Field keys map to API kwargs via `formApiKey` or camelCase → snake_case in [`splitterUtils.js`](src/ui/splitterUtils.js).
+
 ### Add Your Local Embedding Models
 - Add your Hugging Face based local embedding model on Embedding Setting on ui. Click "Add" -> Select "Hugging Face" -> Input your model path in "Model" column.
 

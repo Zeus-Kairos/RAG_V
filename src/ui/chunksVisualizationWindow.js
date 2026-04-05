@@ -249,6 +249,14 @@ export function buildChunksVisualizationDocumentHtml(
     return { color, labelBase };
   };
 
+  const CHUNK_VIS_TYPES = new Set(['text', 'image', 'table', 'code']);
+  const normalizeChunkTypeForViz = (metadata) => {
+    const raw =
+      metadata && metadata.chunk_type != null ? String(metadata.chunk_type).trim().toLowerCase() : '';
+    if (CHUNK_VIS_TYPES.has(raw)) return raw;
+    return 'text';
+  };
+
   const buildChunksOnlyHtml = (chunkRows, fileText, palette, runIdStr) =>
     chunkRows
       .map((chunk, idx) => {
@@ -265,8 +273,9 @@ export function buildChunksVisualizationDocumentHtml(
         const numLabel = escapeHtml(String(labelBase));
         const ridAttr = escapeHtml(String(runIdStr));
         const cidAttr = escapeHtml(String(chunk.chunk_id ?? ''));
+        const chunkTypeAttr = escapeHtml(normalizeChunkTypeForViz(chunk.metadata));
         return `
-          <div class="chunk-only-block" style="--chunk-color: ${color}; border-left-color: ${color}; background: ${applyAlpha(color, 0.06)};">
+          <div class="chunk-only-block" data-chunk-type="${chunkTypeAttr}" style="--chunk-color: ${color}; border-left-color: ${color}; background: ${applyAlpha(color, 0.06)};">
             <div class="chunk-only-block-head">
               <button type="button" class="chunk-only-badge" style="background: ${color}; border: none; cursor: pointer;" data-run-id="${ridAttr}" data-chunk-id="${cidAttr}" title="Show chunk metadata">${numLabel}</button>
             </div>
@@ -875,6 +884,38 @@ export function buildChunksVisualizationDocumentHtml(
           line-height: 1.5;
           margin: 0;
         }
+
+        .chunk-only-block--type-hidden {
+          display: none !important;
+        }
+
+        .viz-chunk-type-filters {
+          display: none;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 10px 14px;
+          font-size: 12px;
+          font-family: Arial, sans-serif;
+          color: #444;
+        }
+
+        body.chunk-visual--chunk-only .viz-chunk-type-filters {
+          display: flex;
+        }
+
+        .viz-chunk-type-filters label {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+          user-select: none;
+          margin: 0;
+        }
+
+        .viz-chunk-type-filters input {
+          margin: 0;
+          cursor: pointer;
+        }
       </style>
     </head>
     <body>
@@ -883,6 +924,12 @@ export function buildChunksVisualizationDocumentHtml(
           ? `<div class="viz-page-head">
         <div class="viz-page-head-row viz-page-head-row--end">
           <div class="viz-toolbar">
+            <div class="viz-chunk-type-filters" id="viz-chunk-type-filters" role="group" aria-label="Chunk type filters">
+              <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="text" checked /> text</label>
+              <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="image" checked /> image</label>
+              <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="table" checked /> table</label>
+              <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="code" checked /> code</label>
+            </div>
             <button type="button" class="viz-toggle-chunk-only" id="toggle-chunk-only" aria-pressed="false">Chunk only</button>
           </div>
         </div>
@@ -1226,6 +1273,18 @@ export function buildChunksVisualizationDocumentHtml(
           if (closeBtn) closeBtn.focus();
         }
 
+        function applyChunkTypeFilterVisibility() {
+          const selected = { text: true, image: true, table: true, code: true };
+          document.querySelectorAll('.viz-chunk-type-filter[data-chunk-type]').forEach(function (cb) {
+            const t = cb.getAttribute('data-chunk-type');
+            if (t) selected[t] = cb.checked;
+          });
+          document.querySelectorAll('.chunk-only-block[data-chunk-type]').forEach(function (el) {
+            const t = el.getAttribute('data-chunk-type') || 'text';
+            el.classList.toggle('chunk-only-block--type-hidden', !selected[t]);
+          });
+        }
+
         // Synchronized scrolling implementation that handles scrollbar alignment
         document.addEventListener('DOMContentLoaded', () => {
           const toggleBtn = document.getElementById('toggle-chunk-only');
@@ -1234,8 +1293,15 @@ export function buildChunksVisualizationDocumentHtml(
               const on = document.body.classList.toggle('chunk-visual--chunk-only');
               toggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
               toggleBtn.textContent = on ? 'Full document' : 'Chunk only';
+              if (on) applyChunkTypeFilterVisibility();
             });
           }
+
+          document.querySelectorAll('.viz-chunk-type-filter[data-chunk-type]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+              applyChunkTypeFilterVisibility();
+            });
+          });
 
           const backdrop = document.getElementById('chunk-meta-float-backdrop');
           const floatWindow = document.getElementById('chunk-meta-float-window');
