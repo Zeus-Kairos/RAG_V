@@ -123,14 +123,19 @@ export default function SplitterParamFields({
         if (spec.type === 'boolean') {
           return (
             <div key={fieldKey} className="param-group checkbox">
-              <input
-                type="checkbox"
-                id={id}
-                checked={!!values[fieldKey]}
-                disabled={disabled}
-                onChange={(e) => onChange(fieldKey, e.target.checked)}
-              />
-              <label htmlFor={id}>{spec.label}</label>
+              <div className="param-checkbox-row">
+                <input
+                  type="checkbox"
+                  id={id}
+                  checked={!!values[fieldKey]}
+                  disabled={disabled}
+                  onChange={(e) => onChange(fieldKey, e.target.checked)}
+                />
+                <label htmlFor={id}>{spec.label}</label>
+              </div>
+              {spec.description ? (
+                <p className="param-description param-description-below-checkbox">{spec.description}</p>
+              ) : null}
             </div>
           );
         }

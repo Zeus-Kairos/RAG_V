@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useKnowledgebaseStore from './store';
-import { buildChunkingFormData } from './splitterUtils';
+import { buildChunkingFormData, getSplitterFrameworks } from './splitterUtils';
 import './ChunkBrowser.css';
 
 const ChunkBrowser = () => {
@@ -172,7 +172,7 @@ const ChunkBrowser = () => {
       setIsLoading(false);
     }
   };
-  
+
   return (
     <div className="chunk-browser">
       <div className="chunk-browser-header">
@@ -195,10 +195,11 @@ const ChunkBrowser = () => {
               onChange={(e) => setActiveFramework(e.target.value)}
               disabled={isRunning}
             >
-              <option value="langchain">Langchain</option>
-              <option value="chonkie">Chonkie</option>
-              <option value="docling">Docling</option>
-              <option value="hybrid">Hybrid</option>
+              {getSplitterFrameworks().map(({ id, label }) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -283,12 +284,13 @@ const ChunkBrowser = () => {
                                 .replace(/\b\w/g, l => l.toUpperCase());
                               
                               // Format value based on type
-                              let displayValue = paramValue;
+                              let displayValue;
                               if (typeof paramValue === 'boolean') {
                                 displayValue = paramValue ? 'Enabled' : 'Disabled';
                               } else if (typeof paramValue === 'object' && paramValue !== null) {
-                                // Convert objects and arrays to string representation for display
                                 displayValue = JSON.stringify(paramValue);
+                              } else {
+                                displayValue = paramValue;
                               }
                               
                               // Determine parameter type for styling
@@ -331,12 +333,13 @@ const ChunkBrowser = () => {
                         .replace(/\b\w/g, l => l.toUpperCase());
                       
                       // Format value based on type
-                      let displayValue = value;
+                      let displayValue;
                       if (typeof value === 'boolean') {
                         displayValue = value ? 'Enabled' : 'Disabled';
                       } else if (typeof value === 'object' && value !== null) {
-                        // Convert objects and arrays to string representation for display
                         displayValue = JSON.stringify(value);
+                      } else {
+                        displayValue = value;
                       }
                       
                       // Determine parameter type for styling
@@ -419,6 +422,11 @@ const ChunkBrowser = () => {
                           {(result.status === 'success' || result.status === 'completed') && result.chunks_count && (
                             <div className="upload-result-details">
                               <span>Chunks: {result.chunks_count}</span>
+                            </div>
+                          )}
+                          {result.warning && (
+                            <div className="upload-result-warning" role="alert">
+                              {result.warning}
                             </div>
                           )}
                           {result.status === 'failed' && result.error && (

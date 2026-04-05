@@ -6,7 +6,6 @@ import {
   openChunksWindow,
   buildChunksVisualizationDocumentHtml,
 } from './chunksVisualizationWindow';
-
 const ChunkRunHistoryPanel = ({ fileId, fileName, onClose, mainViewApi = null }) => {
   const [chunkRuns, setChunkRuns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -229,16 +228,18 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose, mainViewApi = null })
         .replace(/\b\w/g, l => l.toUpperCase());
       
       // Format value based on type
-      let displayValue = value;
+      let displayValue;
       if (typeof value === 'boolean') {
         displayValue = value ? 'Enabled' : 'Disabled';
-      } else if (typeof value === 'object') {
+      } else if (typeof value === 'object' && value !== null) {
         displayValue = JSON.stringify(value);
+      } else {
+        displayValue = value;
       }
-      
+
       paramStrings.push(`${displayKey}: ${displayValue}`);
     });
-    
+
     return paramStrings.join(', ');
   };
 
@@ -348,9 +349,13 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose, mainViewApi = null })
                                   .replace(/\b\w/g, l => l.toUpperCase());
                                 
                                 // Format value based on type
-                                let displayValue = paramValue;
+                                let displayValue;
                                 if (typeof paramValue === 'boolean') {
                                   displayValue = paramValue ? 'Enabled' : 'Disabled';
+                                } else if (typeof paramValue === 'object' && paramValue !== null) {
+                                  displayValue = JSON.stringify(paramValue);
+                                } else {
+                                  displayValue = paramValue;
                                 }
                                 
                                 // Determine parameter type for styling
@@ -393,9 +398,13 @@ const ChunkRunHistoryPanel = ({ fileId, fileName, onClose, mainViewApi = null })
                           .replace(/\b\w/g, l => l.toUpperCase());
                         
                         // Format value based on type
-                        let displayValue = value;
+                        let displayValue;
                         if (typeof value === 'boolean') {
                           displayValue = value ? 'Enabled' : 'Disabled';
+                        } else if (typeof value === 'object' && value !== null) {
+                          displayValue = JSON.stringify(value);
+                        } else {
+                          displayValue = value;
                         }
                         
                         // Determine parameter type for styling

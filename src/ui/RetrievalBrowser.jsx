@@ -370,10 +370,17 @@ const RetrievalBrowser = () => {
                                       Object.entries(chunker.params).forEach(([paramName, paramValue]) => {
                                         const displayName = paramName
                                           .replace(/_/g, ' ')
-                                          .replace(/\b\w/g, l => l.toUpperCase());
-                                        let displayValue = paramValue;
+                                          .replace(/\b\w/g, (l) => l.toUpperCase());
+                                        let displayValue;
                                         if (typeof paramValue === 'boolean') {
                                           displayValue = paramValue ? 'Enabled' : 'Disabled';
+                                        } else if (
+                                          typeof paramValue === 'object' &&
+                                          paramValue !== null
+                                        ) {
+                                          displayValue = JSON.stringify(paramValue);
+                                        } else {
+                                          displayValue = paramValue;
                                         }
                                         paramElements.push(
                                           <span key={`${index++}`}>{`${displayName}: ${displayValue}`}</span>
@@ -387,14 +394,15 @@ const RetrievalBrowser = () => {
                                     .replace(/_/g, ' ')
                                     .replace(/\b\w/g, l => l.toUpperCase());
                                    
-                                  // Format value based on type
-                                  let displayValue = value;
+                                  let displayValue;
                                   if (typeof value === 'boolean') {
                                     displayValue = value ? 'Enabled' : 'Disabled';
-                                  } else if (typeof value === 'object') {
+                                  } else if (typeof value === 'object' && value !== null) {
                                     displayValue = JSON.stringify(value);
+                                  } else {
+                                    displayValue = value;
                                   }
-                                   
+
                                   paramElements.push(
                                     <span key={`${index++}`}>{`${displayKey}: ${displayValue}`}</span>
                                   );

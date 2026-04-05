@@ -17,12 +17,21 @@
   color: #333;
 }
 
-/* Tab Styles */
+/* Tab Styles — wrap whole tabs to the next row when space is tight (long labels, more splitters) */
 .splitter-tabs {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  row-gap: 8px;
+  align-items: flex-end;
   margin-bottom: 12px;
+  padding-bottom: 2px;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.splitter-tabs .tab-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-btn {
@@ -264,29 +273,49 @@
   transform: scale(1.1);
 }
 
-/* Checkbox parameter group */
+/* Checkbox parameter group: label row + full-width description on next line */
 .param-group.checkbox {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   margin-top: 10px;
   margin-bottom: 12px;
 }
 
-.param-group.checkbox label {
+.param-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.param-checkbox-row label {
   margin: 0;
   cursor: pointer;
   font-size: 13px;
   color: #333;
   font-weight: normal;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
 }
 
 .param-group.checkbox input[type="checkbox"] {
-  margin: 0;
+  margin: 2px 0 0 0;
   cursor: pointer;
   width: 16px;
   height: 16px;
+  min-width: 16px;
   accent-color: #4a6cf7;
+  flex-shrink: 0;
+}
+
+.param-group.checkbox .param-description-below-checkbox {
+  margin-top: 6px;
+  margin-bottom: 0;
+  padding-left: 24px; /* align with label text (checkbox + gap) */
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Action container */

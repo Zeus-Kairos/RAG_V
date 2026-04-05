@@ -1,5 +1,5 @@
 {
-  "frameworkOrder": ["langchain", "chonkie", "docling", "hybrid"],
+  "frameworkOrder": ["langchain", "chonkie", "docling", "hybrid", "multimodal"],
   "frameworks": {
     "langchain": {
       "label": "Langchain",
@@ -227,6 +227,45 @@
           "sliderMaxCharacter": 2000,
           "disabledWhen": { "field": "tableChunkEnabled", "equals": false },
           "description": "Defaults: row=3 (rows), character=200 (chars). Chunking preserves table headers."
+        }
+      }
+    },
+    "multimodal": {
+      "label": "Multi-modal",
+      "storeGroup": "multimodalSettings",
+      "fields": {
+        "headerLevels": {
+          "type": "int",
+          "label": "Header Levels",
+          "ui": "slider",
+          "min": 1,
+          "max": 10,
+          "default": 3
+        },
+        "stripHeaders": {
+          "type": "boolean",
+          "label": "Strip Headers",
+          "default": true
+        },
+        "chunkSize": {
+          "type": "int",
+          "label": "Chunk Size",
+          "ui": "sliderWithInput",
+          "min": 50,
+          "max": 10000,
+          "default": 1000
+        },
+        "tableLlmEnabled": {
+          "type": "boolean",
+          "label": "LLM summary for tables (full table → short description for retrieval)",
+          "default": false,
+          "description": "Requires MULTIMODAL_LLM_BASE_URL and MULTIMODAL_LLM_MODEL in .env (optional MULTIMODAL_LLM_API_KEY)."
+        },
+        "imageVlmEnabled": {
+          "type": "boolean",
+          "label": "VLM description for images",
+          "default": false,
+          "description": "Same .env variables as table LLM; use a vision-capable model."
         }
       }
     }

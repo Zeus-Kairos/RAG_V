@@ -8,6 +8,7 @@ from src.file_process.utils import SUPPORTED_FORMATS
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
 from src.file_process.file_splitter import BaseFileSplitter
+from src.file_process.multimodal_splitter_helpers import multimodal_chunk_run_warning
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser
 from src.memory.memory import MemoryManager
@@ -342,7 +343,11 @@ class ParallelFileProcessingPipeline:
         # Initialize FileSplitter with the provided parameters
         self.file_splitter = BaseFileSplitter.create(framework, **kwargs)
         logger.info(f"Using {framework} FileSplitter with parameters: {kwargs}")
-        
+
+        run_warning: str | None = None
+        if framework == "multimodal":
+            run_warning = multimodal_chunk_run_warning(kwargs)
+
         try:                      
             chunk_run_id = self.memory_manager.chunking_manager.save_chunk_run_config(
                 knowledgebase_id=knowledgebase_id,
@@ -368,6 +373,7 @@ class ParallelFileProcessingPipeline:
                 task = self._chunk_single_file(
                     file,
                     chunk_run_id,
+                    run_warning=run_warning,
                 )
                 tasks.append(task)
             
@@ -384,13 +390,20 @@ class ParallelFileProcessingPipeline:
             logger.error(f"Error in chunk_all_files_in_knowledgebase: {e}")
             yield {"status": "failed", "error": f"Unexpected error: {str(e)}"}
     
-    async def _chunk_single_file(self, file: Dict[str, Any], chunk_run_id: int) -> Dict[str, Any]:
+    async def _chunk_single_file(
+        self,
+        file: Dict[str, Any],
+        chunk_run_id: int,
+        *,
+        run_warning: str | None = None,
+    ) -> Dict[str, Any]:
         """Chunk a single file and save chunks to the database.
         
         Args:
             file: File dictionary from the database
             chunk_run_id: ID of the chunk_run record
-            
+            run_warning: Optional message (e.g. incomplete multimodal LLM .env) echoed per file in UI
+
         Returns:
             Dict containing chunking results
         """
@@ -415,13 +428,16 @@ class ParallelFileProcessingPipeline:
             
             if not documents:
                 logger.warning(f"No chunks created for file: {filename}")
-                return {
+                out = {
                     "file_id": file_id,
                     "filename": filename,
                     "status": "completed",
                     "chunks_count": 0,
-                    "message": "No chunks created"
+                    "message": "No chunks created",
                 }
+                if run_warning:
+                    out["warning"] = run_warning
+                return out
             
             # Prepare chunks for database insertion
             chunks_to_insert = []
@@ -439,23 +455,29 @@ class ParallelFileProcessingPipeline:
             chunks_added = self.memory_manager.chunking_manager.add_chunks(chunks_to_insert)
             
             logger.info(f"Chunked file: {filename}, chunks: {len(documents)}")
-            
-            return {
+
+            out = {
                 "file_id": file_id,
                 "parse_run_id": parse_run_id,
                 "filename": filename,
                 "status": "completed",
                 "chunks_count": chunks_added,
-                "chunk_run_id": chunk_run_id
+                "chunk_run_id": chunk_run_id,
             }
+            if run_warning:
+                out["warning"] = run_warning
+            return out
         except Exception as e:
             logger.exception(f"Error chunking file {filename}: {e}", stack_info=True)
-            return {
+            err = {
                 "file_id": file_id,
                 "filename": filename,
                 "status": "failed",
-                "error": f"Chunking failed: {str(e)}"
+                "error": f"Chunking failed: {str(e)}",
             }
+            if run_warning:
+                err["warning"] = run_warning
+            return err
     
     async def upload_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> AsyncGenerator[Dict[str, Any], None]:
         """Upload and parse files in parallel, yield results as they complete.

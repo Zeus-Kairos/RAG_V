@@ -169,28 +169,27 @@ export function buildChunksVisualizationDocumentHtml(
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-  // Helper function to format parameters for display
   const formatParamsForDisplay = (params) => {
     if (!params || Object.keys(params).length === 0) return '';
-    
+
     const paramStrings = [];
     Object.entries(params).forEach(([key, value]) => {
-      // Format key to be more readable
       const displayKey = key
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, l => l.toUpperCase());
-      
-      // Format value based on type
-      let displayValue = value;
+        .replace(/\b\w/g, (l) => l.toUpperCase());
+
+      let displayValue;
       if (typeof value === 'boolean') {
         displayValue = value ? 'Enabled' : 'Disabled';
-      } else if (typeof value === 'object') {
+      } else if (typeof value === 'object' && value !== null) {
         displayValue = JSON.stringify(value);
+      } else {
+        displayValue = value;
       }
-      
+
       paramStrings.push(`${displayKey}: ${displayValue}`);
     });
-    
+
     return paramStrings.join(', ');
   };
 
@@ -966,62 +965,61 @@ export function buildChunksVisualizationDocumentHtml(
       frameworkColors.set(framework, colors[index % colors.length]);
     });
 
-    // Helper function to format parameters for display
-      const formatParamsForDisplay = (params) => {
+    const formatParamsForDisplayRun = (params) => {
         if (!params) return '';
-        
-        // Convert to object if it's a string
-        const paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
-        
-        // Format parameters as readable strings
+
+        let paramsObj;
+        try {
+          paramsObj = typeof params === 'string' ? JSON.parse(params) : params;
+        } catch {
+          return '(invalid parameters)';
+        }
+        if (!paramsObj || typeof paramsObj !== 'object') return '';
+
         const paramStrings = [];
-        
-        // Handle top-level parameters first (like chef for Chonkie)
-        Object.entries(paramsObj)
-          .forEach(([key, value]) => {
-            // Skip chunkers array as we'll handle it separately
-            if (key === 'chunkers') return;
-            
-            if (typeof value !== 'object' || value === null) {
-              // Format key to be more readable
-              const displayKey = key
-                .replace(/_/g, ' ')    
-                .replace(/\b\w/g, l => l.toUpperCase());
-              
-              // Format value based on type
-              let displayValue = value;
-              if (typeof value === 'boolean') {
-                displayValue = value ? 'Enabled' : 'Disabled';
-              }
-              
-              paramStrings.push(`${displayKey}: ${displayValue}`);
+
+        Object.entries(paramsObj).forEach(([key, value]) => {
+          if (key === 'chunkers') return;
+
+          if (typeof value !== 'object' || value === null) {
+            const displayKey = key
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (l) => l.toUpperCase());
+            let displayValue;
+            if (typeof value === 'boolean') {
+              displayValue = value ? 'Enabled' : 'Disabled';
+            } else {
+              displayValue = value;
+            }
+            paramStrings.push(`${displayKey}: ${displayValue}`);
+          }
+        });
+
+        if (paramsObj.chunkers && Array.isArray(paramsObj.chunkers)) {
+          paramsObj.chunkers.forEach((chunker) => {
+            const chunkerType =
+              chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
+            paramStrings.push(`${chunkerType}: Enabled`);
+
+            if (chunker.params) {
+              Object.entries(chunker.params).forEach(([paramName, paramValue]) => {
+                const displayName = paramName
+                  .replace(/_/g, ' ')
+                  .replace(/\b\w/g, (l) => l.toUpperCase());
+                let displayValue;
+                if (typeof paramValue === 'boolean') {
+                  displayValue = paramValue ? 'Enabled' : 'Disabled';
+                } else if (typeof paramValue === 'object' && paramValue !== null) {
+                  displayValue = JSON.stringify(paramValue);
+                } else {
+                  displayValue = paramValue;
+                }
+                paramStrings.push(`${displayName}: ${displayValue}`);
+              });
             }
           });
-        
-        // Handle chunkers array (for both frameworks)
-        if (paramsObj.chunkers && Array.isArray(paramsObj.chunkers)) {
-          paramsObj.chunkers.forEach((chunker, index) => {
-            const chunkerType = chunker.chunker.charAt(0).toUpperCase() + chunker.chunker.slice(1);
-            paramStrings.push(`${chunkerType}: Enabled`);
-            
-            // Display all parameters for this chunker based on type
-            Object.entries(chunker.params).forEach(([paramName, paramValue]) => {
-              // Format parameter name to be more readable
-              const displayName = paramName
-                .replace(/_/g, ' ')    
-                .replace(/\b\w/g, l => l.toUpperCase());
-              
-              // Format value based on type
-              let displayValue = paramValue;
-              if (typeof paramValue === 'boolean') {
-                displayValue = paramValue ? 'Enabled' : 'Disabled';
-              }
-              
-              paramStrings.push(`${displayName}: ${displayValue}`);
-            });
-          });
         }
-        
+
         return paramStrings.join(', ');
       };
 
@@ -1033,8 +1031,8 @@ export function buildChunksVisualizationDocumentHtml(
       const baseColor = frameworkColors.get(framework);
       const runParams = runParamsMap.get(parseInt(runId));
       const isActive = runActiveMap.get(parseInt(runId));
-      const formattedParams = formatParamsForDisplay(runParams);
-      
+      const formattedParams = formatParamsForDisplayRun(runParams);
+
       const activeTag = isActive ? '<span style="background-color: rgba(76, 175, 80, 0.1); color: #4caf50; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-left: 8px; border: 1px solid #4caf50;">Active</span>' : '';
       
       html += `
@@ -1059,8 +1057,8 @@ export function buildChunksVisualizationDocumentHtml(
       const framework = runFrameworkMap.get(parseInt(runId));
       const baseColor = frameworkColors.get(framework);
       const runParams = runParamsMap.get(parseInt(runId));
-      const formattedParams = formatParamsForDisplay(runParams);
-      
+      const formattedParams = formatParamsForDisplayRun(runParams);
+
       // Match chunks to parsed text; only successful matches get boundary markers.
       // Chunk-only view still lists every chunk in order, using stored content when unmatched.
       let lastStart = -1;

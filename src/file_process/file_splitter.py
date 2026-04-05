@@ -4,6 +4,14 @@ import re
 from dataclasses import asdict
 from typing import Any
 
+from src.file_process.multimodal_splitter_helpers import (
+    image_url_for_vision,
+    markdown_image_target,
+    multimodal_llm_config_from_env,
+    multimodal_llm_credentials_sufficient,
+    openai_compatible_chat,
+)
+
 
 class BaseFileSplitter:
     """Base file splitter class that uses a registry pattern for splitter types.
@@ -25,7 +33,7 @@ class BaseFileSplitter:
         super().__init_subclass__(**kwargs)
         BaseFileSplitter._splitter_registry[splitter_name] = cls
     
-    def split_text(self, text: str, metadata: dict = None) -> list[Document]:
+    def split_text(self, text: str, metadata: dict = None) -> list[Any]:
         """Split text into chunks.
         
         Args:
@@ -399,6 +407,154 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         except Exception:
             return [table_content]
 
+
+class MultiModalSplitter(HybridSplitter, splitter_name="multimodal"):
+    """Like HybridSplitter (header split + Chonkie markdown/recursive), but tables stay whole.
+
+    Optional: LLM summary of each full table (for embedding), and optional VLM description
+    of each image. Endpoint and model come from env: MULTIMODAL_LLM_BASE_URL,
+    MULTIMODAL_LLM_MODEL, optional MULTIMODAL_LLM_API_KEY.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**{**kwargs, "table_chunk_enabled": False})
+
+    def _llm_credentials_ok(self) -> bool:
+        return multimodal_llm_credentials_sufficient()
+
+    def _summarize_table(self, table_markdown: str) -> str | None:
+        if not self._llm_credentials_ok():
+            return None
+        api_url, api_key, model = multimodal_llm_config_from_env()
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You summarize Markdown tables for semantic search. "
+                    "Output a concise paragraph in the same language as the table when possible. "
+                    "Capture structure, key entities, metrics, and relationships. No preamble."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Summarize this table for retrieval:\n\n{table_markdown}",
+            },
+        ]
+        return openai_compatible_chat(
+            api_url,
+            api_key,
+            model,
+            messages,
+        )
+
+    def _describe_image(self, image_markdown: str, file_path: str | None) -> str | None:
+        if not self._llm_credentials_ok():
+            return None
+        target = markdown_image_target(image_markdown)
+        if not target:
+            return None
+        image_url = image_url_for_vision(target, file_path)
+        if not image_url:
+            return None
+        api_url, api_key, model = multimodal_llm_config_from_env()
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You describe images for document retrieval. "
+                    "Output a concise factual description: subject, text (if any), charts/tables, "
+                    "and purpose. Same language as visible text when possible. No preamble."
+                ),
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image for search indexing."},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            },
+        ]
+        return openai_compatible_chat(
+            api_url,
+            api_key,
+            model,
+            messages,
+        )
+
+    def _split_pipeline(self, pipeline: Any, doc: Any, chunk_index: int, metadata: dict) -> tuple[list[Any], int]:
+        from langchain_core.documents import Document
+
+        document = pipeline.run(doc.page_content)
+        chunks = getattr(document, "chunks", [])
+        images = getattr(document, "images", [])
+        tables = getattr(document, "tables", [])
+        codes = getattr(document, "code", [])
+        chunk_tuples = [
+            (chunk.start_index, "text", chunk.text, {k: v for k, v in chunk.to_dict().items() if k != "text"})
+            for chunk in chunks
+        ]
+        image_tuples = [
+            (image.start_index, "image", image.content, {k: v for k, v in asdict(image).items() if k != "content"})
+            for image in images
+        ]
+        table_tuples = []
+        for table in tables:
+            base_meta = {k: v for k, v in asdict(table).items() if k != "content"}
+            parts = self._chunk_table(table.content)
+            total = len(parts)
+            for part_index, part in enumerate(parts):
+                part_meta = {**base_meta, "table_chunk_index": part_index, "table_chunk_count": total}
+                table_tuples.append((table.start_index, "table", part, part_meta))
+        code_tuples = [
+            (code.start_index, "code", code.content, {k: v for k, v in asdict(code).items() if k != "content"})
+            for code in codes
+        ]
+
+        all_tuples = chunk_tuples + image_tuples + table_tuples + code_tuples
+        all_tuples.sort(key=lambda x: x[0])
+
+        file_id = metadata.get("file_id", "")
+        fp = metadata.get("file_path")
+        table_llm = bool(self.parser_params.get("table_llm_enabled"))
+        image_vlm = bool(self.parser_params.get("image_vlm_enabled"))
+
+        documents = []
+        for _, chunk_type, content, chunk_meta in all_tuples:
+            page = content
+            mm_meta: dict[str, Any] = {}
+            if chunk_type == "table" and table_llm:
+                summary = self._summarize_table(content)
+                if summary:
+                    mm_meta["table_markdown_original"] = content
+                    mm_meta["multimodal_table_summary"] = True
+                    page = summary
+                else:
+                    mm_meta["multimodal_table_summary"] = False
+            elif chunk_type == "image" and image_vlm:
+                desc = self._describe_image(content, fp)
+                if desc:
+                    mm_meta["image_markdown_original"] = content
+                    mm_meta["multimodal_image_description"] = True
+                    page = desc
+                else:
+                    mm_meta["multimodal_image_description"] = False
+
+            document = Document(
+                page_content=page,
+                metadata={
+                    "chunk_id": f"{file_id}_{chunk_index}",
+                    "chunk_type": chunk_type,
+                    **doc.metadata,
+                    **chunk_meta,
+                    **mm_meta,
+                    **metadata,
+                },
+            )
+            chunk_index += 1
+            documents.append(document)
+        return documents, chunk_index
+
+
 if __name__ == "__main__":
 
     text = """
@@ -475,5 +631,18 @@ This document compares the legacy 8480 and the new N8480 power sensors. It also 
     hybrid_splits = hybrid_splitter.split_text(text, metadata={"file_id": 5})
     for split in hybrid_splits:
         print(split)
-        
+
+    print("\n\nTesting MultiModalSplitter (no LLM/VLM calls):")
+    mm = BaseFileSplitter.create(
+        "multimodal",
+        header_levels=3,
+        strip_headers=True,
+        chunk_size=1000,
+        table_llm_enabled=False,
+        image_vlm_enabled=False,
+    )
+    mm_splits = mm.split_text(text, metadata={"file_id": 6, "file_path": ""})
+    for split in mm_splits[:3]:
+        print(split)
+
         

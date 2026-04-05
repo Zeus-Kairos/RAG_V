@@ -69,28 +69,27 @@ export function buildParsedContentDocumentHtml(parsedText, fileName, parseRun, o
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-  // Format parameters for display
   const formatParamsForDisplay = (params) => {
     if (!params || Object.keys(params).length === 0) return 'No parameters';
-    
+
     const paramStrings = [];
     Object.entries(params).forEach(([key, value]) => {
-      // Format key to be more readable
       const displayKey = key
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, l => l.toUpperCase());
-      
-      // Format value based on type
-      let displayValue = value;
+        .replace(/\b\w/g, (l) => l.toUpperCase());
+
+      let displayValue;
       if (typeof value === 'boolean') {
         displayValue = value ? 'Enabled' : 'Disabled';
-      } else if (typeof value === 'object') {
+      } else if (typeof value === 'object' && value !== null) {
         displayValue = JSON.stringify(value, null, 2);
+      } else {
+        displayValue = value;
       }
-      
+
       paramStrings.push(`${displayKey}: ${displayValue}`);
     });
-    
+
     return paramStrings.join(', ');
   };
 
