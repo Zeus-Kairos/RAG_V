@@ -226,7 +226,6 @@ pywin32-ctypes==0.2.3
 PyYAML==6.0.3
 qwen-vl-utils==0.0.14
 ragas==0.4.3
-rank-bm25==0.2.2
 RapidFuzz==3.14.3
 rapidocr==3.7.0
 referencing==0.37.0

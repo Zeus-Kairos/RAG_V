@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
 
+from src.memory.chunks_fts import ensure_chunks_fts
 from src.memory.vector_store import delete_vectors_for_chunk_pks
 from src.utils.logging_config import get_logger
 
@@ -79,6 +80,8 @@ class ChunkingManager:
                       );
                 END;
             """)
+
+            ensure_chunks_fts(self.conn)
 
             self.conn.commit()
         except Exception as e:

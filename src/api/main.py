@@ -939,8 +939,14 @@ async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
         request_data = await request.json()
         query = request_data.get('query')
         retriever_type = request_data.get('retriever_type', 'vector')
-        k = request_data.get('k', 5)
-        
+        raw_k = request_data.get('k', 5)
+        try:
+            k = int(raw_k)
+        except (TypeError, ValueError):
+            k = 5
+        if k < 1:
+            k = 1
+
         if not query:
             raise HTTPException(status_code=400, detail="Query is required")
         
@@ -957,9 +963,10 @@ async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
         if not indexer:
             raise HTTPException(status_code=400, detail="Failed to initialize indexer")
         
-        # Create Retriever
-
-        retriever = BaseRetriever.create(retriever_type, indexer)
+        try:
+            retriever = BaseRetriever.create(retriever_type, indexer)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         
         # Perform retrieval
         results = retriever.retrieve(query, k=k)

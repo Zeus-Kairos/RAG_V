@@ -1,6 +1,7 @@
 """
 sqlite-vec vec0: one virtual table per embedding_configure.id.
 Row primary key chunk_pk = chunks.id; chunk_run_id metadata for scoped KNN.
+Vector column uses distance_metric=cosine (KNN and fusion use cosine distance).
 """
 from __future__ import annotations
 
@@ -45,7 +46,7 @@ def drop_vec_table(conn: sqlite3.Connection, embedding_config_id: str) -> None:
 
 
 def ensure_vec_table(conn: sqlite3.Connection, embedding_config_id: str, dim: int) -> str:
-    """Create vec0 table if missing. If dimension changed, drop and recreate."""
+    """Create vec0 table if missing. Recreate if dimension changed or metric is not cosine."""
     tbl = vec_table_name(embedding_config_id)
     cur = conn.cursor()
     cur.execute(
@@ -60,28 +61,39 @@ def ensure_vec_table(conn: sqlite3.Connection, embedding_config_id: str, dim: in
             stored_dim = int(raw)
 
     exists = _table_exists(conn, tbl)
-    if exists and stored_dim is not None and stored_dim != dim:
-        logger.warning(
-            "Embedding dimension changed for %s (%s -> %s); recreating %s",
-            embedding_config_id,
-            stored_dim,
-            dim,
-            tbl,
-        )
+
+    def _drop_vec_table(reason: str) -> None:
+        nonlocal exists
+        logger.warning("%s — dropping %s", reason, tbl)
         conn.execute(f'DROP TABLE IF EXISTS "{tbl}"')
         conn.commit()
         exists = False
+
+    if exists and stored_dim is not None and stored_dim != dim:
+        _drop_vec_table(
+            f"Embedding dimension changed for {embedding_config_id} ({stored_dim} -> {dim})"
+        )
+
+    if exists:
+        cur.execute(
+            "SELECT sql FROM sqlite_master WHERE type IN ('table','virtual') AND name = ?",
+            (tbl,),
+        )
+        sql_row = cur.fetchone()
+        create_sql = sql_row[0] if sql_row and sql_row[0] else ""
+        if not re.search(r"distance_metric\s*=\s*cosine", create_sql, re.IGNORECASE):
+            _drop_vec_table(f"Vector table {tbl} is not cosine (migrate from L2 or older schema)")
 
     if not exists:
         conn.execute(
             f'CREATE VIRTUAL TABLE "{tbl}" USING vec0(\n'
             f"  chunk_pk integer primary key,\n"
             f"  chunk_run_id integer,\n"
-            f"  embedding float[{int(dim)}]\n"
+            f"  embedding float[{int(dim)}] distance_metric=cosine\n"
             f")"
         )
         conn.commit()
-        logger.info("Created vector table %s dim=%s", tbl, dim)
+        logger.info("Created vector table %s dim=%s (cosine)", tbl, dim)
 
     cur.execute(
         "UPDATE embedding_configure SET embedding_dim = ? WHERE id = ?",
@@ -137,7 +149,7 @@ def knn_search(
     chunk_run_id: int,
     k: int,
 ) -> List[Tuple[int, float]]:
-    """Return (chunk_pk, distance) sorted by distance ascending."""
+    """Return (chunk_pk, distance) sorted by distance ascending (vec0 cosine distance)."""
     tbl = vec_table_name(embedding_config_id)
     if not _table_exists(conn, tbl):
         return []
@@ -203,6 +215,17 @@ def fetch_embeddings_for_chunk_run(
     return mat, pks
 
 
+def _cosine_distance_row(mat: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """Cosine distance 1 - cos_sim per row; aligned with sqlite-vec vec0 cosine metric."""
+    q = np.asarray(q, dtype=np.float32).reshape(-1)
+    eps = np.float32(1e-12)
+    qn = np.linalg.norm(q) + eps
+    mn = np.linalg.norm(mat, axis=1) + eps
+    cos_sim = (mat @ q) / (mn * qn)
+    cos_sim = np.clip(cos_sim, -1.0, 1.0)
+    return (1.0 - cos_sim).astype(np.float64)
+
+
 def query_to_chunk_distances(
     conn: sqlite3.Connection,
     embedding_config_id: str,
@@ -210,11 +233,11 @@ def query_to_chunk_distances(
     chunk_run_id: int,
 ) -> List[Tuple[int, float]]:
     """
-    L2 distance from query to every vector in the run, order by chunk_pk (stable vs chunks table).
+    Cosine distance from query to each stored vector, order by chunk_pk (stable vs chunks table).
     """
     mat, pks = fetch_embeddings_for_chunk_run(conn, embedding_config_id, chunk_run_id)
     if mat.size == 0:
         return []
     q = np.asarray(query_embedding, dtype=np.float32).reshape(-1)
-    dists = np.linalg.norm(mat - q, axis=1)
+    dists = _cosine_distance_row(mat, q)
     return [(pks[i], float(dists[i])) for i in range(len(pks))]

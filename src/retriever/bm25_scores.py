@@ -2,38 +2,44 @@ from __future__ import annotations
 
 from typing import Any, Iterable, List
 
+import numpy as np
 
-class BM25Scorer():
-    def __init__(self, vectorizer: Any = None):
-        self.vectorizer = vectorizer
-    
+from src.memory.chunks_fts import bm25_scores_for_ordered_pks
+
+
+class BM25Scorer:
+    """Lexical scores from SQLite FTS5 bm25() over chunks_fts."""
+
+    def __init__(
+        self,
+        conn: Any,
+        chunk_run_id: int,
+        ordered_chunk_pks: List[int],
+    ) -> None:
+        self.conn = conn
+        self.chunk_run_id = chunk_run_id
+        self.ordered_chunk_pks = ordered_chunk_pks
+
     @classmethod
     def from_documents(
         cls,
         documents: Iterable[Any],
     ) -> "BM25Scorer":
-        """
-        Create a BM25 scorers from a list of documents.
+        raise TypeError(
+            "BM25Scorer.from_documents is removed; use BM25Scorer.from_indexer(indexer)"
+        )
 
-        Args:
-            documents (List[Document]): The list of documents.
-            **kwargs: Additional keyword arguments to pass to the BM25Scorer.
-        """
-        from rank_bm25 import BM25Okapi
-
-        tokenized_docs = [doc.page_content.split() for doc in documents]
-        return cls(BM25Okapi(tokenized_docs))
+    @classmethod
+    def from_indexer(cls, indexer: Any) -> "BM25Scorer":
+        rows = indexer.chunking_manager.get_chunks_by_chunk_run_id(indexer.chunk_run_id)
+        pks = [int(r["id"]) for r in rows]
+        return cls(indexer.conn, int(indexer.chunk_run_id), pks)
 
     def get_scores(self, query: str) -> List[float]:
-        """
-        Get the BM25 scores for the given query.
-
-        Args:
-            query (str): The query string.
-
-        Returns:
-            List[float]: The list of BM25 scores for the documents.
-        """
-        processed_query = query.split()
-        scores = self.vectorizer.get_scores(processed_query)
-        return scores
+        arr = bm25_scores_for_ordered_pks(
+            self.conn,
+            self.chunk_run_id,
+            query,
+            self.ordered_chunk_pks,
+        )
+        return np.asarray(arr, dtype=float).tolist()

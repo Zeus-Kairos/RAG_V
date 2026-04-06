@@ -23,7 +23,8 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _l2_to_score(distance: float) -> float:
+def _distance_to_score(distance: float) -> float:
+    """Map vec distance to a larger-is-better score (cosine distance: smaller is closer)."""
     return 1.0 / (1.0 + float(distance))
 
 
@@ -203,11 +204,11 @@ class Indexer:
         for chunk_pk, dist in hits:
             doc = self._doc_for_chunk_pk(chunk_pk)
             if doc:
-                out.append((doc, _l2_to_score(dist)))
+                out.append((doc, _distance_to_score(dist)))
         return out
 
     def vector_distances_for_query_ordered(self, query: str) -> np.ndarray:
-        """L2 distances aligned with ``all_docs`` / get_chunks_by_chunk_run_id order."""
+        """Cosine distances aligned with ``all_docs`` / get_chunks_by_chunk_run_id order."""
         rows = self.chunking_manager.get_chunks_by_chunk_run_id(self.chunk_run_id)
         pks_ordered = [int(r["id"]) for r in rows]
         if not pks_ordered:

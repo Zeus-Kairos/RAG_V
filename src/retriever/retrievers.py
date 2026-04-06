@@ -3,6 +3,7 @@ from typing import List, Tuple
 import numpy as np
 from langchain_core.documents import Document
 
+from src.memory.chunks_fts import bm25_top_k_for_run
 from src.retriever.bm25_scores import BM25Scorer
 from src.file_process.indexer import Indexer
 from src.utils.logging_config import get_logger
@@ -62,19 +63,21 @@ class BM25BasedRetriever(BaseRetriever, retriever_name="bm25"):
         super().__init__(indexer)
 
     def retrieve(self, query: str, k: int = 5, **kwargs) -> List[Tuple[Document, float]]:
-        bm25_scorer = BM25Scorer.from_documents(self.indexer.all_docs)
-        bm25_scores = np.asarray(bm25_scorer.get_scores(query), dtype=float)
-
-        positive_indices = np.flatnonzero(bm25_scores > 0)
-        if positive_indices.size == 0:
+        q = str(query).strip()
+        if not q:
             return []
-
-        ranked_positive = positive_indices[np.argsort(bm25_scores[positive_indices])[::-1]]
-        top_indices = ranked_positive[:k]
-        sorted_results = [
-            (self.indexer.all_docs[i], float(bm25_scores[i])) for i in top_indices
-        ]
-        return sorted_results
+        hits = bm25_top_k_for_run(
+            self.indexer.conn,
+            self.indexer.chunk_run_id,
+            q,
+            k,
+        )
+        out: List[Tuple[Document, float]] = []
+        for chunk_pk, score in hits:
+            doc = self.indexer._doc_for_chunk_pk(chunk_pk)
+            if doc:
+                out.append((doc, float(score)))
+        return out
 
 
 class FusionRetriever(BaseRetriever, retriever_name="fusion"):
@@ -89,7 +92,7 @@ class FusionRetriever(BaseRetriever, retriever_name="fusion"):
         dists_safe = np.where(np.isfinite(dists), dists, 1e12)
         vector_scores = 1.0 / (1.0 + dists_safe)
 
-        bm25_scorer = BM25Scorer.from_documents(all_docs)
+        bm25_scorer = BM25Scorer.from_indexer(self.indexer)
         bm25_scores = np.asarray(bm25_scorer.get_scores(query), dtype=float)
 
         epsilon = 1e-6
