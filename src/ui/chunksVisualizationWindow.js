@@ -249,7 +249,7 @@ export function buildChunksVisualizationDocumentHtml(
     return { color, labelBase };
   };
 
-  const CHUNK_VIS_TYPES = new Set(['text', 'image', 'table', 'code']);
+  const CHUNK_VIS_TYPES = new Set(['text', 'image', 'table', 'code', 'augment']);
   const normalizeChunkTypeForViz = (metadata) => {
     const raw =
       metadata && metadata.chunk_type != null ? String(metadata.chunk_type).trim().toLowerCase() : '';
@@ -926,6 +926,7 @@ export function buildChunksVisualizationDocumentHtml(
           <div class="viz-toolbar">
             <div class="viz-chunk-type-filters" id="viz-chunk-type-filters" role="group" aria-label="Chunk type filters">
               <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="text" checked /> text</label>
+              <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="augment" checked /> augment</label>
               <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="image" checked /> image</label>
               <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="table" checked /> table</label>
               <label><input type="checkbox" class="viz-chunk-type-filter" data-chunk-type="code" checked /> code</label>

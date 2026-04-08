@@ -227,6 +227,29 @@
           "sliderMaxCharacter": 2000,
           "disabledWhen": { "field": "tableChunkEnabled", "equals": false },
           "description": "Defaults: row=3 (rows), character=200 (chars). Chunking preserves table headers."
+        },
+        "contextualHeaders": {
+          "type": "boolean",
+          "label": "Contextual Headers (prepend Header 1..N into each chunk)",
+          "default": false,
+          "description": "If enabled, all detected markdown headers (Header 1..N) in chunk metadata are injected at the top of the chunk content."
+        },
+        "docAugmentation": {
+          "type": "boolean",
+          "label": "Doc Augmentation (LLM-generated questions → extra chunks)",
+          "default": false,
+          "description": "If enabled, an LLM generates questions for each text chunk, and each question becomes an extra chunk (chunk_type=augment). Configure LLM_BASE_URL and LLM_MODEL in .env (optional LLM_API_KEY), or use MULTIMODAL_LLM_* as fallback."
+        },
+        "augmentationQuestionCount": {
+          "type": "int",
+          "label": "Questions per chunk",
+          "ui": "sliderWithInput",
+          "min": 1,
+          "max": 10,
+          "default": 1,
+          "disabledWhen": { "field": "docAugmentation", "equals": false },
+          "formSkipWhen": { "field": "docAugmentation", "equals": false },
+          "description": "How many questions to generate per text chunk (1-10). Higher values increase chunk count and LLM calls."
         }
       }
     },
@@ -259,13 +282,13 @@
           "type": "boolean",
           "label": "LLM summary for tables (full table → short description for retrieval)",
           "default": false,
-          "description": "Requires MULTIMODAL_LLM_BASE_URL and MULTIMODAL_LLM_MODEL in .env (optional MULTIMODAL_LLM_API_KEY)."
+          "description": "Uses MULTIMODAL_LLM_* when set; otherwise LLM_BASE_URL and LLM_MODEL (optional API keys)."
         },
         "imageVlmEnabled": {
           "type": "boolean",
           "label": "VLM description for images",
           "default": false,
-          "description": "Same .env variables as table LLM; use a vision-capable model."
+          "description": "Same env resolution as table LLM (MULTIMODAL_LLM_* preferred, else LLM_*). Use a vision-capable model."
         }
       }
     }

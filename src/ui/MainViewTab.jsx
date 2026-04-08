@@ -1,10 +1,10 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import './MainViewTab.css';
 
-const CHUNK_VIS_TYPE_ORDER = ['text', 'image', 'table', 'code'];
+const CHUNK_VIS_TYPE_ORDER = ['text', 'augment', 'image', 'table', 'code'];
 
 function defaultChunkTypeFilters() {
-  return { text: true, image: true, table: true, code: true };
+  return { text: true, augment: true, image: true, table: true, code: true };
 }
 
 function applyChunkTypeFiltersInDoc(doc, filters) {

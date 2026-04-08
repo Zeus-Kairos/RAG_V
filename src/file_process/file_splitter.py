@@ -7,9 +7,13 @@ from typing import Any
 from src.file_process.multimodal_splitter_helpers import (
     image_url_for_vision,
     markdown_image_target,
-    multimodal_llm_config_from_env,
-    multimodal_llm_credentials_sufficient,
-    openai_compatible_chat,
+)
+from src.utils.llm_helpers import (
+    complete_chat,
+    llm_env_configured_general_preferred,
+    llm_env_configured_multimodal_preferred,
+    resolve_llm_general_preferred,
+    resolve_llm_multimodal_preferred,
 )
 
 
@@ -298,6 +302,13 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
     def __init__(self, **kwargs):
         self.parser_params = kwargs
         self._table_chunker = None
+        self._contextual_headers = bool(self.parser_params.get("contextual_headers", False))
+        self._doc_augmentation = bool(self.parser_params.get("doc_augmentation", False))
+        try:
+            self._augmentation_question_count = int(self.parser_params.get("augmentation_question_count", 1))
+        except Exception:
+            self._augmentation_question_count = 1
+        self._augmentation_question_count = max(1, min(10, self._augmentation_question_count))
 
     def split_text(self, text: str, metadata: dict = None) -> list[Any]:
         """Split text into chunks.
@@ -343,7 +354,39 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         for doc in docs:
             splits, chunk_index = self._split_pipeline(pipeline, doc, chunk_index, metadata)
             documents.extend(splits)
+
+        if self._doc_augmentation:
+            documents, _chunk_index = self._augment_documents_with_questions(
+                documents,
+                start_chunk_index=chunk_index,
+                metadata=metadata,
+            )
+            chunk_index = _chunk_index
         return documents
+
+    def _contextual_header_prefix_for_meta(self, meta: dict[str, Any]) -> str:
+        if not meta:
+            return ""
+        headers: list[tuple[int, str]] = []
+        for k, v in meta.items():
+            if not isinstance(k, str):
+                continue
+            m = re.match(r"^Header\s+(\d+)$", k)
+            if not m:
+                continue
+            if v is None:
+                continue
+            val = str(v).strip()
+            if not val:
+                continue
+            level = int(m.group(1))
+            headers.append((level, val))
+        if not headers:
+            return ""
+        headers.sort(key=lambda x: x[0])
+        # Use markdown headings to preserve structure for retrieval.
+        lines = [("#" * lvl) + " " + txt for (lvl, txt) in headers]
+        return "\n".join(lines).strip()
 
     def _split_pipeline(self, pipeline: Any, doc: Any, chunk_index: int, metadata: dict) -> tuple[list[Any], int]:
         """Split document into recursive chunks with Chonkie pipeline.
@@ -385,7 +428,12 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
         file_id = metadata.get("file_id", "")
         documents = []
         for _, chunk_type, content, chunk_meta in all_tuples:
-            document = Document(page_content=content, 
+            page = content
+            if self._contextual_headers:
+                prefix = self._contextual_header_prefix_for_meta({**getattr(doc, "metadata", {}), **(chunk_meta or {})})
+                if prefix:
+                    page = f"{prefix}\n\n{content}"
+            document = Document(page_content=page, 
                     metadata={
                         "chunk_id": f"{file_id}_{chunk_index}",
                         "chunk_type": chunk_type,
@@ -396,6 +444,105 @@ class HybridSplitter(BaseFileSplitter, splitter_name="hybrid"):
             chunk_index += 1
             documents.append(document)
         return documents, chunk_index
+
+    def _llm_credentials_ok(self) -> bool:
+        return llm_env_configured_general_preferred()
+
+    def _generate_questions_for_chunk(self, chunk_text: str, count: int) -> list[str]:
+        if not self._llm_credentials_ok():
+            return []
+        api_url, api_key, model = resolve_llm_general_preferred()
+        n = max(1, min(10, int(count)))
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You generate user questions for retrieval augmentation. "
+                    "Return ONLY a JSON array of strings (questions). "
+                    "No preamble, no markdown, no keys."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Generate {n} short, specific questions that this chunk can answer.\n\n"
+                    f"Chunk:\n{chunk_text}"
+                ),
+            },
+        ]
+        raw = complete_chat(api_url, api_key, model, messages)
+        if not raw:
+            return []
+        raw = raw.strip()
+        # Prefer JSON array; fall back to line parsing.
+        try:
+            import json
+
+            data = json.loads(raw)
+            if isinstance(data, list):
+                out = []
+                for x in data:
+                    if isinstance(x, str) and x.strip():
+                        out.append(x.strip())
+                return out[:n]
+        except Exception:
+            pass
+
+        # Fallback: split on newlines, strip bullets/numbering.
+        lines = []
+        for line in raw.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            s = re.sub(r"^\s*[-*]\s*", "", s)
+            s = re.sub(r"^\s*\d+[\).\s-]+\s*", "", s)
+            if s:
+                lines.append(s)
+        return lines[:n]
+
+    def _augment_documents_with_questions(
+        self,
+        documents: list[Any],
+        *,
+        start_chunk_index: int,
+        metadata: dict | None,
+    ) -> tuple[list[Any], int]:
+        from langchain_core.documents import Document
+
+        if not documents:
+            return documents, start_chunk_index
+
+        file_id = (metadata or {}).get("file_id", "")
+        out_docs = list(documents)
+        chunk_index = start_chunk_index
+        n = self._augmentation_question_count
+
+        for doc in documents:
+            try:
+                meta = getattr(doc, "metadata", {}) or {}
+                if meta.get("chunk_type") != "text":
+                    continue
+                chunk_text = getattr(doc, "page_content", "") or ""
+                if not chunk_text.strip():
+                    continue
+                questions = self._generate_questions_for_chunk(chunk_text, n)
+                for qi, q in enumerate(questions):
+                    aug_meta = {
+                        "chunk_id": f"{file_id}_{chunk_index}",
+                        "chunk_type": "augment",
+                        "source_chunk_id": meta.get("chunk_id"),
+                        "source_chunk_content": chunk_text,
+                        "augment_index": qi,
+                        "augment_count": len(questions),
+                        **(metadata or {}),
+                    }
+                    out_docs.append(Document(page_content=q, metadata=aug_meta))
+                    chunk_index += 1
+            except Exception:
+                # Best-effort augmentation: never fail the base chunking run.
+                continue
+
+        return out_docs, chunk_index
 
     def _chunk_table(self, table_content: str) -> list[str]:
         if not table_content:
@@ -412,20 +559,20 @@ class MultiModalSplitter(HybridSplitter, splitter_name="multimodal"):
     """Like HybridSplitter (header split + Chonkie markdown/recursive), but tables stay whole.
 
     Optional: LLM summary of each full table (for embedding), and optional VLM description
-    of each image. Endpoint and model come from env: MULTIMODAL_LLM_BASE_URL,
-    MULTIMODAL_LLM_MODEL, optional MULTIMODAL_LLM_API_KEY.
+    of each image. Uses MULTIMODAL_LLM_* when set; otherwise falls back to general
+    LLM_BASE_URL, LLM_MODEL, optional LLM_API_KEY.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**{**kwargs, "table_chunk_enabled": False})
 
     def _llm_credentials_ok(self) -> bool:
-        return multimodal_llm_credentials_sufficient()
+        return llm_env_configured_multimodal_preferred()
 
     def _summarize_table(self, table_markdown: str) -> str | None:
         if not self._llm_credentials_ok():
             return None
-        api_url, api_key, model = multimodal_llm_config_from_env()
+        api_url, api_key, model = resolve_llm_multimodal_preferred()
         messages = [
             {
                 "role": "system",
@@ -440,7 +587,7 @@ class MultiModalSplitter(HybridSplitter, splitter_name="multimodal"):
                 "content": f"Summarize this table for retrieval:\n\n{table_markdown}",
             },
         ]
-        return openai_compatible_chat(
+        return complete_chat(
             api_url,
             api_key,
             model,
@@ -456,7 +603,7 @@ class MultiModalSplitter(HybridSplitter, splitter_name="multimodal"):
         image_url = image_url_for_vision(target, file_path)
         if not image_url:
             return None
-        api_url, api_key, model = multimodal_llm_config_from_env()
+        api_url, api_key, model = resolve_llm_multimodal_preferred()
         messages = [
             {
                 "role": "system",
@@ -474,7 +621,7 @@ class MultiModalSplitter(HybridSplitter, splitter_name="multimodal"):
                 ],
             },
         ]
-        return openai_compatible_chat(
+        return complete_chat(
             api_url,
             api_key,
             model,

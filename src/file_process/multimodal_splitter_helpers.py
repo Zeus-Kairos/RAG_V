@@ -1,4 +1,7 @@
-"""HTTP / vision helpers for :class:`MultiModalSplitter` in ``file_splitter``."""
+"""Vision / Markdown helpers for :class:`MultiModalSplitter` in ``file_splitter``.
+
+LLM HTTP calls and env-based credential resolution live in ``src.utils.llm_helpers``.
+"""
 
 from __future__ import annotations
 
@@ -9,65 +12,12 @@ import os
 import re
 from typing import Any
 
-import httpx
-
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass
+from src.utils.llm_helpers import (
+    llm_env_configured_general_preferred,
+    llm_env_configured_multimodal_preferred,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _chat_completions_url(api_url: str) -> str:
-    u = (api_url or "").strip().rstrip("/")
-    if not u:
-        return ""
-    if u.endswith("/chat/completions"):
-        return u
-    return f"{u}/chat/completions"
-
-
-def openai_compatible_chat(
-    api_url: str,
-    api_key: str,
-    model: str,
-    messages: list[dict[str, Any]],
-    *,
-    timeout: float = 120.0,
-) -> str | None:
-    url = _chat_completions_url(api_url)
-    if not url:
-        return None
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if (api_key or "").strip():
-        headers["Authorization"] = f"Bearer {api_key.strip()}"
-    payload: dict[str, Any] = {"model": model, "messages": messages}
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            r = client.post(url, headers=headers, json=payload)
-            r.raise_for_status()
-            data = r.json()
-        choices = data.get("choices") or []
-        if not choices:
-            return None
-        msg = choices[0].get("message") or {}
-        content = msg.get("content")
-        if isinstance(content, str):
-            return content.strip() or None
-        if isinstance(content, list):
-            parts = []
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    parts.append(block.get("text") or "")
-            joined = "".join(parts).strip()
-            return joined or None
-        return None
-    except Exception as exc:
-        logger.warning("OpenAI-compatible chat request failed: %s", exc)
-        return None
 
 
 def markdown_image_target(markdown_line: str) -> str | None:
@@ -112,20 +62,6 @@ def image_url_for_vision(target: str, file_path: str | None) -> str | None:
     return None
 
 
-def multimodal_llm_config_from_env() -> tuple[str, str, str]:
-    """(base_url, api_key, model) for MultiModalSplitter; from environment only."""
-
-    base = (os.getenv("MULTIMODAL_LLM_BASE_URL") or "").strip()
-    key = (os.getenv("MULTIMODAL_LLM_API_KEY") or "").strip()
-    model = (os.getenv("MULTIMODAL_LLM_MODEL") or "").strip()
-    return base, key, model
-
-
-def multimodal_llm_credentials_sufficient() -> bool:
-    base, _key, model = multimodal_llm_config_from_env()
-    return bool(base and model)
-
-
 def multimodal_chunk_run_warning(chunk_parameters: dict[str, Any] | None) -> str | None:
     """When table/image LLM is requested but .env is incomplete, return a user-facing warning."""
 
@@ -135,10 +71,27 @@ def multimodal_chunk_run_warning(chunk_parameters: dict[str, Any] | None) -> str
     image_on = bool(chunk_parameters.get("image_vlm_enabled"))
     if not table_on and not image_on:
         return None
-    if multimodal_llm_credentials_sufficient():
+    if llm_env_configured_multimodal_preferred():
         return None
     return (
-        "Table LLM and/or image VLM is enabled, but MULTIMODAL_LLM_BASE_URL and "
-        "MULTIMODAL_LLM_MODEL must both be set in .env. Tables and images were "
-        "chunked as raw markdown only."
+        "Table LLM and/or image VLM is enabled, but no LLM is configured. Set "
+        "LLM_BASE_URL and LLM_MODEL in .env, or set MULTIMODAL_LLM_BASE_URL and "
+        "MULTIMODAL_LLM_MODEL (optional API keys). Tables and images were chunked as raw markdown only."
+    )
+
+
+def doc_augmentation_chunk_run_warning(chunk_parameters: dict[str, Any] | None) -> str | None:
+    """When doc augmentation is requested but .env is incomplete, return a user-facing warning."""
+
+    if not chunk_parameters:
+        return None
+    doc_aug = bool(chunk_parameters.get("doc_augmentation"))
+    if not doc_aug:
+        return None
+    if llm_env_configured_general_preferred():
+        return None
+    return (
+        "Doc augmentation is enabled, but no LLM is configured. Set LLM_BASE_URL and LLM_MODEL "
+        "in .env (optional LLM_API_KEY), or set MULTIMODAL_LLM_BASE_URL and MULTIMODAL_LLM_MODEL. "
+        "No augment questions were generated."
     )

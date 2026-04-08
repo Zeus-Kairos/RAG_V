@@ -8,7 +8,10 @@ from src.file_process.utils import SUPPORTED_FORMATS
 from src.file_process.indexer import Indexer
 from src.utils.paths import get_upload_dir
 from src.file_process.file_splitter import BaseFileSplitter
-from src.file_process.multimodal_splitter_helpers import multimodal_chunk_run_warning
+from src.file_process.multimodal_splitter_helpers import (
+    doc_augmentation_chunk_run_warning,
+    multimodal_chunk_run_warning,
+)
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser
 from src.memory.memory import MemoryManager
@@ -337,6 +340,8 @@ class ParallelFileProcessingPipeline:
         run_warning: str | None = None
         if framework == "multimodal":
             run_warning = multimodal_chunk_run_warning(kwargs)
+        elif framework == "hybrid":
+            run_warning = doc_augmentation_chunk_run_warning(kwargs)
 
         try:                      
             chunk_run_id = self.memory_manager.chunking_manager.save_chunk_run_config(
