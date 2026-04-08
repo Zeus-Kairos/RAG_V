@@ -142,6 +142,47 @@
   align-items: flex-end;
   background: #fff;
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.playground-preprocess {
+  width: 100%;
+  border: 1px solid #e8eaed;
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 8px 10px;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.playground-preprocess-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #5f6368;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.playground-preprocess-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.playground-preprocess-item {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #202124;
+  background: #fff;
+  border: 1px solid #e8eaed;
+  border-radius: 10px;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .playground-composer textarea {
@@ -210,6 +251,17 @@
 .playground-chunk-idx {
   font-weight: 800;
   color: #0969da;
+}
+
+.playground-chunk-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #7c2d12;
+  background: rgba(234, 88, 12, 0.14);
+  border: 1px solid rgba(234, 88, 12, 0.32);
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 .playground-chunk-title {

@@ -17,6 +17,7 @@ from src.utils.paths import get_upload_dir
 from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
 from src.retriever.retrievers import BaseRetriever
+from src.retriever.retriever_wrapper import RetrieverWrapper
 from src.utils.logging_config import get_logger
 from src.utils.umap_projection import project_2d, subsample_for_projection
 import numpy as np
@@ -939,6 +940,7 @@ async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
         request_data = await request.json()
         query = request_data.get('query')
         retriever_type = request_data.get('retriever_type', 'vector')
+        query_enhancement = request_data.get("query_enhancement", "none")
         raw_k = request_data.get('k', 5)
         try:
             k = int(raw_k)
@@ -967,25 +969,38 @@ async def retrieve_documents(kb_name: str, index_run_id: int, request: Request):
             retriever = BaseRetriever.create(retriever_type, indexer)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        
-        # Perform retrieval
-        results = retriever.retrieve(query, k=k)
-        
-        # Format results
-        formatted_results = []
-        for doc, score in results:
-            formatted_results.append({
-                "id": doc.metadata.get('chunk_id'),
-                "document_name": doc.metadata.get('filename', 'Unknown'),
-                "file_path": doc.metadata.get('filepath', 'Unknown'),
-                "snippet": doc.page_content[:200] + ("..." if len(doc.page_content) > 200 else ""),
-                "relevance_score": float(score)
-            })
-        
+
+        def format_results(pairs):
+            formatted = []
+            for doc, score in pairs:
+                formatted.append(
+                    {
+                        "id": doc.metadata.get("chunk_id"),
+                        "document_name": doc.metadata.get("filename", "Unknown"),
+                        "file_path": doc.metadata.get("filepath", "Unknown"),
+                        "snippet": doc.page_content[:200] + ("..." if len(doc.page_content) > 200 else ""),
+                        "relevance_score": float(score),
+                    }
+                )
+            return formatted
+
+        wrapper = RetrieverWrapper()
+        queries_used = wrapper.preprocess(str(query), str(query_enhancement))
+        if not queries_used:
+            queries_used = [str(query).strip()]
+
+        per_query_formatted = []
+        for q in queries_used:
+            per_query_formatted.append(format_results(retriever.retrieve(q, k=k)))
+
+        final_results = wrapper.postprocess(str(query_enhancement), per_query_formatted, k=k)
+
         return {
             "success": True,
-            "results": formatted_results,
-            "retriever_type": retriever_type
+            "results": final_results,
+            "retriever_type": retriever_type,
+            "query_enhancement": query_enhancement,
+            "queries_used": queries_used,
         }
     except HTTPException:
         raise

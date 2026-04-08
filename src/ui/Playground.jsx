@@ -27,23 +27,36 @@ export default function Playground({ mainViewApi = null }) {
   const { knowledgebases } = useKnowledgebaseStore();
   const activeKB = knowledgebases.find((kb) => kb.is_active) || knowledgebases[0];
 
-  const { retrieverType, setRetrieverType, k, setK } = useRetrievalStore(
+  const { retrieverType, setRetrieverType, k, setK, queryEnhancement, setQueryEnhancement } = useRetrievalStore(
     useShallow((s) => ({
       retrieverType: s.retrieverType,
       setRetrieverType: s.setRetrieverType,
       k: s.k,
       setK: s.setK,
+      queryEnhancement: s.queryEnhancement,
+      setQueryEnhancement: s.setQueryEnhancement,
     })),
   );
+
+  const queryEnhancementOptions = [
+    { value: 'none', label: 'None' },
+    { value: 'multi-query', label: 'Multi-Query' },
+    { value: 'decomposition', label: 'Decomposition' },
+    { value: 'step-back', label: 'Step-Back' },
+    { value: 'hype', label: 'HyPE' },
+    { value: 'hyde', label: 'HyDE' },
+  ];
 
   const [availableRetrievers, setAvailableRetrievers] = useState(['vector', 'bm25', 'fusion', 'rerank']);
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState([]); // { role: 'user'|'assistant', content: string }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [preprocessedQueries, setPreprocessedQueries] = useState([]);
 
   const [topKChunks, setTopKChunks] = useState([]); // { chunkIndex, chunkId, documentName, snippet, score }
   const [highlightedChunkIndices, setHighlightedChunkIndices] = useState([]);
+  const [chunkTypeById, setChunkTypeById] = useState({}); // { [chunkId]: chunk_type }
 
   const [lastIndexCtx, setLastIndexCtx] = useState(null); // { kbName, indexRunId }
   const [listChunkPopover, setListChunkPopover] = useState(null);
@@ -188,6 +201,8 @@ export default function Playground({ mainViewApi = null }) {
     setError(null);
     setHighlightedChunkIndices([]);
     setTopKChunks([]);
+    setChunkTypeById({});
+    setPreprocessedQueries([]);
 
     // single-turn: reset messages
     setMessages([{ role: 'user', content: query }]);
@@ -218,6 +233,7 @@ export default function Playground({ mainViewApi = null }) {
           query,
           retriever_type: retrieverType,
           k,
+          query_enhancement: queryEnhancement,
         }),
       });
 
@@ -227,6 +243,12 @@ export default function Playground({ mainViewApi = null }) {
       }
       if (!retrieveJson?.success) {
         throw new Error(retrieveJson?.message || 'Retrieve failed');
+      }
+
+      if (String(queryEnhancement || '') !== 'none' && Array.isArray(retrieveJson.queries_used)) {
+        setPreprocessedQueries(retrieveJson.queries_used.map((x) => String(x)).filter((s) => s.trim()));
+      } else {
+        setPreprocessedQueries([]);
       }
 
       const results = Array.isArray(retrieveJson.results) ? retrieveJson.results : [];
@@ -257,17 +279,30 @@ export default function Playground({ mainViewApi = null }) {
           throw new Error(typeof d === 'string' ? d : text || res.statusText);
         }
         if (!json?.success) throw new Error(json?.message || 'Failed to load chunk detail');
-        return { index: it.chunkIndex, content: json.content ?? '' };
+        const meta = json.metadata ?? {};
+        const chunkType = String(meta.chunk_type ?? '');
+        const contentForChat =
+          chunkType === 'augment' && typeof meta.source_chunk_content === 'string' && meta.source_chunk_content.trim()
+            ? meta.source_chunk_content
+            : (json.content ?? '');
+        return { index: it.chunkIndex, content: contentForChat, chunkId: it.chunkId, chunkType };
       });
 
       const chunksForLlm = await Promise.all(chunkDetailPromises);
+      setChunkTypeById(() => {
+        const next = {};
+        for (const c of chunksForLlm) {
+          if (c?.chunkId) next[String(c.chunkId)] = String(c.chunkType || '');
+        }
+        return next;
+      });
 
       const chatRes = await fetchWithAuth('/api/chat/playground', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query,
-          chunks: chunksForLlm,
+          chunks: chunksForLlm.map((c) => ({ index: c.index, content: c.content })),
         }),
       });
       const chatText = await chatRes.text();
@@ -297,7 +332,7 @@ export default function Playground({ mainViewApi = null }) {
     } finally {
       setLoading(false);
     }
-  }, [activeKB?.id, draft, k, resolveIndexRunId, retrieverType]);
+  }, [activeKB?.id, draft, k, queryEnhancement, resolveIndexRunId, retrieverType]);
 
   if (!activeKB) {
     return <div className="playground-error">No active knowledgebase. Select or create one first.</div>;
@@ -316,6 +351,15 @@ export default function Playground({ mainViewApi = null }) {
             {availableRetrievers.map((r) => (
               <option key={r} value={r}>
                 {String(r).charAt(0).toUpperCase() + String(r).slice(1)}
+              </option>
+            ))}
+          </select>
+
+          <label>Query Enhancement</label>
+          <select value={queryEnhancement} onChange={(e) => setQueryEnhancement(e.target.value)}>
+            {queryEnhancementOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
               </option>
             ))}
           </select>
@@ -359,6 +403,18 @@ export default function Playground({ mainViewApi = null }) {
               )}
             </div>
             <div className="playground-composer">
+              {String(queryEnhancement || '') !== 'none' && preprocessedQueries.length > 0 ? (
+                <div className="playground-preprocess">
+                  <div className="playground-preprocess-title">Queries (preprocess)</div>
+                  <div className="playground-preprocess-list">
+                    {preprocessedQueries.map((q, idx) => (
+                      <div key={idx} className="playground-preprocess-item">
+                        {q}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -379,6 +435,8 @@ export default function Playground({ mainViewApi = null }) {
               ) : (
                 topKChunks.map((c) => {
                   const isHl = highlightedSet.has(Number(c.chunkIndex));
+                  const chunkType = String(chunkTypeById?.[String(c.chunkId)] || '');
+                  const isAugment = chunkType === 'augment';
                   return (
                     <div
                       key={c.chunkIndex}
@@ -386,6 +444,7 @@ export default function Playground({ mainViewApi = null }) {
                     >
                       <div className="playground-chunk-meta">
                         <span className="playground-chunk-idx">#{c.chunkIndex}</span>
+                        {isAugment ? <span className="playground-chunk-badge">Augment</span> : null}
                         <span className="playground-chunk-id">
                           ID:{' '}
                           <button

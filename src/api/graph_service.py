@@ -1,7 +1,5 @@
 import json
-from collections import defaultdict
-from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from fastapi import HTTPException
 
@@ -162,77 +160,42 @@ def build_knowledgebase_graph(*, memory_manager, kb_id: int) -> Dict[str, Any]:
                 }
             )
 
-        # Chunk edges: one parser→framework edge per (file, parse_run, parser, framework).
-        def chunk_row_sort_key(row: tuple) -> Tuple[float, int]:
-            crid = int(row[10])
-            rt = row[15]
-            ts = 0.0
-            if rt is not None:
-                if isinstance(rt, (int, float)):
-                    ts = float(rt)
-                elif isinstance(rt, str):
-                    try:
-                        ts = datetime.fromisoformat(rt.replace("Z", "+00:00")).timestamp()
-                    except Exception:
-                        ts = 0.0
-            return (ts, crid)
-
-        rows_by_chunk_key: Dict[tuple, list] = defaultdict(list)
+        # Chunk edges: one parser→chunker edge per chunk_run_id (i.e. each chunking run draws its own line).
+        #
+        # NOTE: We intentionally do NOT collapse multiple runs into a single edge; otherwise the UI will
+        # always show only one parser→chunker link and lose run-by-run visibility.
         for r in chunk_groups:
+            parse_id = int(r[0])
             file_id = int(r[1])
+            filename = r[2]
+            filepath = r[3]
             parse_run_id = int(r[4])
             parser = r[5] or "unknown"
+            parser_parameters = loads_maybe_json(r[6])
+            parse_time_usage = r[7]
+            parse_time = r[8]
+            parse_is_active = bool(r[9])
+            chunk_run_id = int(r[10])
             framework = r[11] or "unknown"
-            rows_by_chunk_key[(file_id, parse_run_id, parser, framework)].append(r)
-
-        for (_file_id, _parse_run_id, _parser, _fw), rows in rows_by_chunk_key.items():
-            if not rows:
-                continue
-            sorted_rows = sorted(rows, key=chunk_row_sort_key, reverse=True)
-            primary = sorted_rows[0]
-
-            parse_id = int(primary[0])
-            file_id = int(primary[1])
-            filename = primary[2]
-            filepath = primary[3]
-            parse_run_id = int(primary[4])
-            parser = primary[5] or "unknown"
-            parser_parameters = loads_maybe_json(primary[6])
-            parse_time_usage = primary[7]
-            parse_time = primary[8]
-            parse_is_active = bool(primary[9])
-            chunk_run_id = int(primary[10])
-            framework = primary[11] or "unknown"
-            chunk_parameters = loads_maybe_json(primary[12])
-            chunk_run_is_active = bool(primary[13])
-            chunk_run_in_sync = bool(primary[14])
-            run_time = primary[15]
-            chunks_count = int(primary[16]) if primary[16] is not None else None
-
-            file_parse_links = []
-            for row in sorted_rows:
-                file_parse_links.append(
-                    {
-                        "chunk_run_id": int(row[10]),
-                        "run_time": row[15],
-                        "chunks_count": int(row[16]) if row[16] is not None else 0,
-                        "chunk_run_is_active": bool(row[13]),
-                        "chunk_run_in_sync": bool(row[14]),
-                    }
-                )
+            chunk_parameters = loads_maybe_json(r[12])
+            chunk_run_is_active = bool(r[13])
+            chunk_run_in_sync = bool(r[14])
+            run_time = r[15]
+            chunks_count = int(r[16]) if r[16] is not None else None
 
             parser_node_id = f"parser:{parser}"
             upsert_node(parser_node_id, "parser", parser)
 
             chunker_node_id = "chunker:langchain" if framework == "langchain" else f"chunker:{framework}"
-            chunk_edge_id = f"chunk:{file_id}:{parse_run_id}:{framework}"
-
             upsert_node(
                 chunker_node_id,
                 "chunker",
                 "langchain" if framework == "langchain" else framework,
                 {"framework": framework},
             )
+
+            # Keep edge ids unique across runs so frontend graph libs never collapse/dedupe them.
+            chunk_edge_id = f"chunk:{file_id}:{parse_run_id}:{chunk_run_id}"
             edges.append(
                 {
                     "id": chunk_edge_id,
@@ -257,7 +220,17 @@ def build_knowledgebase_graph(*, memory_manager, kb_id: int) -> Dict[str, Any]:
                         "run_parameters": chunk_parameters,
                         "run_time": run_time,
                         "chunks_count": chunks_count,
-                        "file_parse_links": file_parse_links,
+                        # Backwards-compatible field: when multiple runs were collapsed, this listed all runs.
+                        # Now each edge represents exactly one run.
+                        "file_parse_links": [
+                            {
+                                "chunk_run_id": chunk_run_id,
+                                "run_time": run_time,
+                                "chunks_count": chunks_count or 0,
+                                "chunk_run_is_active": chunk_run_is_active,
+                                "chunk_run_in_sync": chunk_run_in_sync,
+                            }
+                        ],
                     },
                 }
             )

@@ -16,14 +16,25 @@ const EmbeddingSettings = () => {
   } = useKnowledgebaseStore();
   
   // Retriever settings (shallow: avoid re-renders when unrelated retrieval state changes)
-  const { retrieverType, setRetrieverType, k, setK } = useRetrievalStore(
+  const { retrieverType, setRetrieverType, k, setK, queryEnhancement, setQueryEnhancement } = useRetrievalStore(
     useShallow((s) => ({
       retrieverType: s.retrieverType,
       setRetrieverType: s.setRetrieverType,
       k: s.k,
       setK: s.setK,
+      queryEnhancement: s.queryEnhancement,
+      setQueryEnhancement: s.setQueryEnhancement,
     })),
   );
+
+  const queryEnhancementOptions = [
+    { value: 'none', label: 'None' },
+    { value: 'multi-query', label: 'Multi-Query' },
+    { value: 'decomposition', label: 'Decomposition' },
+    { value: 'step-back', label: 'Step-Back' },
+    { value: 'hype', label: 'HyPE' },
+    { value: 'hyde', label: 'HyDE' },
+  ];
   
   // Available retrievers
   const [availableRetrievers, setAvailableRetrievers] = useState(['vector', 'bm25', 'fusion']);
@@ -250,6 +261,22 @@ const EmbeddingSettings = () => {
                 {availableRetrievers.map(retriever => (
                   <option key={retriever} value={retriever}>
                     {retriever.charAt(0).toUpperCase() + retriever.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="retriever-setting-item">
+            <span className="retriever-setting-label">Query Enhancement:</span>
+            <div className="retriever-setting-control">
+              <select
+                className="retriever-type-select"
+                value={queryEnhancement}
+                onChange={(e) => setQueryEnhancement(e.target.value)}
+              >
+                {queryEnhancementOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
                   </option>
                 ))}
               </select>

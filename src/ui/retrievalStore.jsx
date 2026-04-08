@@ -18,6 +18,7 @@ const useRetrievalStore = create((set, get) => {
     // Retriever settings
     retrieverType: 'vector',
     k: 5,
+    queryEnhancement: 'none',
     
     // Action functions
     setCurrentQuery: (query) => {
@@ -30,6 +31,10 @@ const useRetrievalStore = create((set, get) => {
     
     setK: (value) => {
       set({ k: value });
+    },
+
+    setQueryEnhancement: (value) => {
+      set({ queryEnhancement: String(value || 'none').toLowerCase() });
     },
     
     setSelectedRuns: (selectedRuns) => {
@@ -154,7 +159,7 @@ const useRetrievalStore = create((set, get) => {
       try {
         set({ isLoading: true, error: null });
         
-        const { activeKnowledgebase, indexRuns, selectedRuns, retrieverType, k } = get();
+        const { activeKnowledgebase, indexRuns, selectedRuns, retrieverType, k, queryEnhancement } = get();
         
         // Ensure we have all required parameters
         if (!activeKnowledgebase || !activeKnowledgebase.name) {
@@ -189,7 +194,8 @@ const useRetrievalStore = create((set, get) => {
               body: JSON.stringify({
                 query,
                 retriever_type: retrieverType,
-                k
+                k,
+                query_enhancement: queryEnhancement,
               })
             }
           );
