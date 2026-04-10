@@ -1,6 +1,7 @@
 import os
 import shutil
 import json
+import math
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -25,9 +26,42 @@ import requests
 
 logger = get_logger(__name__)
 
+# JSON cannot represent NaN/Inf; sanitize evaluation outputs.
+def _json_safe(obj: Any) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, (str, int, bool)):
+        return obj
+    if isinstance(obj, list):
+        return [_json_safe(x) for x in obj]
+    if isinstance(obj, tuple):
+        return [_json_safe(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    # pydantic / numpy scalars / others
+    try:
+        f = float(obj)
+        return f if math.isfinite(f) else None
+    except Exception:
+        return str(obj)
+
 # business logic modules (keep main.py thin: API routes only)
-from src.api.chat_service import playground_chat_answer
+from src.api.chat_service import get_playground_llm_info, playground_chat_answer
+from src.api.ragas_llm import get_evaluation_judge_llm_info
 from src.api.graph_service import build_knowledgebase_graph
+from src.api.evaluation_service import (
+    get_dataset as eval_get_dataset,
+    list_datasets as eval_list_datasets,
+    delete_evaluation_run as eval_delete_evaluation_run,
+    get_evaluation_run as eval_get_evaluation_run,
+    list_evaluation_runs as eval_list_evaluation_runs,
+    run_evaluation as eval_run_evaluation,
+    save_evaluation_run as eval_save_evaluation_run,
+    update_evaluation_run_meta as eval_update_evaluation_run_meta,
+    save_uploaded_dataset_bytes as eval_save_uploaded_dataset_bytes,
+)
 
 # Default user ID (since we don't have authentication)
 DEFAULT_USER_ID = 1
@@ -54,6 +88,22 @@ class PlaygroundChatChunk(BaseModel):
 class PlaygroundChatRequest(BaseModel):
     query: str
     chunks: List[PlaygroundChatChunk]
+
+
+class EvaluationRunRequest(BaseModel):
+    dataset_id: str
+    kb_name: str
+    chunk_run_id: int
+    index_run_id: int
+    retriever_type: str
+    query_enhancement: str = "none"
+    k: int = 5
+    max_rows: Optional[int] = None
+
+
+class EvaluationRunMetaUpdate(BaseModel):
+    title: Optional[str] = None
+    note: Optional[str] = None
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
@@ -238,6 +288,162 @@ async def playground_chat(request_body: PlaygroundChatRequest):
         raise
     except Exception as e:
         logger.exception(f"Error in playground chat: {e}", stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/evaluation/datasets/upload")
+async def upload_evaluation_dataset(file: UploadFile = File(...)):
+    """Upload an evaluation dataset JSON file."""
+    try:
+        b = await file.read()
+        meta = eval_save_uploaded_dataset_bytes(b)
+        return {"success": True, "dataset": meta}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error uploading evaluation dataset: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/evaluation/datasets")
+async def list_evaluation_datasets():
+    """List available evaluation datasets."""
+    try:
+        return {"success": True, "datasets": eval_list_datasets()}
+    except Exception as e:
+        logger.exception("Error listing evaluation datasets: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/evaluation/datasets/{dataset_id}")
+async def get_evaluation_dataset(dataset_id: str, offset: int = 0, limit: int = 50):
+    """Get dataset metadata and a page of rows."""
+    meta, rows, total = eval_get_dataset(dataset_id, offset=int(offset), limit=int(limit))
+    return {"success": True, "dataset": meta, "rows": rows, "total": total}
+
+
+@app.post("/api/evaluation/run")
+async def run_evaluation(request_body: EvaluationRunRequest):
+    """Run RAG evaluation (retrieval + LLM + RAGAS metrics)."""
+    try:
+        rows, summary = eval_run_evaluation(
+            memory_manager=memory_manager,
+            get_indexer_fn=get_indexer,
+            dataset_id=request_body.dataset_id,
+            kb_name=request_body.kb_name,
+            index_run_id=int(request_body.index_run_id),
+            retriever_type=request_body.retriever_type,
+            query_enhancement=request_body.query_enhancement,
+            k=int(request_body.k),
+            max_rows=request_body.max_rows,
+        )
+        rows_out = [
+            {
+                "query": r.query,
+                "answer": r.answer,
+                "response": r.response,
+                "retrieved_chunk_ids": r.retrieved_chunk_ids,
+                "retrieved_contexts": r.retrieved_contexts,
+                "metrics": _json_safe(r.metrics),
+            }
+            for r in rows
+        ]
+
+        summary_out = _json_safe(summary)
+
+        run_meta = eval_save_evaluation_run(
+            request_params=_json_safe(
+                {
+                    "dataset_id": request_body.dataset_id,
+                    "kb_name": request_body.kb_name,
+                    "chunk_run_id": int(request_body.chunk_run_id),
+                    "index_run_id": int(request_body.index_run_id),
+                    "retriever_type": request_body.retriever_type,
+                    "query_enhancement": request_body.query_enhancement,
+                    "k": int(request_body.k),
+                    "max_rows": request_body.max_rows,
+                }
+            ),
+            summary=summary_out,
+            rows=rows_out,
+        )
+
+        return {
+            "success": True,
+            "run": {"run_id": run_meta.get("run_id"), "created_at": run_meta.get("created_at")},
+            "summary": summary_out,
+            "rows": rows_out,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error running evaluation: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/evaluation/runs")
+async def list_evaluation_runs(kb_name: Optional[str] = None, dataset_id: Optional[str] = None, limit: int = 50):
+    """List persisted evaluation runs (most recent first)."""
+    try:
+        runs = eval_list_evaluation_runs(kb_name=kb_name, dataset_id=dataset_id, limit=int(limit))
+        return {"success": True, "runs": _json_safe(runs)}
+    except Exception as e:
+        logger.exception("Error listing evaluation runs: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/evaluation/runs/{run_id}")
+async def get_evaluation_run(run_id: str):
+    """Fetch a persisted evaluation run payload."""
+    try:
+        payload = eval_get_evaluation_run(run_id)
+        return {"success": True, "run": _json_safe(payload)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error fetching evaluation run: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/llm/info")
+async def get_llm_info():
+    """Return current chat/playground LLM configuration (non-secret)."""
+    try:
+        resp_llm = get_playground_llm_info()
+        judge_llm = get_evaluation_judge_llm_info()
+        return {
+            "success": True,
+            "response_llm": {"provider": resp_llm.get("provider"), "model": resp_llm.get("model")},
+            "judge_llm": {"provider": judge_llm.get("provider"), "model": judge_llm.get("model")},
+        }
+    except Exception as e:
+        logger.exception("Error reading LLM info: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/api/evaluation/runs/{run_id}")
+async def update_evaluation_run_meta(run_id: str, request_body: EvaluationRunMetaUpdate):
+    """Update a persisted evaluation run's title/note."""
+    try:
+        meta = eval_update_evaluation_run_meta(run_id, title=request_body.title, note=request_body.note)
+        return {"success": True, "meta": _json_safe(meta)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error updating evaluation run meta: %s", e, stack_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/evaluation/runs/{run_id}")
+async def delete_evaluation_run(run_id: str):
+    """Delete a persisted evaluation run."""
+    try:
+        eval_delete_evaluation_run(run_id)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error deleting evaluation run: %s", e, stack_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for creating a knowledge base

@@ -317,3 +317,89 @@ export function getDoclingFieldConfig() {
 export function getHybridFieldConfig() {
   return getFlatFrameworkFieldBlock('hybrid');
 }
+
+/** Same rule as `SplitterParamFields`: field is disabled when `values[field] === equals`. */
+function isDisabledSpec(spec, values) {
+  if (!spec || typeof spec !== 'object') return false;
+  if (!spec.disabledWhen) return false;
+  const { field, equals } = spec.disabledWhen;
+  return values[field] === equals;
+}
+
+/**
+ * Collect field specs for a splitter framework (pipeline + chunker catalog + flat fields).
+ * Hybrid: adds `tableChunkSizeRow` / `tableChunkSizeCharacter` (store keys) with tableChunkEnabled gating.
+ */
+export function collectSplitterFieldSpecs(frameworkId) {
+  const fw = splitterConfig.frameworks[frameworkId];
+  if (!fw) return {};
+  const out = {};
+  if (Array.isArray(fw.pipeline)) {
+    for (const p of fw.pipeline) {
+      Object.assign(out, p.fields || {});
+    }
+  }
+  if (Array.isArray(fw.chunkerCatalog)) {
+    for (const c of fw.chunkerCatalog) {
+      Object.assign(out, c.fields || {});
+    }
+  }
+  if (fw.fields && typeof fw.fields === 'object') {
+    Object.assign(out, fw.fields);
+  }
+  if (frameworkId === 'hybrid' && fw.fields?.tableChunkSize) {
+    const base = fw.fields.tableChunkSize;
+    const dw = { field: 'tableChunkEnabled', equals: false };
+    out.tableChunkSizeRow = { ...base, disabledWhen: dw };
+    out.tableChunkSizeCharacter = { ...base, disabledWhen: dw };
+  }
+  return out;
+}
+
+function deepOmitDisabledSplitterParams(obj, specs, root) {
+  if (obj == null) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map((item) =>
+      item && typeof item === 'object' && !Array.isArray(item)
+        ? deepOmitDisabledSplitterParams(item, specs, root)
+        : item
+    );
+  }
+  if (typeof obj !== 'object') return obj;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k.startsWith('_')) continue;
+    const spec = specs[k];
+    if (spec && isDisabledSpec(spec, root)) continue;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      out[k] = deepOmitDisabledSplitterParams(v, specs, root);
+    } else if (Array.isArray(v)) {
+      out[k] = deepOmitDisabledSplitterParams(v, specs, root);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * Drop splitter/chunk run parameter keys that are disabled for the current value tuple
+ * (matches Splitter UI: `disabledWhen` in splitterConfig).
+ */
+export function filterVisibleSplitterParams(frameworkId, params) {
+  if (!params || typeof params !== 'object') return {};
+  const specs = collectSplitterFieldSpecs(frameworkId);
+  return deepOmitDisabledSplitterParams(params, specs, params);
+}
+
+/** Pretty-print for graph tooltips; truncates very long JSON. */
+export function formatParamsForTooltip(params, maxLen = 1400) {
+  if (!params || typeof params !== 'object') return '';
+  try {
+    let s = JSON.stringify(params, null, 2);
+    if (s.length > maxLen) s = `${s.slice(0, maxLen - 1)}…`;
+    return s;
+  } catch {
+    return String(params);
+  }
+}

@@ -3,6 +3,19 @@ import { fetchWithAuth } from './store';
 import useKnowledgebaseStore from './store';
 import ChunkRunHistoryPanel from './ChunkRunHistoryPanel';
 import ParseRunPopup from './ParseRunPopup';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faArrowsRotate,
+  faFolder,
+  faFileLines,
+  faLayerGroup,
+  faTrashCan,
+  faCircleCheck,
+  faCircleXmark,
+  faSpinner,
+  faCheck,
+  faDatabase,
+} from '@fortawesome/free-solid-svg-icons';
 import './KnowledgebaseBrowser.css';
 
 const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
@@ -1177,7 +1190,11 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                 }}
               >
                 {kb.name}
-                {kb.is_active && <span className="kb-knowledgebase-active-indicator">✓</span>}
+                {kb.is_active && (
+                  <span className="kb-knowledgebase-active-indicator" aria-hidden>
+                    <FontAwesomeIcon icon={faCheck} />
+                  </span>
+                )}
               </div>
               <div className="kb-knowledgebase-actions">
                 <button 
@@ -1188,48 +1205,23 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                   }}
                   disabled={knowledgebases.length <= 1}
                   title={knowledgebases.length <= 1 ? 'Cannot delete the only knowledgebase' : 'Delete knowledgebase'}
+                  aria-label="Delete knowledgebase"
                 >
-                  🗑️
+                  <FontAwesomeIcon icon={faTrashCan} />
                 </button>
               </div>
             </div>
             ))}
           </div>
           <button 
+            type="button"
             onClick={() => setShowCreateKBModal(true)} 
             className="kb-btn kb-btn-tertiary kb-new-kb-btn"
             disabled={isLoading}
             title="Create new knowledgebase"
+            aria-label="Create new knowledgebase"
           >
-            <svg width="60" height="60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-              <path d="M80,360 L256,410 L432,360 L432,180 L420,180 L420,350 L256,395 L92,350 L92,180 L80,180 Z" fill="#3E3159"/>
-              <path d="M216,398 C216,415 296,415 296,398 Z" fill="#3E3159"/>
-              
-              <path d="M256,150 L110,110 L110,335 L256,380 Z" fill="white" stroke="#3E3159" stroke-width="6" stroke-linejoin="round"/>
-              
-              <path d="M256,150 L402,110 L402,335 L256,380 Z" fill="white" stroke="#3E3159" stroke-width="6" stroke-linejoin="round"/>
-              
-              <path d="M280,100 L280,220 C280,245 400,245 400,220 L400,100 Z" fill="#9B66AA"/>
-              <ellipse cx="340" cy="100" rx="60" ry="25" fill="#4B2C69"/>
-              <path d="M280,140 C280,165 400,165 400,140" fill="none" stroke="#3E3159" stroke-width="3"/>
-              <path d="M280,180 C280,205 400,205 400,180" fill="none" stroke="#3E3159" stroke-width="3"/>
-              
-              <circle cx="295" cy="148" r="4" fill="white"/>
-              <circle cx="312" cy="153" r="4" fill="white"/>
-              <circle cx="295" cy="188" r="4" fill="white"/>
-              <circle cx="312" cy="193" r="4" fill="white"/>
-              
-              <path d="M256,200 V320 M196,260 H316" 
-                    fill="none" 
-                    stroke="white" 
-                    stroke-width="36" 
-                    stroke-linecap="round"/>
-              <path d="M256,200 V320 M196,260 H316" 
-                    fill="none" 
-                    stroke="#8CC665" 
-                    stroke-width="36" 
-                    stroke-linecap="round"/>
-            </svg>
+            <FontAwesomeIcon icon={faDatabase} className="kb-new-kb-icon" />
           </button>
         </div>
       </div>
@@ -1389,7 +1381,10 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                 disabled={isLoading}
                 title="Run parsing on all files in Root directory"
               >
-                🔄 Parse
+                <span className="kb-btn-icon-text">
+                  <FontAwesomeIcon icon={faArrowsRotate} className="kb-btn-leading-icon" />
+                  Parse
+                </span>
               </button>
             )}
           </div>
@@ -1422,7 +1417,10 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                     disabled={isLoading}
                     title={`Run parsing on all files in ${folder} directory`}
                   >
-                    🔄 Parse
+                    <span className="kb-btn-icon-text">
+                      <FontAwesomeIcon icon={faArrowsRotate} className="kb-btn-leading-icon" />
+                      Parse
+                    </span>
                   </button>
                 )}
               </div>
@@ -1495,7 +1493,9 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
             {isDragging && (
               <div className="kb-drag-overlay">
                 <div className="kb-drag-message">
-                  <div className="kb-drag-icon">📁</div>
+                  <div className="kb-drag-icon" aria-hidden>
+                    <FontAwesomeIcon icon={faFolder} />
+                  </div>
                   <div className="kb-drag-text">Drop files or folders to upload</div>
                 </div>
               </div>
@@ -1523,7 +1523,11 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                         onClick={item.type === 'folder' ? () => navigateToFolder(item.name) : undefined}
                       >
                         <span className={`item-icon ${item.type}-icon`}>
-                          {item.type === 'folder' ? '📁' : '📄'}
+                          <FontAwesomeIcon
+                            icon={item.type === 'folder' ? faFolder : faFileLines}
+                            className="item-type-icon"
+                            fixedWidth
+                          />
                         </span>
                         <div className="item-details">
                           <div className="item-header">
@@ -1586,7 +1590,8 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                                 title={`Run parsing on ${item.name}`}
                                 disabled={isLoading}
                               >
-                                🔄 Parse
+                                <FontAwesomeIcon icon={faArrowsRotate} />
+                                <span>Parse</span>
                               </button>
                               {/* View button only for files with parse runs */}
                               {item.type === 'file' && item.parse_runs && item.parse_runs.length > 0 && (
@@ -1599,9 +1604,9 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                                     setShowChunkRunPanel(true);
                                   }}
                                   title="View parsed text and chunks"
+                                  aria-label="View parsed text and chunks"
                                 >
-                                  {/* Document sections icon representing chunks */}
-                                  📑
+                                  <FontAwesomeIcon icon={faLayerGroup} />
                                 </button>
                               )}
                             </div>
@@ -1627,8 +1632,9 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                             }
                           }}
                           title={`Delete ${item.type}`}
+                          aria-label={`Delete ${item.type}`}
                         >
-                          🗑️
+                          <FontAwesomeIcon icon={faTrashCan} />
                         </button>
                       </div>
                     </div>
@@ -1682,29 +1688,34 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                   <div className="upload-results-list" ref={uploadResultsListRef}>
                     {uploadResults.map((result, index) => {
                       // Get status icon and message based on result
-                      let statusIcon, statusClass;
+                      let statusIcon;
+                      let statusClass;
+                      let statusIconSpin = false;
                       switch (result.status) {
                         case 'success':
-                          statusIcon = '✅';
+                          statusIcon = faCircleCheck;
                           statusClass = 'upload-success';
                           break;
                         case 'failed':
-                          statusIcon = '❌';
+                          statusIcon = faCircleXmark;
                           statusClass = 'upload-failed';
                           break;
                         case 'updated':
-                          statusIcon = '🔄';
+                          statusIcon = faArrowsRotate;
                           statusClass = 'upload-updated';
                           break;
                         default:
-                          statusIcon = '⏳';
+                          statusIcon = faSpinner;
                           statusClass = 'upload-processing';
+                          statusIconSpin = true;
                       }
                       
                       return (
                         <div key={index} className={`upload-result-item ${statusClass}`}>
                           <div className="upload-result-header">
-                            <span className="upload-result-icon">{statusIcon}</span>
+                            <span className="upload-result-icon">
+                              <FontAwesomeIcon icon={statusIcon} spin={statusIconSpin} />
+                            </span>
                             <span className="upload-result-filename">{result.filename}</span>
                             <span className="upload-result-status">
                               {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
@@ -1799,25 +1810,30 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                       }
                       
                       // Get status icon and message based on result
-                      let statusIcon, statusClass;
+                      let statusIcon;
+                      let statusClass;
+                      let statusIconSpin = false;
                       switch (result.status) {
                         case 'success':
-                          statusIcon = '✅';
+                          statusIcon = faCircleCheck;
                           statusClass = 'upload-success';
                           break;
                         case 'failed':
-                          statusIcon = '❌';
+                          statusIcon = faCircleXmark;
                           statusClass = 'upload-failed';
                           break;
                         default:
-                          statusIcon = '⏳';
+                          statusIcon = faSpinner;
                           statusClass = 'upload-processing';
+                          statusIconSpin = true;
                       }
                       
                       return (
                         <div key={index} className={`upload-result-item ${statusClass}`}>
                           <div className="upload-result-header">
-                            <span className="upload-result-icon">{statusIcon}</span>
+                            <span className="upload-result-icon">
+                              <FontAwesomeIcon icon={statusIcon} spin={statusIconSpin} />
+                            </span>
                             <span className="upload-result-filename">{result.filename || `File ${result.file_id}`}</span>
                             <span className="upload-result-status">
                               {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
@@ -2045,7 +2061,11 @@ const KnowledgebaseBrowser = ({ mainViewApi = null }) => {
                     <div key={`${file.type}-${file.id}-${file.name}`} className="edit-description-item">
                       <div className="edit-description-item-header">
                         <span className={`item-icon ${file.type}-icon`}>
-                          {file.type === 'folder' ? '📁' : '📄'}
+                          <FontAwesomeIcon
+                            icon={file.type === 'folder' ? faFolder : faFileLines}
+                            className="item-type-icon"
+                            fixedWidth
+                          />
                         </span>
                         <span className="item-name">{file.name}</span>
                         {file.type === 'file' && file.file_size && (

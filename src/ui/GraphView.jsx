@@ -13,6 +13,8 @@ import {
   buildChunksVisualizationDocumentHtml,
 } from './chunksVisualizationWindow';
 import { isEdgeActive } from './graphEdgeActive';
+import { formatParamsForTooltip } from './splitterUtils';
+import { formatChunkRunParamsForTooltip } from './chunkRunParamsDisplay';
 import './GraphView.css';
 
 const NODE_COLORS = {
@@ -1394,17 +1396,21 @@ function GraphView({
               nodeId="id"
               nodeLabel={(n) => `${n.label || n.id}\n(${n.type || 'node'})`}
               linkLabel={(l) => {
+                const a = l.attributes || {};
                 if (l.type === 'parse') {
-                  const a = l.attributes || {};
-                  return `parse | ${a.filename || ''} → ${a.parser || ''}\nrun: ${a.parse_run_id ?? '–'} | time: ${formatTimeUsage(a.time_usage)}`;
+                  const params = a.parameters && typeof a.parameters === 'object' ? a.parameters : {};
+                  const body = formatParamsForTooltip(params);
+                  return body ? `parameters\n${body}` : 'parameters\n(–)';
                 }
                 if (l.type === 'chunk') {
-                  const a = l.attributes || {};
-                  return `chunk | ${a.parser || ''} → ${(a.framework && a.chunker) ? `${a.framework}/${a.chunker}` : (a.framework || '')}\nchunk_run: ${a.chunk_run_id ?? '–'} | chunks: ${a.chunks_count ?? '–'}`;
+                  const body = formatChunkRunParamsForTooltip(a.run_parameters || {});
+                  const clipped = body.length > 2200 ? `${body.slice(0, 2199)}…` : body;
+                  return clipped ? `parameters\n${clipped}` : 'parameters\n(–)';
                 }
                 if (l.type === 'embed') {
-                  const a = l.attributes || {};
-                  return `embed | chunk_run: ${a.chunk_run_id ?? '–'} → embedding: ${a.embedding_configure_id ?? '–'}\nindex_run: ${a.index_run_id ?? '–'}`;
+                  const id = a.embedding_configure_id;
+                  if (id != null && id !== '') return `embedding_configure_id: ${id}`;
+                  return l.id || 'edge';
                 }
                 return l.id || 'edge';
               }}

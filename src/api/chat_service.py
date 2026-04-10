@@ -5,6 +5,26 @@ import requests
 from fastapi import HTTPException
 
 
+def get_playground_llm_info(
+    *,
+    ollama_base_url: Optional[str] = None,
+    ollama_model: Optional[str] = None,
+    ollama_api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Resolve the effective LLM config used by ``playground_chat_answer``.
+
+    This is the single source of truth for model selection (env + overrides).
+    """
+    base_url = (
+        (ollama_base_url if ollama_base_url is not None else os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
+        or ""
+    ).rstrip("/")
+    model = ((ollama_model if ollama_model is not None else os.getenv("OLLAMA_MODEL")) or "").strip()
+    api_key = ((ollama_api_key if ollama_api_key is not None else os.getenv("OLLAMA_API_KEY")) or "").strip()
+    return {"provider": "ollama", "base_url": base_url, "model": model or None, "has_api_key": bool(api_key)}
+
+
 def playground_chat_answer(
     *,
     query: str,
@@ -26,11 +46,13 @@ def playground_chat_answer(
         if not chunks:
             raise HTTPException(status_code=400, detail="chunks is required")
 
-        base_url = (
-            (ollama_base_url if ollama_base_url is not None else os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
-            or ""
-        ).rstrip("/")
-        model = ((ollama_model if ollama_model is not None else os.getenv("OLLAMA_MODEL")) or "").strip()
+        llm = get_playground_llm_info(
+            ollama_base_url=ollama_base_url,
+            ollama_model=ollama_model,
+            ollama_api_key=ollama_api_key,
+        )
+        base_url = llm["base_url"]
+        model = llm["model"] or ""
         api_key = ((ollama_api_key if ollama_api_key is not None else os.getenv("OLLAMA_API_KEY")) or "").strip()
 
         if not model:

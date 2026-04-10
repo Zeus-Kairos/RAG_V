@@ -63,6 +63,7 @@ export default function Playground({ mainViewApi = null }) {
   const [listChunkDetail, setListChunkDetail] = useState(null);
   const [listDetailLoading, setListDetailLoading] = useState(false);
   const [listDetailError, setListDetailError] = useState(null);
+  const [llmInfo, setLlmInfo] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +76,23 @@ export default function Playground({ mainViewApi = null }) {
         if (data?.success && Array.isArray(data.retrievers) && data.retrievers.length > 0) {
           setAvailableRetrievers(data.retrievers);
         }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth('/api/llm/info');
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (res.ok && json?.success) setLlmInfo(json);
       } catch {
         // ignore
       }
@@ -387,7 +405,12 @@ export default function Playground({ mainViewApi = null }) {
 
         <div className="playground-bottom">
           <div className="playground-chat">
-            <div className="playground-panel-title">Chat (single turn)</div>
+            <div className="playground-panel-title playground-panel-title--row">
+              <span>Chat (single turn)</span>
+              <span className="playground-llm-pill" title={llmInfo?.response_llm?.model ? String(llmInfo.response_llm.model) : ''}>
+                LLM: {llmInfo?.response_llm?.model ? String(llmInfo.response_llm.model) : 'unknown'}
+              </span>
+            </div>
             <div className="playground-messages" role="log" aria-label="Chat messages">
               {messages.length === 0 ? (
                 <div className="playground-msg">Enter a query and send. Answers use only the chunks on the right; cite with `[n]`.</div>
@@ -444,7 +467,7 @@ export default function Playground({ mainViewApi = null }) {
                     >
                       <div className="playground-chunk-meta">
                         <span className="playground-chunk-idx">#{c.chunkIndex}</span>
-                        {isAugment ? <span className="playground-chunk-badge">Augment</span> : null}
+                        {isAugment ? <span className="playground-chunk-badge">Aug</span> : null}
                         <span className="playground-chunk-id">
                           ID:{' '}
                           <button

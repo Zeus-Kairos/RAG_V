@@ -8,6 +8,7 @@ import ParserSettings from './ParserSettings';
 import ChunkBrowser from './ChunkBrowser';
 import RetrievalBrowser from './RetrievalBrowser';
 import Dashboard from './Dashboard';
+import Evaluation from './Evaluation';
 import MainViewTab from './MainViewTab';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -109,7 +110,7 @@ function App() {
     return <div className="loading">Loading...</div>;
   }
 
-  const showSidebar = activeTab !== 'dashboard' && activeTab !== 'view';
+  const showSidebar = activeTab !== 'dashboard' && activeTab !== 'evaluation' && activeTab !== 'view';
 
   // Show main app with sidebar layout
   return (
@@ -168,6 +169,12 @@ function App() {
           >
             Dashboard
           </button>
+          <button
+            className={`tab-btn ${activeTab === 'evaluation' ? 'active' : ''}`}
+            onClick={() => setActiveTab('evaluation')}
+          >
+            Evaluation
+          </button>
           {mainView && (
             <button
               type="button"
@@ -184,6 +191,11 @@ function App() {
           {activeTab === 'dashboard' && (
             <ErrorBoundary>
               <Dashboard mainViewApi={mainViewApi} />
+            </ErrorBoundary>
+          )}
+          {activeTab === 'evaluation' && (
+            <ErrorBoundary>
+              <Evaluation />
             </ErrorBoundary>
           )}
           {activeTab === 'view' && mainView && <MainViewTab mainView={mainView} />}
